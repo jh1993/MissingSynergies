@@ -1,0 +1,8 @@
+Main icon opacities are 39%, 71%, 100%, 100%, 100%, 100%, 100%, 72% for the 8 frames from left to right. The outline opacities are 100%, 70%, 38%, 0%, 0%, 0%, 37%, 74%.
+
+
+
+
+
+
+
