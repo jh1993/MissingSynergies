@@ -57,6 +57,8 @@ Spells:
 + Chaos Theory (Chaos/Ice/Arcane/Conjuration)
 + Afterlife Echoes (Holy/Dark/Enchantment)
 + Time Dilation (Arcane/Enchantment)
++ Cult of Darkness (Dark/Enchantment/Conjuration)
++ Box of Woe (Dark/Lightning/Ice/Conjuration)
 
 Skills:
 + Shivering Venom (Ice/Nature)

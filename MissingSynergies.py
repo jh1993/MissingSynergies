@@ -2148,8 +2148,9 @@ class GenesisSpell(Spell):
                 if buff:
                     buff.death_boom()
                 if x != existing.x or y != existing.y:
-                    self.caster.level.act_move(existing, x, y, teleport=True)
-                    self.caster.level.show_effect(existing.x, existing.y, Tags.Translocation)
+                    if self.caster.level.can_move(existing, x, y, teleport=True):
+                        self.caster.level.act_move(existing, x, y, teleport=True)
+                        self.caster.level.show_effect(existing.x, existing.y, Tags.Translocation)
             existing.cur_hp = existing.max_hp
         else:
             unit = Unit()
@@ -4429,7 +4430,7 @@ class GatheringStormSpell(Spell):
                 existing = unit
                 break
 
-        if existing and (existing.x != x or existing.y != y):
+        if existing and (existing.x != x or existing.y != y) and self.caster.level.can_move(existing, x, y, teleport=True):
             self.caster.level.show_effect(existing.x, existing.y, Tags.Translocation)
             self.caster.level.act_move(existing, x, y, teleport=True)
 
@@ -4869,8 +4870,9 @@ class LivingLabyrinthSpell(Spell):
                 break
         if existing:
             existing.deal_damage(existing.cur_hp - existing.max_hp, Tags.Heal, self)
-            self.caster.level.show_effect(existing.x, existing.y, Tags.Translocation)
-            self.caster.level.act_move(existing, x, y, teleport=True)
+            if self.caster.level.can_move(existing, x, y, teleport=True):
+                self.caster.level.show_effect(existing.x, existing.y, Tags.Translocation)
+                self.caster.level.act_move(existing, x, y, teleport=True)
             self.caster.level.queue_spell(self.maze(x, y))
             return
         
@@ -5326,7 +5328,9 @@ class ChaosTheorySpell(Spell):
         return None
 
     def cloudburst(self, minion, target):
-        self.caster.level.act_move(minion, target.x, target.y, teleport=True)
+        if self.caster.level.can_move(minion, target.x, target.y, teleport=True):
+            self.caster.level.show_effect(minion.x, minion.y, Tags.Translocation)
+            self.caster.level.act_move(minion, target.x, target.y, teleport=True)
         radius = self.get_stat("radius")
         points = [p for p in self.caster.level.get_points_in_ball(target.x, target.y, radius*2) if not self.caster.level.tiles[p.x][p.y].is_wall()]
         if not points:
@@ -5843,5 +5847,202 @@ class CultOfDarknessSpell(Spell):
         self.caster.apply_buff(passive)
         self.caster.apply_buff(CultOfDarknessBuff(self), self.get_stat("duration"))
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, BlackWinterSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell])
+class WoeBuff(Buff):
+    def __init__(self, name, tag, amount):
+        Buff.__init__(self)
+        self.name = name
+        self.resists[tag] = -amount
+        self.buff_type = BUFF_TYPE_CURSE
+        self.stack_type = STACK_REPLACE
+        self.color = tag.color
+
+class SpiritsOfWoeSpell(Spell):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Spell.__init__(self)
+    
+    def on_init(self):
+        self.name = "Spirits of Woe"
+        self.range = 0
+        self.cool_down = self.spell.get_stat("summon_cooldown")
+        self.description = "Summon the spirits of woe around the caster."
+    
+    def cast_instant(self, x, y):
+        self.spell.summon_ghosts(self.caster)
+
+class BoxOfWoeAura(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+
+    def on_init(self):
+        self.name = "Aura of Woe"
+        self.radius = self.spell.get_stat("radius")
+        self.poison = self.spell.get_stat("poison")
+        self.description = "Each turn, deal 1 dark, 1 lightning, %s damage to enemies in a %i tile radius." % ("1 ice, and 1 poison" if self.poison else "and 1 ice", self.radius)
+
+    def on_advance(self):
+
+        effects_left = 7
+        dtypes = [Tags.Dark, Tags.Lightning, Tags.Ice]
+        if self.poison:
+            dtypes.append(Tags.Poison)
+
+        for unit in self.owner.level.get_units_in_ball(Point(self.owner.x, self.owner.y), self.radius):
+            if unit is self.owner:
+                continue
+            if not are_hostile(self.owner, unit):
+                continue
+            for dtype in dtypes:
+                unit.deal_damage(1, dtype, self)
+            effects_left -= 1
+
+        # Show some graphical indication of this aura if it didnt hit much
+        points = self.owner.level.get_points_in_ball(self.owner.x, self.owner.y, self.radius)
+        points = [p for p in points if not self.owner.level.get_unit_at(p.x, p.y)]
+        random.shuffle(points)
+        for _ in range(effects_left):
+            if not points:
+                break
+            p = points.pop()
+            self.owner.level.show_effect(p.x, p.y, random.choice(dtypes), minor=True)
+
+class WoeTeleportyBuff(Buff):
+
+    def __init__(self, tag):
+        self.tag = tag
+        Buff.__init__(self)
+        self.color = self.tag.color
+        self.description = "Each turn, teleports closer toward the closest enemy resistant to %s before acting." % self.tag.name
+    
+    def on_pre_advance(self):
+        units = [unit for unit in self.owner.level.units if are_hostile(unit, self.owner) and unit.resists[self.tag] > 0]
+        if not units:
+            return
+        target = min(units, key=lambda unit: distance(unit, self.owner))
+        points = [point for point in self.owner.level.get_points_in_ball(target.x, target.y, distance(target, self.owner)) if self.owner.level.can_move(self.owner, point.x, point.y, teleport=True)]
+        if not points:
+            return
+        dest = random.choice(points)
+        self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
+        self.owner.level.act_move(self.owner, dest.x, dest.y, teleport=True)
+
+class WoeBlastSpell(SimpleRangedAttack):
+
+    def __init__(self, tag, name, range, damage):
+        SimpleRangedAttack.__init__(self, name=name, damage=damage, damage_type=None, range=range, effect=tag)
+        self.tag = tag
+        self.description = "Reduces %s resistance to 0 before dealing %s damage." % (self.tag.name, self.tag.name)
+
+    def get_ai_target(self):
+        targets = [unit for unit in self.caster.level.units if are_hostile(unit, self.caster) and self.can_cast(unit.x, unit.y)]
+        if not targets:
+            return None
+        else:
+            target = random.choice(targets)
+            return Point(target.x, target.y)
+
+    def hit(self, x, y):
+        unit = self.caster.level.get_unit_at(x, y)
+        if unit and unit.resists[self.tag] > 0:
+            unit.apply_buff(WoeBuff(self.name, self.tag, unit.resists[self.tag]))
+        self.caster.level.deal_damage(x, y, self.get_stat("damage"), self.tag, self)
+        
+class BoxOfWoeSpell(Spell):
+
+    def on_init(self):
+        self.name = "Box of Woe"
+        self.asset = ["MissingSynergies", "Icons", "box_of_woe"]
+        self.tags = [Tags.Dark, Tags.Lightning, Tags.Ice, Tags.Conjuration]
+        self.level = 5
+        self.max_charges = 3
+        self.range = 10
+        self.requires_los = False
+        self.must_target_empty = True
+        self.must_target_walkable = True
+
+        self.minion_health = 25
+        self.minion_damage = 6
+        self.minion_range = 4
+        self.radius = 6
+        self.summon_cooldown = 10
+
+        self.upgrades["radius"] = (2, 4)
+        self.upgrades["summon_cooldown"] = (-3, 3)
+        self.upgrades["poison"] = (1, 4, "Repugnance", "Box of Woe will also summon Repugnance, a [poison] ghost.\nThe box's aura will also deal [poison] damage.")
+        self.upgrades["chase"] = (1, 3, "Relentless Woe", "Each turn, before it acts, each ghost summoned by the Box of Woe is guaranteed to teleport closer to the closest enemy that resists its element.")
+        self.upgrades["aura"] = (1, 4, "Compounding Woe", "Each ghost summoned by the Box of Woe now has an aura that deals 1 damage of its own element in a radius equal to half of the box's aura radius.")
+
+    def get_description(self):
+        return ("Summon the Box of Woe, an immobile [construct] with [{minion_health}_HP:minion_health] that deals [1_dark:dark], [1_lightning:lightning], and [1_ice:ice] damage in a [{radius}_tile:radius] radius around itself each turn.\n"
+                "Every [{summon_cooldown}_turns:duration], the box summons three ghosts, each corresponding to the elements of [dark], [lightning], and [ice]. Each ghost has an attack with [{minion_range}_range:minion_range] that permanently reduces the target's resistance to its element to 0.\n"
+                "Casting this spell again while the box is already summoned will teleport it to the target tile and instantly summon its ghosts without triggering cooldown.").format(**self.fmt_dict())
+
+    def cast_instant(self, x, y):
+
+        existing = None
+        for unit in self.caster.level.units:
+            if unit.name == "Box of Woe" and unit.source is self:
+                existing = unit
+                break
+        if existing:
+            if self.caster.level.can_move(existing, x, y, teleport=True):
+                self.caster.level.show_effect(existing.x, existing.y, Tags.Translocation)
+                self.caster.level.act_move(existing, x, y, teleport=True)
+            self.summon_ghosts(existing)
+            return
+        
+        unit = Unit()
+        unit.unique = True
+        unit.name = "Box of Woe"
+        unit.max_hp = self.get_stat("minion_health")
+        unit.tags = [Tags.Dark, Tags.Lightning, Tags.Ice, Tags.Construct]
+        for tag in [Tags.Dark, Tags.Lightning, Tags.Ice]:
+            unit.resists[tag] = 100
+        unit.stationary = True
+        unit.spells = [SpiritsOfWoeSpell(self)]
+        unit.buffs = [BoxOfWoeAura(self)]
+        self.summon(unit, target=Point(x, y))
+
+    def summon_ghosts(self, minion):
+
+        tags = [Tags.Dark, Tags.Lightning, Tags.Ice]
+        if self.get_stat("poison"):
+            tags.append(Tags.Poison)
+        
+        radius = self.get_stat("radius")
+        chase = self.get_stat("chase")
+        aura = self.get_stat("aura")
+
+        minion_health = self.get_stat("minion_health", base=4)
+        minion_damage = self.get_stat("minion_damage")
+        minion_range = self.get_stat("minion_range")
+
+        for tag in tags:
+            unit = Ghost()
+            if tag == Tags.Dark:
+                unit.name = "Death"
+                unit.asset_name = "death_ghost"
+            elif tag == Tags.Lightning:
+                unit.name = "Pain"
+                unit.asset_name = "pain_ghost"
+            elif tag == Tags.Ice:
+                unit.name = "Sorrow"
+                unit.asset_name = "sorrow_ghost"
+            else:
+                unit.name = "Repugnance"
+                unit.asset = ["MissingSynergies", "Units", "repugnance_ghost"]
+            unit.max_hp = minion_health
+            unit.resists[tag] = 100
+            unit.tags = [Tags.Undead, tag]
+            unit.spells = [WoeBlastSpell(tag, unit.name, minion_range, minion_damage)]
+            if chase:
+                unit.buffs.append(WoeTeleportyBuff(tag))
+            if aura:
+                unit.buffs.append(DamageAuraBuff(1, tag, radius//2))
+            self.summon(unit, target=minion, radius=5, sort_dist=False)
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, BlackWinterSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter])
