@@ -6016,7 +6016,7 @@ class BoxOfWoeSpell(Spell):
         chase = self.get_stat("chase")
         aura = self.get_stat("aura")
 
-        minion_health = self.get_stat("minion_health", base=4)
+        minion_health = self.get_stat("minion_health", base=8)
         minion_damage = self.get_stat("minion_damage")
         minion_range = self.get_stat("minion_range")
 
