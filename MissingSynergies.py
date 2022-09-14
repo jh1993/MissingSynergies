@@ -5969,11 +5969,11 @@ class BoxOfWoeSpell(Spell):
         self.radius = 6
         self.summon_cooldown = 10
 
+        self.upgrades["minion_health"] = (10, 3)
         self.upgrades["radius"] = (2, 4)
         self.upgrades["summon_cooldown"] = (-3, 3)
         self.upgrades["poison"] = (1, 4, "Repugnance", "Box of Woe will also summon Repugnance, a [poison] ghost.\nThe box's aura will also deal [poison] damage.")
         self.upgrades["chase"] = (1, 3, "Relentless Woe", "Each turn, before it acts, each ghost summoned by the Box of Woe is guaranteed to teleport closer to the closest enemy that resists its element.")
-        self.upgrades["aura"] = (1, 4, "Compounding Woe", "Each ghost summoned by the Box of Woe now has an aura that deals 1 damage of its own element in a radius equal to half of the box's aura radius.")
 
     def get_description(self):
         return ("Summon the Box of Woe, an immobile [construct] with [{minion_health}_HP:minion_health] that deals [1_dark:dark], [1_lightning:lightning], and [1_ice:ice] damage in a [{radius}_tile:radius] radius around itself each turn.\n"
@@ -6012,11 +6012,8 @@ class BoxOfWoeSpell(Spell):
         if self.get_stat("poison"):
             tags.append(Tags.Poison)
         
-        radius = self.get_stat("radius")
         chase = self.get_stat("chase")
-        aura = self.get_stat("aura")
-
-        minion_health = self.get_stat("minion_health", base=8)
+        minion_health = self.get_stat("minion_health", base=4)
         minion_damage = self.get_stat("minion_damage")
         minion_range = self.get_stat("minion_range")
 
@@ -6040,8 +6037,6 @@ class BoxOfWoeSpell(Spell):
             unit.spells = [WoeBlastSpell(tag, unit.name, minion_range, minion_damage)]
             if chase:
                 unit.buffs.append(WoeTeleportyBuff(tag))
-            if aura:
-                unit.buffs.append(DamageAuraBuff(1, tag, radius//2))
             self.summon(unit, target=minion, radius=5, sort_dist=False)
 
 all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, BlackWinterSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell])
