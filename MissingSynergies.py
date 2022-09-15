@@ -1907,34 +1907,6 @@ class RuinousImpactSpell(Spell):
                 step += 1
             yield
 
-class CopperFurnaceTechSupport(Buff):
-    def __init__(self, spell):
-        self.spell = spell
-        Buff.__init__(self)
-    def on_init(self):
-        self.buff_type = BUFF_TYPE_PASSIVE
-        self.description = "On death, summon a Furnace Fiend or a Copper Fiend, or 3 imps if a fiend already exists."
-        self.color = Tags.Chaos.color
-        self.owner_triggers[EventOnDeath] = self.on_death
-    def on_death(self, evt):
-        existing = False
-        existing_is_copper = False
-        for unit in self.owner.level.units:
-            if unit.source is self.spell:
-                if unit.name == "Furnace Fiend":
-                    existing = True
-                    existing_is_copper = False
-                    break
-                elif unit.name == "Copper Fiend":
-                    existing = True
-                    existing_is_copper = True
-                    break
-        if existing:
-            for _ in range(3):
-                self.summon(self.spell.get_ally(existing_is_copper, is_fiend=2), target=self.owner, sort_dist=False)
-        else:
-            self.summon(self.spell.get_ally(random.choice([True, False]), is_fiend=1), target=self.owner)
-
 class CopperFurnaceSpell(Spell):
 
     def on_init(self):
@@ -1951,8 +1923,8 @@ class CopperFurnaceSpell(Spell):
         self.minion_range = 8
         self.summon_chance = 10
 
-        self.upgrades["summon_chance"] = (5, 3, "Summon Chance", "+5% summoning chance per turn for each of the Copper Furnace's summoning abilities.")
-        self.upgrades["tech_support"] = (1, 5, "Tech Support", "If the Copper Furnace is destroyed, summon a copper fiend or a furnace fiend near its location.\nIf a fiend summoned by this spell already exists, instead summon 3 interns (imps) of the corresponding type.")
+        self.upgrades["summon_chance"] = (5, 3, "Summon Chance", "+5% summoning chance per turn for each of the Copper Furnace's summoning abilities.\nWhen you cast this spell while the Copper Furnace is already summoned, you will summon 1 additional random spider or mantis.")
+        self.upgrades["tech_support"] = (1, 7, "Tech Support", "When you cast this spell while the Copper Furnace is already summoned, you will instead summon a copper fiend or furnace fiend, chosen at random.\nIf both the Copper Furnace and a fiend are already summoned, the spell will summon mantises and spiders on subsequent casts.")
         self.upgrades["max_charges"] = (3, 4)
     
     def fmt_dict(self):
@@ -2002,13 +1974,22 @@ class CopperFurnaceSpell(Spell):
     def cast_instant(self, x, y):
 
         existing = None
+        existing_fiend = None
         for unit in self.caster.level.units:
             if unit.name == "Copper Furnace":
                 existing = unit
                 break
+        for unit in self.caster.level.units:
+            if unit.source is self and "Fiend" in unit.name:
+                existing_fiend = unit
         if existing:
-            self.summon(self.get_ally(False), target=existing)
-            self.summon(self.get_ally(True), target=existing)
+            if self.get_stat("tech_support") and not existing_fiend:
+                self.summon(self.get_ally(random.choice([True, False]), is_fiend=1), target=existing)
+            else:
+                self.summon(self.get_ally(False), target=existing)
+                self.summon(self.get_ally(True), target=existing)
+                if self.get_stat("summon_chance") > 10:
+                    self.summon(self.get_ally(random.choice([True, False])), target=existing)
             return
         
         unit = Unit()
@@ -2029,9 +2010,6 @@ class CopperFurnaceSpell(Spell):
         buff = GeneratorBuff(lambda: self.get_ally(True), self.get_stat("summon_chance")/100)
         buff.example_monster.name = "Copper Spider or a Copper Mantis"
         unit.buffs.append(buff)
-
-        if self.get_stat("tech_support"):
-            unit.buffs.append(CopperFurnaceTechSupport(self))
         
         self.summon(unit, target=Point(x, y))
 
@@ -2861,9 +2839,8 @@ class GoldenTricksterShot(Spell):
         self.damage = self.spell.get_stat("minion_damage")
         self.range = self.spell.get_stat("minion_range")
         self.requires_los = 0 if self.spell.get_stat("phase") else 1
-        self.hit_count = self.spell.get_stat("hit_count")
         self.damage_type = [Tags.Fire, Tags.Lightning, Tags.Physical]
-        self.description = "Hits %i times. Does no actual damage but otherwise behaves as if damage is dealt. Randomly teleports the target up to 3 tiles away." % self.hit_count
+        self.description = "Does no actual damage but otherwise behaves as if all damage types are dealt. Randomly teleports the target up to 3 tiles away."
     
     def get_ai_target(self):
         targets = [unit for unit in self.caster.level.units if are_hostile(unit, self.caster) and self.can_cast(unit.x, unit.y)]
@@ -2880,9 +2857,10 @@ class GoldenTricksterShot(Spell):
         unit = self.caster.level.get_unit_at(x, y)
         if not unit:
             return
-        for _ in range(self.hit_count):
-            self.caster.level.event_manager.raise_event(EventOnPreDamaged(unit, self.damage, random.choice(self.damage_type), self), unit)
-            self.caster.level.event_manager.raise_event(EventOnDamaged(unit, self.damage, random.choice(self.damage_type), self), unit)
+        damage = self.get_stat("damage")
+        for dtype in self.damage_type:
+            self.caster.level.event_manager.raise_event(EventOnPreDamaged(unit, damage, dtype, self), unit)
+            self.caster.level.event_manager.raise_event(EventOnDamaged(unit, damage, dtype, self), unit)
         randomly_teleport(unit, 3)
 
 class GoldenTricksterAura(Buff):
@@ -2927,18 +2905,17 @@ class GoldenTricksterSpell(Spell):
         self.minion_damage = 10
         self.minion_range = 10
         self.radius = 3
-        self.hit_count = 2
         self.shields = 1
 
+        self.upgrades["minion_damage"] = (20, 4)
         self.upgrades["radius"] = (2, 5)
         self.upgrades["shields"] = (5, 5)
         self.upgrades["phase"] = (1, 5, "Phase Shot", "The Golden Trickster's trick shot no longer requires line of sight.")
-        self.upgrades["hit_count"] = (1, 3, "Hit Count", "The Golden Trickster's trick shot hits an additional time.")
         self.upgrades["mage"] = (1, 6, "Trickster Mage", "The Golden Trickster can cast Chaos Shuffle with a 3 turn cooldown.\nThis Chaos Shuffle gains all of your upgrades and bonuses.")
     
     def get_description(self):
         return ("Summon a Golden Trickster, a flying, randomly teleporting minion with many resistances, [{minion_health}_HP:minion_health], and [{shields}_SH:shields].\n"
-                "It has a trick shot with [{minion_range}_range:minion_range] that hits [{hit_count}_times:num_targets]. Each hit inflicts no actual damage but otherwise behaves as if [{minion_damage}_fire:fire], [{minion_damage}_lightning:lightning], or [{minion_damage}_physical:physical] damage has been done to the target. The target is also randomly teleported up to [3_tiles:range] away.\n"
+                "It has a trick shot with [{minion_range}_range:minion_range]. Each hit inflicts no actual damage but otherwise behaves as if [{minion_damage}_fire:fire], [{minion_damage}_lightning:lightning], and [{minion_damage}_physical:physical] damage have been done to the target. The target is also randomly teleported up to [3_tiles:range] away.\n"
                 "Each turn, for each enemy within [{radius}_tiles:radius], it behaves as if it has taken [1_dark:dark] damage from that enemy. It gains [1_SH:shields] whenever it takes damage, up to a max of [{shields}_SH:shields].").format(**self.fmt_dict())
 
     def cast_instant(self, x, y):
@@ -3304,46 +3281,49 @@ class VolatileOrbSpell(OrbSpell):
         self.level = 2
         self.max_charges = 18
         self.range = 9
-        self.orb_walk = True
 
         self.minion_health = 40
         self.minion_damage = 6
         self.damage = 6
-        self.radius = 2
+        self.radius = 6
 
         self.upgrades["minion_damage"] = (9, 2)
         self.upgrades["damage"] = (9, 2)
+        self.upgrades["radius"] = (2, 2, "Radius", "Increases the upper limit of the orb's targeting radius.")
         self.upgrades["range"] = (5, 1)
-        self.upgrades["radius"] = (1, 2)
         self.upgrades["max_charges"] = (8, 2)
     
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["total_damage"] = self.get_stat("damage") + self.get_stat("minion_damage")
+        return stats
+
     def get_description(self):
         return ("Summon an orb of unstable energy next to the caster.\n"
-                "Upon death, the orb deals [{damage}_spell_damage:damage] then [{minion_damage}_minion_damage:minion_damage] damage to all units in a [{radius}_tile:radius] burst, randomly chosen from [fire], [physical], and [lightning] each time.\n"
-                "Targeting an existing orb with this spell causes it to explode without dying.\n"
+                "Each turn, the orb targets a random number of enemies in a random radius between 1 to [{radius}:radius], dealing [fire], [lightning], or [physical] damage to each enemy equal to [{total_damage}:damage] divided by the number of enemies targeted, rounded up. The total damage benefits from bonuses to both [spell_damage:sorcery] and [minion_damage:minion_damage].\n"
                 "The orb has no will of its own, each turn it will float one tile towards the target.\n"
                 "The orb has [{minion_health}_HP:minion_health]. It has 100% resistance to all damage but loses 10% resistances every turn.").format(**self.fmt_dict())
-
-    def get_orb_impact_tiles(self, orb):
-        return [p for stage in Burst(self.caster.level, orb, self.get_stat('radius')) for p in stage]
-
-    def on_orb_walk(self, existing):
-        for stage in Burst(self.caster.level, existing, self.get_stat("radius")):
-            for point in stage:
-                self.caster.level.deal_damage(point.x, point.y, self.get_stat("damage"), random.choice([Tags.Fire, Tags.Lightning, Tags.Physical]), self)
-                self.caster.level.deal_damage(point.x, point.y, self.get_stat("minion_damage"), random.choice([Tags.Fire, Tags.Lightning, Tags.Physical]), self)
-            yield
     
     def on_orb_move(self, orb, next_point):
+
         for tag in orb.resists.keys():
             orb.resists[tag] -= 10
 
+        radius = random.choice(list(range(1, self.get_stat("radius") + 1)))
+        for point in self.caster.level.get_points_in_ball(next_point.x, next_point.y, radius):
+            self.caster.level.show_effect(point.x, point.y, random.choice([Tags.Fire, Tags.Lightning, Tags.Physical]), minor=True)
+        
+        units = [unit for unit in self.caster.level.get_units_in_ball(next_point, radius) if are_hostile(unit, self.caster)]
+        if not units:
+            return
+        random.shuffle(units)
+        num_targets = random.choice(list(range(1, len(units) + 1)))
+        damage = math.ceil((self.get_stat("damage") + self.get_stat("minion_damage"))/num_targets)
+        for unit in units[:num_targets]:
+            unit.deal_damage(damage, random.choice([Tags.Fire, Tags.Lightning, Tags.Physical]), self)
+
     def on_make_orb(self, orb):
         orb.asset = ["MissingSynergies", "Units", "volatile_orb"]
-        buff = Buff()
-        buff.description = "On death, deals %i damage then %i damage to all units in a %i tile radius, randomly chosen from fire, lightning, and physical damage." % (self.get_stat("damage"), self.get_stat("minion_damage"), self.get_stat("radius"))
-        buff.owner_triggers[EventOnDeath] = lambda evt: self.caster.level.queue_spell(self.on_orb_walk(orb))
-        orb.buffs.append(buff)
     
     def on_orb_collide(self, orb, next_point):
         orb.level.show_effect(next_point.x, next_point.y, random.choice([Tags.Fire, Tags.Lightning, Tags.Physical]))
