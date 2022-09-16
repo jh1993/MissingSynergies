@@ -3300,9 +3300,9 @@ class VolatileOrbSpell(OrbSpell):
 
     def get_description(self):
         return ("Summon an orb of unstable energy next to the caster.\n"
-                "Each turn, the orb targets a random number of enemies in a random radius between 1 to [{radius}:radius], dealing [fire], [lightning], or [physical] damage to each enemy equal to [{total_damage}:damage] divided by the number of enemies targeted, rounded up. The total damage benefits from bonuses to both [spell_damage:sorcery] and [minion_damage:minion_damage].\n"
+                "Each turn, the orb targets a random number of enemies in a random radius between 1 to [{radius}:radius], dealing [fire], [lightning], or [physical] damage to each enemy equal to [{total_damage}:damage] divided by the number of enemies targeted, with a random damage modifier between -100% and +100%, rounded up. The total damage benefits from bonuses to both [spell_damage:sorcery] and [minion_damage:minion_damage].\n"
                 "The orb has no will of its own, each turn it will float one tile towards the target.\n"
-                "The orb has [{minion_health}_HP:minion_health]. It has 100% resistance to all damage but loses 10% resistances every turn.").format(**self.fmt_dict())
+                "The orb has [{minion_health}_HP:minion_health], with 100% resistance to all damage but loses 10% each turn.").format(**self.fmt_dict())
     
     def on_orb_move(self, orb, next_point):
 
@@ -3318,9 +3318,9 @@ class VolatileOrbSpell(OrbSpell):
             return
         random.shuffle(units)
         num_targets = random.choice(list(range(1, len(units) + 1)))
-        damage = math.ceil((self.get_stat("damage") + self.get_stat("minion_damage"))/num_targets)
+        damage = (self.get_stat("damage") + self.get_stat("minion_damage"))/num_targets
         for unit in units[:num_targets]:
-            unit.deal_damage(damage, random.choice([Tags.Fire, Tags.Lightning, Tags.Physical]), self)
+            unit.deal_damage(math.ceil(damage*random.random()*2), random.choice([Tags.Fire, Tags.Lightning, Tags.Physical]), self)
 
     def on_make_orb(self, orb):
         orb.asset = ["MissingSynergies", "Units", "volatile_orb"]
