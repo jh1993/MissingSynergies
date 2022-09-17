@@ -2914,7 +2914,7 @@ class GoldenTricksterSpell(Spell):
         self.upgrades["mage"] = (1, 6, "Trickster Mage", "The Golden Trickster can cast Chaos Shuffle with a 3 turn cooldown.\nThis Chaos Shuffle gains all of your upgrades and bonuses.")
     
     def get_description(self):
-        return ("Summon a Golden Trickster, a flying, randomly teleporting minion with many resistances, [{minion_health}_HP:minion_health], and [{shields}_SH:shields].\n"
+        return ("Summon a Golden Trickster, a flying minion with many resistances, [{minion_health}_HP:minion_health], and [{shields}_SH:shields].\n"
                 "It has a trick shot with [{minion_range}_range:minion_range]. Each hit inflicts no actual damage but otherwise behaves as if [{minion_damage}_fire:fire], [{minion_damage}_lightning:lightning], and [{minion_damage}_physical:physical] damage have been done to the target. The target is also randomly teleported up to [3_tiles:range] away.\n"
                 "Each turn, for each enemy within [{radius}_tiles:radius], it behaves as if it has taken [1_dark:dark] damage from that enemy. It gains [1_SH:shields] whenever it takes damage, up to a max of [{shields}_SH:shields].").format(**self.fmt_dict())
 
@@ -2931,9 +2931,7 @@ class GoldenTricksterSpell(Spell):
         unit.max_hp = self.get_stat("minion_health")
         unit.shields = self.get_stat("shields")
         unit.spells = [GoldenTricksterShot(self)]
-        teleport = TeleportyBuff(radius=8, chance=1)
-        teleport.get_tooltip = lambda: "Each turn, blink to a random tile up to 8 tiles away."
-        unit.buffs = [GoldenTricksterAura(self), teleport]
+        unit.buffs = [GoldenTricksterAura(self), TeleportyBuff(chance=.1, radius=8)]
 
         if self.get_stat('mage'):
             shuffle = ChaosShuffleSpell()
