@@ -5039,7 +5039,7 @@ class PsychedelicPuff(SimpleRangedAttack):
 class PsychedelicMushboomBuff(MushboomBuff):
 
     def __init__(self, spell):
-        MushboomBuff.__init__(self, lambda: DeliriumBuff(spell.get_stat("weakness")), spell.get_stat("duration"))
+        MushboomBuff.__init__(self, lambda: DeliriumBuff(self, spell.get_stat("weakness")), spell.get_stat("duration"))
         self.description = "On death, applies %d turns of %s to adjacent enemies." % (self.apply_duration, self.buff().name)
 
     def explode(self, level, x, y):
