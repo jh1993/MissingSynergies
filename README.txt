@@ -59,6 +59,7 @@ Spells:
 + Time Dilation (Arcane/Enchantment)
 + Cult of Darkness (Dark/Enchantment/Conjuration)
 + Box of Woe (Dark/Lightning/Ice/Conjuration)
++ Mad Werewolf (Dark/Nature/Arcane/Conjuration)
 
 Skills:
 + Shivering Venom (Ice/Nature)

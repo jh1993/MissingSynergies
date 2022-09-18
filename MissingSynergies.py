@@ -6017,5 +6017,149 @@ class BoxOfWoeSpell(Spell):
                 unit.buffs.append(WoeTeleportyBuff(tag))
             self.summon(unit, target=minion, radius=5, sort_dist=False)
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, BlackWinterSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell])
+class PhaseInsanityBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+    
+    def on_init(self):
+        self.name = "Phase Insanity"
+        self.color = Tags.Arcane.color
+        self.description = "25% chance on teleport and 100% chance on death to summon an insanity hound allied to the wizard."
+        self.owner_triggers[EventOnMoved] = self.on_moved
+        self.owner_triggers[EventOnDeath] = lambda evt: self.spell.summon(self.spell.get_hound(), target=self.owner, radius=5)
+    
+    def on_applied(self, owner):
+        if are_hostile(self.owner, self.spell.caster):
+            self.buff_type = BUFF_TYPE_CURSE
+        else:
+            self.buff_type = BUFF_TYPE_PASSIVE
+        if self.spell.get_stat("distortion"):
+            self.global_bonuses["range"] = -2 if self.buff_type == BUFF_TYPE_CURSE else 2
+            self.global_bonuses["radius"] = -1 if self.buff_type == BUFF_TYPE_CURSE else 1
+    
+    def on_moved(self, evt):
+        if not evt.teleport or random.random() >= 0.25:
+            return
+        self.spell.summon(self.spell.get_hound(), target=self.owner, radius=5)
+
+class InvokeMadnessSpell(Spell):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Spell.__init__(self)
+    
+    def on_init(self):
+        self.name = "Invoke Madness"
+        self.range = 0
+        self.radius = self.spell.get_stat("minion_range")
+        self.cool_down = 3
+        self.description = "Inflicts Phase Insanity on enemies and teleports them up to 5 tiles away."
+    
+    def get_targets(self):
+        return [unit for unit in self.caster.level.get_units_in_ball(self.owner, self.get_stat("radius")) if are_hostile(self.caster, unit)]
+
+    def can_cast(self, x, y):
+        if not self.get_targets():
+            return False
+        return Spell.can_cast(self, x, y)
+    
+    def cast_instant(self, x, y):
+        for unit in self.get_targets():
+            unit.apply_buff(PhaseInsanityBuff(self.spell))
+            randomly_teleport(unit, radius=5)
+
+class MadWerewolfSpell(Spell):
+
+    def on_init(self):
+        self.name = "Mad Werewolf"
+        self.asset = ["MissingSynergies", "Icons", "mad_werewolf"]
+        self.tags = [Tags.Dark, Tags.Arcane, Tags.Nature, Tags.Conjuration]
+        self.level = 3
+        self.max_charges = 6
+        self.requires_los = False
+        self.must_target_empty = True
+        self.must_target_walkable = True
+
+        self.shields = 1
+        self.minion_health = 18
+        self.minion_range = 4
+        self.minion_damage = 6
+
+        self.upgrades["minion_range"] = (2, 3)
+        self.upgrades["shields"] = (3, 3)
+        self.upgrades["holy"] = (1, 2, "Lunacy", "Mad werewolves become [holy] units, and gain [150_holy:holy] and [100_poison:poison] resistance.")
+        self.upgrades["distortion"] = (1, 4, "Phase Distortion", "Enemies afflicted with Phase Insanity suffer [-2_range:range] and [-1_radius:radius] on all spells.\nMad werewolves and wild men instead gain bonuses to these stats.")
+
+    def get_description(self):
+        return ("Summon a demonically possessed werewolf with [{minion_health}_HP:minion_health] and [{shields}_SH:shields]. It has a melee attack and teleport attack with [{minion_range}_range:minion_range] that deal [{minion_damage}_arcane:arcane] damage.\n"
+                "The werewolf has Phase Insanity, and its melee attack inflicts Phase Insanity and teleports enemies away. Units with Phase Insanity have 25% chance on teleport and 100% chance on death to summon an insanity hound allied to the wizard.\n"
+                "On reaching 0 HP, the werewolf transforms into a wild man that inflicts Phase Insanity on nearby enemies and teleports them away while fleeing, until it transforms into a werewolf again in [20_turns:duration].").format(**self.fmt_dict())
+
+    def get_werewolf(self):
+
+        unit = Unit()
+        unit.name = "Mad Werewolf"
+        unit.asset = ["MissingSynergies", "Units", "mad_werewolf"]
+        unit.tags = [Tags.Living, Tags.Arcane]
+        unit.resists[Tags.Arcane] = 100
+        unit.resists[Tags.Dark] = 75
+        unit.resists[Tags.Holy] = -50
+        unit.max_hp = self.get_stat("minion_health")
+        unit.shields = self.get_stat("shields")
+        if self.get_stat("holy"):
+            unit.tags.append(Tags.Holy)
+            unit.resists[Tags.Holy] = 100
+            unit.resists[Tags.Poison] = 100
+        
+        def onhit(caster, unit):
+            unit.apply_buff(PhaseInsanityBuff(self))
+            randomly_teleport(unit, radius=5)
+        
+        damage = self.get_stat("minion_damage")
+        melee = SimpleMeleeAttack(damage=damage, damage_type=Tags.Arcane, onhit=onhit)
+        melee.description = "Inflicts Phase Insanity on the target and teleports it up to 5 tiles away."
+        leap = LeapAttack(damage=damage, range=self.get_stat("minion_range"), damage_type=Tags.Arcane, is_leap=False, is_ghost=True)
+        leap.name = "Phase Pounce"
+        unit.spells = [melee, leap]
+        unit.buffs = [PhaseInsanityBuff(self), RespawnAs(self.get_wild_man)]
+
+        return unit
+    
+    def get_wild_man(self):
+        unit = Unit()
+        unit.name = "Mad Wild Man"
+        unit.asset = ["MissingSynergies", "Units", "mad_wild_man"]
+        unit.tags = [Tags.Living, Tags.Arcane]
+        unit.resists[Tags.Arcane] = 100
+        unit.max_hp = self.get_stat("minion_health", base=8)
+        unit.shields = self.get_stat("shields")
+        unit.is_coward = True
+        unit.spells = [InvokeMadnessSpell(self)]
+        unit.buffs = [PhaseInsanityBuff(self), MatureInto(self.get_werewolf, 20)]
+        return unit
+    
+    def get_hound(self):
+        unit = InsanityHound()
+        unit.max_hp = self.get_stat("minion_health", base=13)
+        unit.shields = self.get_stat("shields")
+        damage = self.get_stat("minion_damage")
+        swap = VoidRip()
+        swap.max_charges = 0
+        swap.cur_charges = 0
+        swap.cool_down = 3
+        swap.requires_los = False
+        swap.damage = damage
+        swap.damage_type = Tags.Arcane
+        swap.range = self.get_stat("minion_range")
+        swap.description = "Ignores LOS. Swaps place with the target and deals damage."
+        unit.spells[0] = swap
+        unit.spells[1].damage = damage
+        return unit
+
+    def cast_instant(self, x, y):
+        self.summon(self.get_werewolf(), target=Point(x, y))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, BlackWinterSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter])
