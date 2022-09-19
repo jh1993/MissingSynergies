@@ -2997,6 +2997,8 @@ class RainbowDrakeBuff(Buff):
         elements = []
         weights = []
         for element in list(self.owner.resists.keys()):
+            if element == Tags.Heal:
+                continue
             if self.owner.resists[element] <= 0:
                 continue
             elements.append(element)
