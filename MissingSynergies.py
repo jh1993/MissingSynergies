@@ -6102,7 +6102,7 @@ class MadWerewolfSpell(Spell):
         unit = Unit()
         unit.name = "Mad Werewolf"
         unit.asset = ["MissingSynergies", "Units", "mad_werewolf"]
-        unit.tags = [Tags.Living, Tags.Arcane]
+        unit.tags = [Tags.Living, Tags.Arcane, Tags.Nature, Tags.Dark]
         unit.resists[Tags.Arcane] = 100
         unit.resists[Tags.Dark] = 75
         unit.resists[Tags.Holy] = -50
