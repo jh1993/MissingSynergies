@@ -1181,21 +1181,20 @@ class WordOfUpheavalSpell(Spell):
 class RaiseDracolichBreath(BreathWeapon):
 
     def __init__(self, damage, range, legacy):
+        self.legacy = legacy
         BreathWeapon.__init__(self)
         self.damage = damage
         self.range = range
-        self.legacy = legacy
 
     def on_init(self):
         self.name = "Dark Breath"
-        self.description = "Breathes a cone of dark energy, dealing dark damage and reanimating slain units as skeletons."
-        self.damage_type = Tags.Dark
+        self.description = "Deals Dark damage%s in a cone. Reanimates slain units as skeletons." % ((" and half %s damage" % self.legacy.name) if self.legacy else "")
 
     def get_ai_target(self):
         def is_good_target(unit):
             if not unit or not are_hostile(unit, self.caster) or not self.can_cast(unit.x, unit.y):
                 return False
-            if not is_immune(unit, self, self.damage_type):
+            if not is_immune(unit, self, Tags.Dark):
                 return True
             if self.legacy and not is_immune(unit, self, self.legacy):
                 return True
@@ -1222,7 +1221,7 @@ class RaiseDracolichBreath(BreathWeapon):
     def per_square_effect(self, x, y):
         unit = self.caster.level.get_unit_at(x, y)
         
-        self.caster.level.deal_damage(x, y, self.get_stat("damage"), self.damage_type, self)
+        self.caster.level.deal_damage(x, y, self.get_stat("damage"), Tags.Dark, self)
         if self.legacy:
             self.caster.level.deal_damage(x, y, self.get_stat("damage")//2, self.legacy, self)
 
@@ -2443,11 +2442,11 @@ class WarpLensStrike(LeapAttack):
 
     def __init__(self, spell):
         self.spell = spell
-        LeapAttack.__init__(self, spell.get_stat("minion_damage"), RANGE_GLOBAL)
+        LeapAttack.__init__(self, damage=spell.get_stat("minion_damage"), range=RANGE_GLOBAL, damage_type=None)
         self.name = "Warp-Lens Strike"
 
     def get_description(self):
-        desc = "Melee or leap attack. Consumes duration from its summoner's eye buffs to add their effects to the attack."
+        desc = "Melee or leap attack. Deals physical damage and consumes duration from its summoner's eye buffs to add their effects to the attack."
         if self.spell.get_stat("cascade"):
             desc += " Cascades to a random target in LOS after killing the previous."
         return desc
@@ -2456,7 +2455,7 @@ class WarpLensStrike(LeapAttack):
         def is_good_target(unit):
             if not are_hostile(self.caster, unit) or not self.can_cast(unit.x, unit.y):
                 return False
-            if not is_immune(unit, self, self.damage_type):
+            if not is_immune(unit, self, Tags.Physical):
                 return True
             for eye in [buff for buff in self.spell.caster.buffs if isinstance(buff, Spells.ElementalEyeBuff)]:
                 if eye.turns_left >= eye.freq and not is_immune(unit, eye.spell, eye.element):
@@ -2839,26 +2838,17 @@ class GoldenTricksterShot(Spell):
         self.damage = self.spell.get_stat("minion_damage")
         self.range = self.spell.get_stat("minion_range")
         self.requires_los = 0 if self.spell.get_stat("phase") else 1
-        self.damage_type = [Tags.Fire, Tags.Lightning, Tags.Physical]
-        self.description = "Does no actual damage but otherwise behaves as if all damage types are dealt. Randomly teleports the target up to 3 tiles away."
-    
-    def get_ai_target(self):
-        targets = [unit for unit in self.caster.level.units if are_hostile(unit, self.caster) and self.can_cast(unit.x, unit.y)]
-        if not targets:
-            return None
-        else:
-            target = random.choice(targets)
-            return Point(target.x, target.y)
+        self.description = "Does no actual damage but otherwise behaves as if fire, lightning, and physical damage are dealt. Randomly teleports the target up to 3 tiles away."
 
     def cast(self, x, y):
         for point in Bolt(self.caster.level, self.caster, Point(x, y), find_clear=self.requires_los):
-            self.caster.level.show_effect(point.x, point.y, random.choice(self.damage_type), minor=True)
+            self.caster.level.show_effect(point.x, point.y, random.choice([Tags.Fire, Tags.Lightning, Tags.Physical]), minor=True)
             yield
         unit = self.caster.level.get_unit_at(x, y)
         if not unit:
             return
         damage = self.get_stat("damage")
-        for dtype in self.damage_type:
+        for dtype in [Tags.Fire, Tags.Lightning, Tags.Physical]:
             self.caster.level.event_manager.raise_event(EventOnPreDamaged(unit, damage, dtype, self), unit)
             self.caster.level.event_manager.raise_event(EventOnDamaged(unit, damage, dtype, self), unit)
         randomly_teleport(unit, 3)
@@ -2986,6 +2976,7 @@ class RainbowEggBuff(Buff):
         yield
 
 class RainbowDrakeBuff(Buff):
+
     def __init__(self, breath):
         self.breath = breath
         Buff.__init__(self)
@@ -2993,6 +2984,7 @@ class RainbowDrakeBuff(Buff):
         self.color = Tags.Dragon.color
         self.on_advance = self.change_element
         self.on_applied = lambda owner: self.change_element()
+    
     def change_element(self):
         elements = []
         weights = []
@@ -3004,38 +2996,40 @@ class RainbowDrakeBuff(Buff):
             elements.append(element)
             weights.append(self.owner.resists[element])
         if elements:
-            self.breath.damage_type = random.choices(elements, weights)[0]
+            self.breath.element = random.choices(elements, weights)[0]
         else:
-            self.breath.damage_type = random.choice([Tags.Fire, Tags.Ice, Tags.Lightning, Tags.Poison, Tags.Holy, Tags.Dark, Tags.Arcane, Tags.Physical])
+            self.breath.element = random.choice([Tags.Fire, Tags.Ice, Tags.Lightning, Tags.Poison, Tags.Holy, Tags.Dark, Tags.Arcane, Tags.Physical])
 
 class RainbowBreath(BreathWeapon):
 
     def __init__(self, spell):
         BreathWeapon.__init__(self)
         self.name = "Rainbow Breath"
-        self.damage_type = Tags.Physical # To be immediately changed
+        self.element = Tags.Physical # To be immediately changed
         self.damage = spell.get_stat("breath_damage")
         self.range = spell.get_stat("minion_range")
         self.penetration = spell.get_stat("penetration")
-        self.description = "Penetrates enemy resistance by an amount equal to half of the user's own resistance to its element%s." % ((" plus %i" % self.penetration) if self.penetration else "")
     
+    def get_description(self):
+        return "Deals %s damage in a cone. Penetrates %s resistance by an amount equal to half of the user's own %s resistance%s." % (self.element.name, self.element.name, self.element.name, (" plus %i" % self.penetration) if self.penetration else "")
+
     def per_square_effect(self, x, y):
         unit = self.caster.level.get_unit_at(x, y)
         if unit and are_hostile(self.caster, unit):
-            amount = (self.caster.resists[self.damage_type]//2 if self.caster.resists[self.damage_type] >= 0 else 0) + self.penetration
-            unit.resists[self.damage_type] -= amount
-            unit.deal_damage(self.get_stat("damage"), self.damage_type, self)
-            unit.resists[self.damage_type] += amount
+            amount = (self.caster.resists[self.element]//2 if self.caster.resists[self.element] >= 0 else 0) + self.penetration
+            unit.resists[self.element] -= amount
+            unit.deal_damage(self.get_stat("damage"), self.element, self)
+            unit.resists[self.element] += amount
         else:
-            self.caster.level.deal_damage(x, y, self.get_stat("damage"), self.damage_type, self)
+            self.caster.level.deal_damage(x, y, self.get_stat("damage"), self.element, self)
     
     def get_ai_target(self):
         def is_good_target(unit):
             if not unit or not are_hostile(unit, self.caster) or not self.can_cast(unit.x, unit.y):
                 return False
-            if unit.resists[self.damage_type] - (self.caster.resists[self.damage_type]//2 if self.caster.resists[self.damage_type] >= 0 else 0) - self.penetration < 100:
+            if unit.resists[self.element] - (self.caster.resists[self.element]//2 if self.caster.resists[self.element] >= 0 else 0) - self.penetration < 100:
                 return True
-            if not is_immune(unit, self, self.damage_type):
+            if not is_immune(unit, self, self.element):
                 return True
             return False
         targets = [u for u in self.caster.level.units if is_good_target(u)]
@@ -5224,9 +5218,8 @@ class ChaosTheoryPerturbation(Spell):
         self.radius = 2
         self.damage = self.spell.get_stat("minion_damage")
         self.range = self.spell.get_stat("minion_range")
-        self.damage_type = Tags.Arcane
         self.requires_los = False
-        self.description = "Only damages enemies. Melts walls and creates thunderstorm and blizzard clouds."
+        self.description = "Deals arcane damage to enemies. Melts walls and creates thunderstorm and blizzard clouds."
 
     def get_impacted_tiles(self, x, y):
         return [p for stage in Burst(self.caster.level, Point(x, y), self.get_stat('radius'), ignore_walls=True) for p in stage]
@@ -5235,7 +5228,7 @@ class ChaosTheoryPerturbation(Spell):
         def is_good_target(unit):
             if not unit or not are_hostile(unit, self.caster) or not self.can_cast(unit.x, unit.y):
                 return False
-            if not is_immune(unit, self, self.damage_type):
+            if not is_immune(unit, self, Tags.Arcane):
                 return True
             if not is_immune(unit, self, Tags.Lightning) or not is_immune(unit, self, Tags.Ice):
                 return True
