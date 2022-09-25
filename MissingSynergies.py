@@ -488,23 +488,35 @@ class PlanarBindingBuff(Buff):
         self.color = Tags.Holy.color
         self.buff_type = BUFF_TYPE_CURSE
         self.asset = ["MissingSynergies", "Statuses", "planar_binding"]
+        if self.spell.get_stat("thorough"):
+            self.owner_triggers[EventOnMoved] = self.on_moved
     
     def do_teleport(self):
     
         if self.owner.x != self.x or self.owner.y != self.y:
             point = self.owner.level.get_summon_point(self.x, self.y, flying=self.owner.flying)
             if point:
-                yield self.owner.level.act_move(self.owner, point.x, point.y, teleport=True)
+                # Prevent infinite loop with Thorough Binding if the original location is blocked
+                self.x = point.x
+                self.y = point.y
+                self.owner.level.act_move(self.owner, point.x, point.y, teleport=True)
                 self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
             return
         
         # We can't actually teleport the unit onto the same tile as itself, because that tile is occupied by itself
         # So we just cheat, raise an EventOnMoved, and pretend the teleport happened
         if self.spell.get_stat("redundancy") and self.owner.is_alive():
-            yield self.owner.level.event_manager.raise_event(EventOnMoved(self.owner, self.x, self.y, teleport=True), self.owner)
+            self.owner.level.event_manager.raise_event(EventOnMoved(self.owner, self.x, self.y, teleport=True), self.owner)
             self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
     
+        yield
+
     def on_advance(self):
+        self.owner.level.queue_spell(self.do_teleport())
+    
+    def on_moved(self, evt):
+        if not evt.teleport:
+            return
         self.owner.level.queue_spell(self.do_teleport())
 
 class PlanarBindingSpell(Spell):
@@ -525,6 +537,7 @@ class PlanarBindingSpell(Spell):
         self.upgrades["range"] = (7, 2)
         self.upgrades["requires_los"] = (-1, 2, "Blindcasting", "Planar Binding can be cast without line of sight.")
         self.upgrades["redundancy"] = (1, 2, "Redundancy", "The target still counts as having teleported even if it did not move away from its original spot.")
+        self.upgrades["thorough"] = (1, 5, "Thorough Binding", "The target will now be immediately teleported back to its original location whenever it teleports.")
     
     def get_description(self):
         return ("For [{duration}_turns:duration], the target will be teleported back each turn to the location it was when this spell was originally cast if it moved away from that tile.").format(**self.fmt_dict())
@@ -6089,5 +6102,51 @@ class MadWerewolfSpell(Spell):
     def cast_instant(self, x, y):
         self.summon(self.get_werewolf(), target=Point(x, y))
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, BlackWinterSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell])
+class ParlorTrickDummySpell(Spell):
+    def __init__(self, tag):
+        Spell.__init__(self)
+        self.tags = [tag]
+        self.name = "%s Trick" % tag.name
+        self.range = RANGE_GLOBAL
+        self.requires_los = False
+        self.can_target_self = True
+        self.level = 1
+    def cast_instant(self, x, y):
+        return
+
+class ParlorTrickSpell(Spell):
+
+    def on_init(self):
+        self.name = "Parlor Trick"
+        self.asset = ["MissingSynergies", "Icons", "parlor_trick"]
+        self.tags = [Tags.Chaos, Tags.Sorcery]
+        self.level = 1
+        self.max_charges = 20
+        self.range = 12
+
+        self.upgrades["requires_los"] = (-1, 2, "Blindcasting", "Parlor Trick can be cast without line of sight.")
+        self.upgrades["max_charges"] = (15, 2)
+        self.upgrades["range"] = (5, 2)
+        self.upgrades["endless"] = (1, 4, "Endless Trick", "Each cast of Parlor Trick has a 75% chance to cast itself again, as long as it has enough charges.")
+
+    def get_description(self):
+        return ("Pretend to cast a [fire] spell, an [ice] spell, a [lightning] spell, a [nature] spell, an [arcane] spell, a [holy] spell, and a [dark] spell at the target tile, triggering all effects that are normally triggered when casting spells with those tags.\n"
+                "These fake spells are considered level 1 and have no other tags.").format(**self.fmt_dict())
+
+    def cast(self, x, y):
+        
+        for point in Bolt(self.caster.level, self.caster, Point(x, y), find_clear=False):
+            self.caster.level.show_effect(point.x, point.y, random.choice([Tags.Fire, Tags.Ice, Tags.Lightning, Tags.Poison, Tags.Holy, Tags.Dark, Tags.Arcane, Tags.Physical]), minor=random.choice([True, False]))
+            yield
+        
+        for tag in [Tags.Fire, Tags.Ice, Tags.Lightning, Tags.Nature, Tags.Holy, Tags.Dark, Tags.Arcane]:
+            spell = ParlorTrickDummySpell(tag)
+            spell.caster = self.caster
+            spell.owner = self.caster
+            self.caster.level.event_manager.raise_event(EventOnSpellCast(spell, self.caster, x, y), self.caster)
+        
+        if self.get_stat("endless") and self.can_cast(x, y) and self.cur_charges > 0 and random.random() < 0.75:
+            self.caster.level.act_cast(self.caster, self, x, y)
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, BlackWinterSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter])
