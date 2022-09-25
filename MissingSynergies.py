@@ -6114,6 +6114,20 @@ class ParlorTrickDummySpell(Spell):
     def cast_instant(self, x, y):
         return
 
+class ParlorTrickEndless(Upgrade):
+
+    def on_init(self):
+        self.name = "Endless Trick"
+        self.level = 4
+        self.description = "Each cast of Parlor Trick has a 75% chance to cast itself again, as long as it has enough charges.\nThis upgrade cannot copy Parlor Trick more times in a turn than the spell has max charges."
+        self.spell_bonuses[ParlorTrickSpell]["endless"] = 1
+    
+    def on_applied(self, owner):
+        self.prereq.times_copied = 0
+
+    def on_pre_advance(self):
+        self.prereq.times_copied = 0
+
 class ParlorTrickSpell(Spell):
 
     def on_init(self):
@@ -6123,14 +6137,15 @@ class ParlorTrickSpell(Spell):
         self.level = 1
         self.max_charges = 20
         self.range = 12
+        self.times_copied = 0
 
         self.upgrades["requires_los"] = (-1, 2, "Blindcasting", "Parlor Trick can be cast without line of sight.")
         self.upgrades["max_charges"] = (15, 2)
         self.upgrades["range"] = (5, 2)
-        self.upgrades["endless"] = (1, 4, "Endless Trick", "Each cast of Parlor Trick has a 75% chance to cast itself again, as long as it has enough charges.")
+        self.add_upgrade(ParlorTrickEndless())
 
     def get_description(self):
-        return ("Pretend to cast a [fire] spell, an [ice] spell, a [lightning] spell, a [nature] spell, an [arcane] spell, a [holy] spell, and a [dark] spell at the target tile, triggering all effects that are normally triggered when casting spells with those tags.\n"
+        return ("Pretend to cast a [fire] spell, an [ice] spell, a [lightning] spell, a [nature] spell, an [arcane] spell, a [holy] spell, and a [dark] spell at the target tile in random order, triggering all effects that are normally triggered when casting spells with those tags.\n"
                 "These fake spells are considered level 1 and have no other tags.").format(**self.fmt_dict())
 
     def cast(self, x, y):
@@ -6139,14 +6154,143 @@ class ParlorTrickSpell(Spell):
             self.caster.level.show_effect(point.x, point.y, random.choice([Tags.Fire, Tags.Ice, Tags.Lightning, Tags.Poison, Tags.Holy, Tags.Dark, Tags.Arcane, Tags.Physical]), minor=random.choice([True, False]))
             yield
         
-        for tag in [Tags.Fire, Tags.Ice, Tags.Lightning, Tags.Nature, Tags.Holy, Tags.Dark, Tags.Arcane]:
+        tags = [Tags.Fire, Tags.Ice, Tags.Lightning, Tags.Nature, Tags.Holy, Tags.Dark, Tags.Arcane]
+        random.shuffle(tags)
+        for tag in tags:
             spell = ParlorTrickDummySpell(tag)
             spell.caster = self.caster
             spell.owner = self.caster
             self.caster.level.event_manager.raise_event(EventOnSpellCast(spell, self.caster, x, y), self.caster)
         
-        if self.get_stat("endless") and self.can_cast(x, y) and self.cur_charges > 0 and random.random() < 0.75:
+        if self.get_stat("endless") and self.can_cast(x, y) and self.cur_charges > 0 and self.times_copied < self.get_stat("max_charges") and random.random() < 0.75:
+            self.times_copied += 1
             self.caster.level.act_cast(self.caster, self, x, y)
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, BlackWinterSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell])
+class GrudgeReaperBuff(Soulbound):
+
+    def __init__(self, spell, target):
+        self.relentless = spell.get_stat("relentless")
+        self.insatiable = spell.get_stat("insatiable")
+        self.spell = spell
+        Soulbound.__init__(self, target)
+        self.color = Tags.Demon.color
+    
+    def on_init(self):
+        Soulbound.on_init(self)
+        self.description = "Cannot be killed when the target of its grudge is alive. Vanishes when the target dies."
+        self.global_triggers[EventOnDeath] = self.on_death
+
+    def on_death(self, evt):
+        if evt.unit is not self.guardian:
+            return
+        if self.insatiable and Point(evt.unit.x, evt.unit.y) not in self.owner.level.get_adjacent_points(Point(self.owner.x, self.owner.y), filter_walkable=False):
+            units = [unit for unit in self.owner.level.units if are_hostile(unit, self.spell.caster)]
+            if units:
+                self.guardian = random.choice(units)
+                return
+        self.owner.cur_hp = 0
+        self.owner.kill(trigger_death_event=False)
+
+    def on_pre_advance(self):
+        if not self.guardian.is_alive():
+            self.owner.cur_hp = 0
+            self.owner.kill(trigger_death_event=False)
+        if not self.relentless:
+            return
+        target = self.guardian
+        points = [point for point in self.owner.level.get_points_in_ball(target.x, target.y, distance(target, self.owner)) if self.owner.level.can_move(self.owner, point.x, point.y, teleport=True)]
+        if not points:
+            return
+        dest = random.choice(points)
+        self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
+        self.owner.level.act_move(self.owner, dest.x, dest.y, teleport=True)
+
+class HatredBuff(Buff):
+    def on_init(self):
+        self.name = "Hatred"
+        self.buff_type = BUFF_TYPE_CURSE
+        self.stack_type = STACK_INTENSITY
+        self.color = Tags.Demon.color
+        self.resists[Tags.Dark] = -100
+
+class GrudgeReapSpell(SimpleMeleeAttack):
+
+    def __init__(self, damage, grudge, hatred=False, shield_reap=False):
+        self.grudge = grudge
+        self.hatred = hatred
+        self.shield_reap = shield_reap
+        SimpleMeleeAttack.__init__(self, damage=damage, damage_type=Tags.Dark)
+        self.name = "Grudge Reap"
+        self.description = "Can only be used against the target of the user's grudge."
+    
+    def cast_instant(self, x, y):
+        unit = self.caster.level.get_unit_at(x, y)
+        if unit:
+            if self.hatred:
+                unit.apply_buff(HatredBuff())
+            if self.shield_reap:
+                unit.shields = max(0, unit.shields - 6)
+        self.caster.level.deal_damage(x, y, self.get_stat("damage"), Tags.Dark, self)
+
+    def can_cast(self, x, y):
+        if x != self.grudge.guardian.x or y != self.grudge.guardian.y:
+            return False
+        return Spell.can_cast(self, x, y)
+
+    # For my No More Scams mod
+    def can_redeal(self, target):
+        return self.hatred
+
+class GrudgeReaperSpell(Spell):
+
+    def on_init(self):
+        self.name = "Grudge Reaper"
+        self.asset = ["MissingSynergies", "Icons", "grudge_reaper"]
+        self.tags = [Tags.Dark, Tags.Conjuration]
+        self.level = 3
+        self.max_charges = 10
+        self.range = RANGE_GLOBAL
+        self.requires_los = False
+        self.can_target_empty = False
+
+        self.minion_damage = 200
+        self.minion_health = 31
+
+        self.upgrades["max_charges"] = (5, 3)
+        self.upgrades["relentless"] = (1, 3, "Relentless Grudge", "Each turn, before it acts, the reaper is guaranteed to teleport closer to the target of its grudge.")
+        self.upgrades["shield_reap"] = (1, 2, "Shield Reaper", "The reaper's attack will remove up to [6_SH:shields] before dealing damage.")
+        self.upgrades["hatred"] = (1, 5, "Overwhelming Hatred", "The reaper's attack will permanently reduce the target's [dark] resistance by 100 before dealing damage.\nThis reduction stacks.")
+        self.upgrades["insatiable"] = (1, 4, "Insatiable Grudge", "If the target of the reaper's grudge dies while not adjacent to the reaper, the reaper will redirect its grudge toward another random enemy instead of vanishing.")
+
+    def get_description(self):
+        return ("Summon a demonic spirit next to yourself that bears a grudge against the target unit. It cannot be killed by damage while the target is alive, but vanishes without counting as dying when the target dies.\n"
+                "The reaper has a melee attack that deals [{minion_damage}_dark:dark] damage, which can only be used against the target of its grudge.").format(**self.fmt_dict())
+
+    def cast_instant(self, x, y):
+
+        target = self.caster.level.get_unit_at(x, y)
+        if not target:
+            return
+        
+        def can_harm(unit, other):
+            buff = unit.get_buff(GrudgeReaperBuff)
+            if not buff:
+                return False
+            if other is not buff.guardian:
+                return False
+            return Unit.can_harm(unit, other)
+        
+        unit = Reaper()
+        unit.name = "Grudge Reaper"
+        unit.asset = ["MissingSynergies", "Units", "grudge_reaper"]
+        unit.tags.append(Tags.Demon)
+        unit.resists[Tags.Poison] = 100
+        unit.max_hp = self.get_stat("minion_health")
+        buff = GrudgeReaperBuff(self, target)
+        unit.buffs = [buff]
+        unit.spells = [GrudgeReapSpell(self.get_stat("minion_damage"), buff, self.get_stat("hatred"), self.get_stat("shield_reap"))]
+        unit.can_harm = lambda other: can_harm(unit, other)
+        self.summon(unit, radius=5)
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, BlackWinterSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter])

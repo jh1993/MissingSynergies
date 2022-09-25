@@ -63,6 +63,7 @@ Spells:
 + Box of Woe (Dark/Lightning/Ice/Conjuration)
 + Mad Werewolf (Dark/Nature/Arcane/Conjuration)
 + Parlor Trick (Chaos/Sorcery)
++ Grudge Reaper (Dark/Conjuration)
 
 Skills:
 + Shivering Venom (Ice/Nature)
