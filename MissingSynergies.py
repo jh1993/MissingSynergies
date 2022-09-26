@@ -577,7 +577,7 @@ class ChaosShuffleSpell(Spell):
         self.shuffle_once(unit)
         if not self.get_stat("mass"):
             yield False
-        others = self.owner.level.get_units_in_ball(Point(unit.x, unit.y), 3)
+        others = self.owner.level.get_units_in_ball(Point(unit.x, unit.y), self.get_stat("radius", base=3))
         others = [other for other in others if other is not unit and are_hostile(self.caster, other)]
         random.shuffle(others)
         for other in others:
@@ -6292,5 +6292,102 @@ class GrudgeReaperSpell(Spell):
         unit.can_harm = lambda other: can_harm(unit, other)
         self.summon(unit, radius=5)
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, BlackWinterSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell])
+class BlackWail(BreathWeapon):
+
+    def __init__(self, damage, range):
+        BreathWeapon.__init__(self)
+        self.damage_type = Tags.Dark
+        self.damage = damage
+        self.range = range
+        self.name = "Black Wail"
+        self.description = "Deals damage to enemies in a cone."
+        self.cool_down = 2
+    
+    def per_square_effect(self, x, y):
+        unit = self.caster.level.get_unit_at(x, y)
+        if not unit or not are_hostile(unit, self.caster):
+            self.caster.level.show_effect(x, y, Tags.Dark)
+        else:
+            unit.deal_damage(self.get_stat("damage"), Tags.Dark, self)
+
+class DeathMetalSpell(Spell):
+
+    def on_init(self):
+        self.name = "Death Metal"
+        self.asset = ["MissingSynergies", "Icons", "death_metal"]
+        self.tags = [Tags.Metallic, Tags.Dark, Tags.Sorcery, Tags.Conjuration]
+        self.level = 6
+        self.max_charges = 3
+        self.range = 0
+
+        self.minion_health = 78
+        self.minion_damage = 13
+        self.minion_range = 7
+        self.minion_duration = 6
+        self.num_summons = 4
+
+        self.upgrades["num_summons"] = (2, 3, "Num Summons", "Up to [2:num_summons] more metalheads can be summoned.")
+        self.upgrades["chorus"] = (1, 4, "Shrieking Chorus", "When you already have the normal maximum number of metalheads summoned, this spell has a chance to summon a metalhead beyond the maximum number each turn when channeled, equal to 100% divided by your current number of metalheads.")
+        self.upgrades["gore"] = (1, 5, "Goregrind", "Each turn when channeling this spell, all of your minions gain a stack of bloodlust for a duration equal to this spell's [minion_duration:minion_duration], increasing all of their damage by 1.\nThe remaining durations of all of their bloodlust stacks are then increased by [1_turn:duration].")
+        self.upgrades["discord"] = (1, 4, "Discordian Tune", "Enemies that take [physical] damage from this spell have a 25% chance to be [stunned] for [1_turn:duration].\nEnemies that take [dark] damage from this spell have a 25% chance to go [berserk] for [1_turn:duration].\nThese durations are fixed and unaffected by bonuses.")
+
+    def get_description(self):
+        return ("Channel this spell to create aggressive otherworldly music, repeating the following effects each turn.\n"
+                "Summon a metalhead near you for [{minion_duration}_turns:minion_duration], which is a stationary flying [metallic] [undead] minion with [{minion_health}_HP:minion_health]. It has a wailing attack that deals [{minion_damage}_dark:dark] damage to enemies in a [{minion_range}_tile:minion_range] cone, and a headbanging leap attack that deals [{minion_damage}_physical:physical] with double the range. At most [{num_summons}:num_summons] metalheads can be summoned.\n"
+                "All of your temporary minions, including metalheads, have their remaining durations increased by [1_turn:minion_duration].\n"
+                "All enemies take [1_dark:dark] or [1_physical:physical] damage.").format(**self.fmt_dict())
+
+    def cast(self, x, y, channel_cast=False):
+
+        if not channel_cast:
+            self.caster.apply_buff(ChannelBuff(self.cast, Point(x, y)))
+            return
+
+        minion_duration = self.get_stat("minion_duration")
+        existing_num = len([unit for unit in self.caster.level.units if unit.source is self])
+        if existing_num < self.get_stat("num_summons") or (self.get_stat("chorus") and random.random() < 1/existing_num):
+            unit = GiantSkull()
+            unit.name = "Metalhead"
+            unit.asset = ["MissingSynergies", "Units", "metalhead"]
+            unit.tags.append(Tags.Metallic)
+            unit.resists[Tags.Ice] = 100
+            unit.max_hp = self.get_stat("minion_health")
+            minion_range = self.get_stat("minion_range")
+            minion_damage = self.get_stat("minion_damage")
+            leap = LeapAttack(damage=minion_damage, range=2*minion_range)
+            leap.name = "Headbang"
+            leap.cool_down = 2
+            unit.spells = [leap, BlackWail(minion_damage, minion_range)]
+            unit.turns_to_death = minion_duration
+            self.summon(unit, radius=5, sort_dist=False)
+        
+        discord = self.get_stat("discord")
+        gore = self.get_stat("gore")
+
+        for unit in list(self.caster.level.units):
+
+            if are_hostile(unit, self.caster):
+                if random.choice([True, False]):
+                    dealt = unit.deal_damage(1, Tags.Dark, self)
+                    if discord and dealt and random.random() < 0.25:
+                        unit.apply_buff(BerserkBuff(), 1)
+                else:
+                    dealt = unit.deal_damage(1, Tags.Physical, self)
+                    if discord and dealt and random.random() < 0.25:
+                        unit.apply_buff(Stun(), 1)
+
+            else:
+                if unit.is_player_controlled:
+                    continue
+                if unit.turns_to_death is not None:
+                    unit.turns_to_death += 1
+                if gore:
+                    unit.apply_buff(BloodrageBuff(1), minion_duration)
+                    for buff in unit.buffs:
+                        if isinstance(buff, BloodrageBuff) and buff.turns_left:
+                            buff.turns_left += 1
+
+        yield
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, BlackWinterSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter])

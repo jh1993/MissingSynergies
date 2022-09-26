@@ -64,6 +64,7 @@ Spells:
 + Mad Werewolf (Dark/Nature/Arcane/Conjuration)
 + Parlor Trick (Chaos/Sorcery)
 + Grudge Reaper (Dark/Conjuration)
++ Death Metal (Dark/Metallic/Sorcery/Conjuration)
 
 Skills:
 + Shivering Venom (Ice/Nature)
