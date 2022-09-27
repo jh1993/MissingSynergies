@@ -6316,7 +6316,7 @@ class DeathMetalSpell(Spell):
         self.name = "Death Metal"
         self.asset = ["MissingSynergies", "Icons", "death_metal"]
         self.tags = [Tags.Metallic, Tags.Dark, Tags.Sorcery, Tags.Conjuration]
-        self.level = 6
+        self.level = 7
         self.max_charges = 3
         self.range = 0
 
@@ -6329,13 +6329,12 @@ class DeathMetalSpell(Spell):
         self.upgrades["num_summons"] = (2, 3, "Num Summons", "Up to [2:num_summons] more metalheads can be summoned.")
         self.upgrades["chorus"] = (1, 4, "Shrieking Chorus", "When you already have the normal maximum number of metalheads summoned, this spell has a chance to summon a metalhead beyond the maximum number each turn when channeled, equal to 100% divided by your current number of metalheads.")
         self.upgrades["gore"] = (1, 5, "Goregrind", "Each turn when channeling this spell, all of your minions gain a stack of bloodlust for a duration equal to this spell's [minion_duration:minion_duration], increasing all of their damage by 1.\nThe remaining durations of all of their bloodlust stacks are then increased by [1_turn:duration].")
-        self.upgrades["discord"] = (1, 4, "Discordian Tune", "Enemies that take [physical] damage from this spell have a 25% chance to be [stunned] for [1_turn:duration].\nEnemies that take [dark] damage from this spell have a 25% chance to go [berserk] for [1_turn:duration].\nThese durations are fixed and unaffected by bonuses.")
+        self.upgrades["discord"] = (1, 6, "Discordian Tune", "Each turn, each enemy has a 25% chance to take [1_dark:dark] or [1_physical:physical] damage.\nEnemies that take [physical] damage are [stunned] for [1_turn:duration].\nEnemies that take [dark] damage go [berserk] for [1_turn:duration].\nThese durations are fixed and unaffected by bonuses.")
 
     def get_description(self):
-        return ("Channel this spell to create aggressive otherworldly music, repeating the following effects each turn.\n"
-                "Summon a metalhead near you for [{minion_duration}_turns:minion_duration], which is a stationary flying [metallic] [undead] minion with [{minion_health}_HP:minion_health]. It has a wailing attack that deals [{minion_damage}_dark:dark] damage to enemies in a [{minion_range}_tile:minion_range] cone, and a headbanging leap attack that deals [{minion_damage}_physical:physical] with double the range. At most [{num_summons}:num_summons] metalheads can be summoned.\n"
-                "All of your temporary minions, including metalheads, have their remaining durations increased by [1_turn:minion_duration].\n"
-                "All enemies take [1_dark:dark] or [1_physical:physical] damage.").format(**self.fmt_dict())
+        return ("Channel this spell to create aggressive otherworldly music each turn to motivate your temporary minions, increasing their remaining durations by [1_turn:minion_duration].\n"
+                "In addition, summon a metalhead near you each turn for [{minion_duration}_turns:minion_duration], which is a stationary flying [metallic] [undead] minion with [{minion_health}_HP:minion_health]. It has a wailing attack that deals [{minion_damage}_dark:dark] damage to enemies in a [{minion_range}_tile:minion_range] cone, and a headbanging leap attack that deals [{minion_damage}_physical:physical] with double the range.\n"
+                "At most [{num_summons}:num_summons] metalheads can be summoned.\n").format(**self.fmt_dict())
 
     def cast(self, x, y, channel_cast=False):
 
@@ -6367,13 +6366,15 @@ class DeathMetalSpell(Spell):
         for unit in list(self.caster.level.units):
 
             if are_hostile(unit, self.caster):
+                if not discord or random.random() >= 0.25:
+                    continue
                 if random.choice([True, False]):
                     dealt = unit.deal_damage(1, Tags.Dark, self)
-                    if discord and dealt and random.random() < 0.25:
+                    if dealt:
                         unit.apply_buff(BerserkBuff(), 1)
                 else:
                     dealt = unit.deal_damage(1, Tags.Physical, self)
-                    if discord and dealt and random.random() < 0.25:
+                    if dealt:
                         unit.apply_buff(Stun(), 1)
 
             else:
