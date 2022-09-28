@@ -4664,6 +4664,12 @@ class SoakedBuff(Buff):
         self.owner_triggers[EventOnDamaged] = self.on_damaged
         self.owner_triggers[EventOnBuffApply] = self.on_buff_apply
     
+    def on_applied(self, owner):
+        freeze = self.owner.get_buff(FrozenBuff)
+        if freeze:
+            freeze.turns_left += self.turns_left
+            return ABORT_BUFF_APPLY
+
     def on_damaged(self, evt):
         if evt.source is self.upgrade:
             return
