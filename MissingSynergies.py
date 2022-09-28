@@ -4113,14 +4113,16 @@ class BlackWinterBuff(Buff):
     def on_pre_damaged(self, evt):
         if evt.damage_type != Tags.Heal or evt.damage >= 0:
             return
-        for _ in range(-evt.damage):
-            targets = list(self.owner.level.units)
-            if self.mercy:
-                targets = [target for target in targets if are_hostile(self.owner, target)]
-            if not targets:
-                return
-            target = random.choice(targets)
-            target.deal_damage(1, random.choice([Tags.Dark, Tags.Ice]), self.spell)
+        targets = list(self.owner.level.units)
+        if self.mercy:
+            targets = [target for target in targets if are_hostile(self.owner, target)]
+        if not targets:
+            return
+        random.shuffle(targets)
+        num_targets = random.choice(range(1, len(targets) + 1))
+        damage = -evt.damage//num_targets
+        for target in targets[:num_targets]:
+            target.deal_damage(damage, random.choice([Tags.Dark, Tags.Ice]), self.spell)
 
     def on_buff_apply(self, evt):
         if isinstance(evt.buff, FrozenBuff) and are_hostile(evt.unit, self.owner):
@@ -4149,9 +4151,8 @@ class BlackWinterSpell(Spell):
         self.upgrades["endless"] = (1, 5, "Endless Cold", "When an enemy is [frozen], the duration of that freeze is extended by [1_turn:duration].")
 
     def get_description(self):
-        return ("Every turn, all units take [1_dark:dark] or [1_ice:ice] damage.\n"
-                "Whenever a unit is about to be [healed:heal], before counting resistances, deal [1_dark:dark] or [1_ice:ice] damage to a random unit for every 1 HP healed.\n"
-                "The damage of this spell is fixed, and cannot be increased using shrines, skills, or buffs.\n"
+        return ("Every turn, all units take [1_dark:dark] or [1_ice:ice] damage. This damage is fixed, and cannot be increased using shrines, skills, or buffs.\n"
+                "Whenever a unit is about to be [healed:heal], before counting resistances, deal that amount as [dark] or [ice] damage divided among a random number of units.\n"
                 "Lasts [{duration}_turns:duration].").format(**self.fmt_dict())
 
     def cast_instant(self, x, y):
