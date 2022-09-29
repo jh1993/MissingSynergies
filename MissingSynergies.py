@@ -1615,6 +1615,7 @@ class TwistedMutationSpell(Spell):
         self.tags = [Tags.Nature, Tags.Chaos, Tags.Enchantment, Tags.Conjuration]
         self.range = 8
         self.max_charges = 2
+        self.minion_damage = 3
 
         self.upgrades["hp_bonus"] = (30, 2, "Twisted Vitality", "The target gains [30_HP:minion_health].")
         self.upgrades["on_death"] = (1, 4, "Twisted Remains", "On death, the target spawns giant spiders, green slimes, and large toxic worm balls based on its max HP.")
@@ -1623,7 +1624,8 @@ class TwistedMutationSpell(Spell):
     def get_description(self):
         return ("Can only target [living], [nature], or [demon] allies.\n"
                 "The target becomes a [spider], [slime], and [poison] unit.\n"
-                "It gains a passive web-weaving ability, [100_poison:poison] resistance, an aura that deals [2_poison:poison] damage to enemies in a [4_tile:radius] radius each turn, and a slime-like ability to randomly gain max HP and spawn mutant slime offshoots.").format(**self.fmt_dict())
+                "It gains a passive web-weaving ability, [100_poison:poison] resistance, an aura that deals [2_poison:poison] damage to enemies in a [4_tile:radius] radius each turn, and a slime-like ability to randomly gain max HP and spawn mutant slime offshoots.\n"
+                "The mutant slimes have the same max HP as the unit that spawned them, melee attacks that deal [{minion_damage}_poison:poison] damage, and all abilities granted by this spell.").format(**self.fmt_dict())
     
     def can_cast(self, x, y):
         if not Spell.can_cast(self, x, y):
@@ -1639,7 +1641,7 @@ class TwistedMutationSpell(Spell):
         slime.name = "Mutant Slime"
         slime.asset = ["MissingSynergies", "Units", "mutant_slime"]
 
-        slime.spells[0].damage = self.get_stat("minion_damage", base=slime.spells[0].damage)
+        slime.spells[0].damage = self.get_stat("minion_damage")
         slime.max_hp = max_hp
         slime.tags = [Tags.Slime, Tags.Spider, Tags.Poison]
         slime.source = self
