@@ -65,6 +65,7 @@ Spells:
 + Parlor Trick (Chaos/Sorcery)
 + Grudge Reaper (Dark/Conjuration)
 + Death Metal (Dark/Metallic/Sorcery/Conjuration)
++ Mutant Cyclops (Arcane/Conjuration)
 
 Skills:
 + Shivering Venom (Ice/Nature)

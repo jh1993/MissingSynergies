@@ -6397,5 +6397,152 @@ class DeathMetalSpell(Spell):
 
         yield
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, BlackWinterSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell])
+class MutantCyclopsMassTelekinesis(Spell):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Spell.__init__(self)
+    
+    def on_init(self):
+        self.name = "Mass Telekinesis"
+        self.damage_type = Tags.Physical
+        self.damage = self.spell.get_stat("minion_damage")
+        self.range = self.spell.get_stat("minion_range")
+        self.radius = self.spell.get_stat("radius")
+        self.cool_down = 3
+        self.num_targets = self.spell.get_stat("num_targets")
+        self.requires_los = not self.spell.get_stat("phase")
+        self.conjure = self.spell.get_stat("conjure")
+    
+    def get_description(self):
+        return "Throw %i units toward the target, dealing damage and stunning in a radius based on the thrown unit's max HP." % self.get_stat("num_targets")
+    
+    def throw(self, x, y, unit):
+        damage = self.get_stat("damage")
+        phase = not self.get_stat("requires_los")
+        if unit:
+            if (unit.x != x or unit.y != y):
+                for point in self.caster.level.get_points_in_line(unit, Point(x, y), find_clear=not phase):
+                    self.caster.level.leap_effect(point.x, point.y, Tags.Physical.color, unit)
+                    yield
+                self.caster.level.act_move(unit, x, y, teleport=True)
+        else:
+            for point in Bolt(self.caster.level, self.caster, Point(x, y), find_clear=not phase):
+                self.caster.level.show_effect(point.x, point.y, Tags.Physical, minor=True)
+                yield
+        
+        for stage in Burst(self.caster.level, Point(x, y), math.ceil(unit.max_hp/40) if unit else 1, ignore_walls=phase):
+            for point in stage:
+                target = self.caster.level.get_unit_at(point.x, point.y)
+                if not target or not are_hostile(target, self.caster):
+                    self.caster.level.show_effect(point.x, point.y, Tags.Physical)
+                else:
+                    target.deal_damage(damage, Tags.Physical, self)
+                    target.apply_buff(Stun(), 1)
+            yield
+
+    def get_thrown_units(self):
+        units = [unit for unit in self.caster.level.get_units_in_ball(self.caster, self.get_stat("radius")) if (not (are_hostile(unit, self.caster)) or self.caster.max_hp > unit.max_hp) and not unit.is_player_controlled and unit is not self.caster]
+        if self.get_stat("requires_los"):
+            units = [unit for unit in units if self.caster.level.can_see(unit.x, unit.y, self.caster.x, self.caster.y)]
+        return units
+
+    def get_throw_target(self, x, y, unit):
+        points = [point for point in self.caster.level.get_points_in_ball(x, y, self.get_stat("radius")) if self.caster.level.can_move(unit, point.x, point.y, teleport=True) or Point(unit.x, unit.y) == point]
+        if self.get_stat("requires_los"):
+            points = [point for point in points if self.caster.level.can_see(unit.x, unit.y, point.x, point.y)]
+        if not points:
+            return None
+        return min(points, key=lambda point: distance(point, Point(x, y)))
+
+    def can_cast(self, x, y):
+        if not Spell.can_cast(self, x, y):
+            return False
+        if not self.conjure:
+            units = self.get_thrown_units()
+            if not units or all([not self.get_throw_target(x, y, unit) for unit in units]):
+                return False
+        return True
+
+    def cast(self, x, y):
+        units = self.get_thrown_units()
+        random.shuffle(units)
+        yield from self.throw_units(x, y, units, 0)
+
+    def throw_units(self, x, y, units, num_thrown):
+
+        num_targets = self.get_stat("num_targets")
+        if num_thrown >= num_targets:
+            return
+        if not units:
+            if num_thrown < num_targets and self.conjure:
+                for _ in range(num_targets - num_thrown):
+                    self.caster.level.queue_spell(self.throw(x, y, None), non_simultaneous=True)
+            return
+        
+        target = self.get_throw_target(x, y, units[0])
+        if target:
+            yield from self.throw(target.x, target.y, units[0])
+            num_thrown += 1
+        units.pop(0)
+        self.caster.level.queue_spell(self.throw_units(x, y, units, num_thrown))
+
+class MutantCyclopsSpell(Spell):
+
+    def on_init(self):
+        self.name = "Mutant Cyclops"
+        self.asset = ["MissingSynergies", "Icons", "mutant_cyclops"]
+        self.tags = [Tags.Arcane, Tags.Conjuration]
+        self.level = 6
+        self.max_charges = 3
+        self.range = 10
+        self.requires_los = False
+        self.must_target_empty = True
+        self.must_target_walkable = True
+
+        self.minion_health = 126
+        self.minion_range = 15
+        self.minion_damage = 13
+        self.radius = 5
+        self.num_targets = 4
+
+        self.upgrades["minion_health"] = (84, 3)
+        self.upgrades["num_targets"] = (2, 3, "Num Targets", "The mutant cyclops can throw [2:num_targets] more units at once.")
+        self.upgrades["phase"] = (1, 6, "Phase Throw", "The mutant cyclops can now throw units not in its line of sight, at tiles not in each thrown unit's line of sight, passing through walls; each landing impact ignores walls.\nThe cyclops's leap attack becomes a teleport attack.")
+        self.upgrades["conjure"] = (1, 3, "Conjure Rocks", "If there are fewer than the maximum number of throwable units in range, the mutant cyclops will make up for the difference by throwing rocks at the target.\nEach rock deals damage and stuns in a [1_tile:radius] radius.")
+    
+    def get_description(self):
+        return ("Summon a mutant cyclops with [{minion_health}_HP:minion_health].\n It has a mass telekinesis ability with a [3_turn:duration] cooldown, which throws [{num_targets}:num_targets] units in LOS within [{radius}_tiles:radius] of itself toward an enemy [{minion_range}_tiles:minion_range] away. Upon landing, each unit deals [{minion_damage}_physical:physical] damage to all enemies in a burst with radius equal to the unit's max HP divided by 40, rounded up, and [stuns] for [1_turn:duration]. The wizard and enemies with more max HP than the cyclops cannot be thrown.\n"
+                "The cyclops also has a leap attack with the same range and damage.\n"
+                "Casting this spell again when the cyclops is already summoned will teleport it to the target tile and fully heal it.").format(**self.fmt_dict())
+
+    def cast_instant(self, x, y):
+
+        existing = None
+        for unit in self.caster.level.units:
+            if unit.source is self:
+                existing = unit
+                break
+        if existing:
+            self.caster.level.show_effect(existing.x, existing.y, Tags.Translocation)
+            self.caster.level.act_move(existing, x, y, teleport=True)
+            existing.deal_damage(-existing.max_hp, Tags.Heal, self)
+            return
+        
+        unit = Unit()
+        unit.unique = True
+        unit.name = "Mutant Cyclops"
+        unit.asset = ["MissingSynergies", "Units", "mutant_cyclops"]
+        unit.tags = [Tags.Living, Tags.Arcane]
+        unit.resists[Tags.Arcane] = 50
+        unit.max_hp = self.get_stat("minion_health")
+        minion_damage = self.get_stat("minion_damage")
+        minion_range = self.get_stat("minion_range")
+        phase = self.get_stat("phase")
+        leap = LeapAttack(damage=minion_damage, range=minion_range, is_leap=not phase, is_ghost=phase)
+        leap.name = "Telekinetic Leap"
+        unit.spells = [MutantCyclopsMassTelekinesis(self), leap]
+        self.summon(unit, target=Point(x, y))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, BlackWinterSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter])
