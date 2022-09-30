@@ -5529,7 +5529,7 @@ class TimeDilationSpell(Spell):
         self.upgrades["self"] = (1, 4, "Self Dilation", "You can now target yourself with Time Dilation to affect yourself.\nThis consumes 2 extra charges of the spell and cannot be done if you have less than 3 charges remaining.")
 
     def get_description(self):
-        return ("The buffs, debuffs, and passive effects of all units in a [{radius}_tile:radius] radius behave as if [{turns}_turns:duration] have passed, without losing any of their actual remaining durations.").format(**self.fmt_dict())
+        return ("The buffs, debuffs, and passive effects of all units in a [{radius}_tile:radius] radius behave as if [{turns}_turns:duration] have passed, without losing any of their actual remaining durations.\nThe caster is unaffected.").format(**self.fmt_dict())
 
     def can_cast(self, x, y):
         if x == self.caster.x and y == self.caster.y and self.get_stat("self") and self.cur_charges >= 3:
