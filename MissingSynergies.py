@@ -6543,7 +6543,7 @@ class MutantCyclopsSpell(Spell):
         phase = self.get_stat("phase")
         leap = LeapAttack(damage=minion_damage, range=minion_range, is_leap=not phase, is_ghost=phase)
         leap.name = "Telekinetic Leap"
-        unit.spells = [MutantCyclopsMassTelekinesis(self), leap]
+        unit.spells = [MutantCyclopsMassTelekinesis(self), leap, SimpleMeleeAttack(damage=self.get_stat("minion_damage"))]
         self.summon(unit, target=Point(x, y))
 
 class WastingBuff(Buff):
