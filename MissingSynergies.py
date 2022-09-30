@@ -4756,7 +4756,7 @@ class LivingLabyrinthBuff(Buff):
     
     def on_init(self):
         self.color = Tags.Arcane.color
-        self.description = "Whenever this unit casts a spell, each empty tile in a %i radius around itself has a 50%% chance to be randomly turned into a wall, chasm, or floor tile." % self.spell.get_stat("radius")
+        self.description = "Whenever this unit attacks, each empty tile in a %i radius around itself has a 50%% chance to be randomly turned into a wall, chasm, or floor tile." % self.spell.get_stat("radius")
         self.owner_triggers[EventOnSpellCast] = lambda evt: self.owner.level.queue_spell(self.maze())
     
     def maze(self):
@@ -4788,7 +4788,7 @@ class LivingLabyrinthSpell(Spell):
 
     def get_description(self):
         return ("Summon the Living Labyrinth, an [arcane] minotaur with [{minion_health}_HP:minion_health], and a teleport attack with [{minion_range}_range:minion_range] that deals [{minion_damage}_arcane:arcane] damage.\n"
-                "Whenever the Living Labyrinth casts a spell, each empty tile in a [{radius}_radius:radius] around it has a [50%:arcane] chance to be randomly turned into a wall, chasm, or floor tile.\n"
+                "Whenever the Living Labyrinth attacks, each empty tile in a [{radius}_radius:radius] around it has a [50%:arcane] chance to be randomly turned into a wall, chasm, or floor tile.\n"
                 "For the safety of its summoner, the Living Labyrinth will always ensure that the mazes it creates are escapable.\n"
                 "Casting this spell again while the Living Labyrinth is already present will instead teleport it to the target tile, restore it to full HP, and immediately transform its surroundings into a maze.").format(**self.fmt_dict())
 
