@@ -66,6 +66,7 @@ Spells:
 + Grudge Reaper (Dark/Conjuration)
 + Death Metal (Dark/Metallic/Sorcery/Conjuration)
 + Mutant Cyclops (Arcane/Conjuration)
++ Primordial Rot (Dark/Nature/Conjuration)
 
 Skills:
 + Shivering Venom (Ice/Nature)

@@ -6546,5 +6546,133 @@ class MutantCyclopsSpell(Spell):
         unit.spells = [MutantCyclopsMassTelekinesis(self), leap]
         self.summon(unit, target=Point(x, y))
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, BlackWinterSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell])
+class WastingBuff(Buff):
+
+    def __init__(self, source):
+        self.source = source
+        Buff.__init__(self)
+        self.name = "Wasting"
+
+    def on_applied(self, owner):
+        self.asset = ["MissingSynergies", "Statuses", "wasting"]
+        self.color = Tags.Dark.color
+        self.buff_type = BUFF_TYPE_CURSE
+        self.max_hp = self.owner.max_hp
+    
+    def on_advance(self):
+        if self.owner.max_hp < self.max_hp:
+            self.owner.deal_damage(self.max_hp - self.owner.max_hp, Tags.Dark, self.source)
+
+class PrimordialRotBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+    
+    def on_init(self):
+        self.name = "Primordial Rot"
+        self.color = Tags.Dark.color
+        self.max_hp_steal = self.spell.get_stat("max_hp_steal")
+        self.wasting = self.spell.get_stat("wasting")
+        self.description = "Attacks steal %i max HP and deal bonus damage based on max HP.\n\nSplits into two copies with half HP on death if max HP is at least 8." % self.max_hp_steal
+        self.global_triggers[EventOnPreDamaged] = self.on_pre_damaged
+        self.owner_triggers[EventOnDeath] = self.on_death
+    
+    def on_pre_damaged(self, evt):
+        if evt.damage <= 0 or evt.source.owner is not self.owner or not isinstance(evt.source, Spell):
+            return
+        # Queue this so the max HP drain happens after the triggering damage
+        self.owner.level.queue_spell(self.effect(evt))
+    
+    def effect(self, evt):
+        if self.wasting:
+            evt.unit.apply_buff(WastingBuff(self))
+        amount = min(evt.unit.max_hp, self.max_hp_steal)
+        if evt.unit.max_hp <= self.max_hp_steal:
+            evt.unit.max_hp = 1
+            evt.unit.cur_hp = 0
+            evt.unit.kill()
+        else:
+            drain_max_hp(evt.unit, self.max_hp_steal)
+        self.owner.max_hp += amount
+        self.owner.deal_damage(-amount, Tags.Heal, self)
+        if evt.source.melee:
+            damage = self.owner.max_hp//4
+        else:
+            damage = self.owner.max_hp//10
+        evt.unit.deal_damage(damage, evt.damage_type, self)
+        yield
+
+    def on_advance(self):
+        self.spell.update_sprite(self.owner)
+
+    def on_death(self, evt):
+        if self.owner.max_hp < 8:
+            return
+        for _ in range(2):
+            self.spell.summon(self.spell.get_unit(self.owner.max_hp//2), target=self.owner, radius=5)
+
+    # For my No More Scams mod
+    def can_redeal(self, target, source, damage_type):
+        return True
+
+class PrimordialRotSpell(Spell):
+
+    def on_init(self):
+        self.name = "Primordial Rot"
+        self.asset = ["MissingSynergies", "Icons", "primordial_rot"]
+        self.tags = [Tags.Nature, Tags.Dark, Tags.Conjuration]
+        self.level = 7
+        self.max_charges = 2
+        self.must_target_empty = True
+        self.must_target_walkable = True
+
+        self.minion_health = 64
+        self.minion_damage = 3
+        self.minion_duration = 10
+        self.max_hp_steal = 4
+
+        self.upgrades["minion_health"] = (64, 7)
+        self.upgrades["minion_duration"] = (5, 3)
+        self.upgrades["max_hp_steal"] = (4, 4)
+        self.upgrades["wasting"] = (1, 4, "Primordial Wasting", "The slime's attacks permanently inflict primordial wasting, which deals [dark] damage each turn equal to the amount of max HP the target has lost since the debuff was inflicted.")
+
+    def get_description(self):
+        return ("Summon a [nature] [undead] [slime] minion for [{minion_duration}_turns:minion_duration]. It has [{minion_health}_HP:minion_health] and a melee attack that deals [{minion_damage}_dark:dark] damage.\n"
+                "The slime's attacks steal [{max_hp_steal}:dark] max HP, and instantly kill targets with less max HP than that. Its melee attacks deal bonus damage equal to 25% of its max HP, and other attacks deal bonus damage equal to 10% of its max HP.\n"
+                "On death, the slime splits into two slimes with half max HP if its max HP was at least 8.").format(**self.fmt_dict())
+
+    def update_sprite(self, unit):
+        if unit.max_hp >= 256:
+            size = "huge"
+        elif unit.max_hp >= 64:
+            size = "large"
+        elif unit.max_hp > 8:
+            size = "medium"
+        else:
+            size = "small"
+        new_asset = "primordial_rot_%s" % size
+        if unit.asset[2] == new_asset:
+            return
+        unit.asset[2] = new_asset
+        unit.Anim = None
+    
+    def get_unit(self, max_hp):
+        unit = Unit()
+        unit.name = "Primordial Rot"
+        unit.max_hp = max_hp
+        unit.asset = ["MissingSynergies", "Units", ""]
+        self.update_sprite(unit)
+        unit.tags = [Tags.Nature, Tags.Undead, Tags.Slime]
+        unit.resists[Tags.Poison] = 100
+        unit.resists[Tags.Physical] = 50
+        unit.spells = [SimpleMeleeAttack(damage=self.get_stat("minion_damage"), damage_type=Tags.Dark)]
+        unit.buffs = [PrimordialRotBuff(self)]
+        unit.turns_to_death = self.get_stat("minion_duration")
+        return unit
+    
+    def cast_instant(self, x, y):
+        self.summon(self.get_unit(self.get_stat("minion_health")), target=Point(x, y))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, BlackWinterSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter])
