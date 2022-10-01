@@ -6674,5 +6674,22 @@ class PrimordialRotSpell(Spell):
     def cast_instant(self, x, y):
         self.summon(self.get_unit(self.get_stat("minion_health")), target=Point(x, y))
 
+class UnnaturalVitality(Upgrade):
+
+    def on_init(self):
+        self.name = "Unnatural Vitality"
+        self.asset = ["MissingSynergies", "Icons", "unnatural_vitality"]
+        self.tags = [Tags.Nature, Tags.Dark]
+        self.level = 4
+        self.description = "Your [living], [nature], and [demon] minions gain [-100_heal:heal] resistance, benefitting doubly from most sources of healing.\nThis will also counteract the healing suppression of the [poison] debuff."
+        self.global_triggers[EventOnUnitAdded] = self.on_unit_added
+    
+    def on_unit_added(self, evt):
+        if evt.unit.is_player_controlled or are_hostile(evt.unit, self.owner):
+            return
+        if not [tag for tag in [Tags.Living, Tags.Nature, Tags.Demon] if tag in evt.unit.tags]:
+            return
+        evt.unit.resists[Tags.Heal] -= 100
+
 all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, BlackWinterSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell])
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter, UnnaturalVitality])

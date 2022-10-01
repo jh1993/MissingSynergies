@@ -83,5 +83,6 @@ Skills:
 + Singular Eye (Eye)
 + Hydromancy (Fire/Lightning/Ice)
 + Nuclear Winter (Lightning/Ice/Nature)
++ Unnatural Vitality (Dark/Nature)
 
 Credit to Bord Listian for the Golden Trickster sprite.
