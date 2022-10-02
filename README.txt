@@ -47,7 +47,7 @@ Spells:
 + Mass of Curses (Dark/Enchantment/Conjuration)
 + Brimstone Cluster (Fire/Dark/Nature/Enchantment)
 + Call Scapegoat (Dark/Nature/Conjuration)
-+ Black Winter (Dark/Ice/Enchantment)
++ Frigid Famine (Dark/Ice/Enchantment)
 + Negentropy (Fire/Ice/Sorcery)
 + Gathering Storm (Lightning/Ice/Conjuration)
 + Word of Rust (Word/Metallic)
@@ -67,6 +67,7 @@ Spells:
 + Death Metal (Dark/Metallic/Sorcery/Conjuration)
 + Mutant Cyclops (Arcane/Conjuration)
 + Primordial Rot (Dark/Nature/Conjuration)
++ Cosmic Stasis (Arcane/Ice/Enchantment)
 
 Skills:
 + Shivering Venom (Ice/Nature)

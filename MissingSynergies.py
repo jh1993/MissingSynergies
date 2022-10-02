@@ -4095,31 +4095,53 @@ class CallScapegoatSpell(Spell):
             unit.buffs.append(ScapegoatBuff())
             self.summon(unit, Point(x, y), radius=5, team=TEAM_ENEMY, sort_dist=False)
 
-class BlackWinterBuff(Buff):
+class FrigidFamineBuff(Buff):
 
     def __init__(self, spell):
         self.spell = spell
-        self.mercy = spell.get_stat("mercy")
+        self.ration = spell.get_stat("ration")
+        self.wendigo = spell.get_stat("wendigo")
+        self.starvation = spell.get_stat("starvation")
+        self.counter = 0
         Buff.__init__(self)
     
     def on_init(self):
-        self.name = "Black Winter"
+        self.name = "Frigid Famine"
         self.color = Tags.Ice.color
         self.global_triggers[EventOnPreDamaged] = self.on_pre_damaged
-        if self.spell.get_stat("endless"):
-            self.global_triggers[EventOnBuffApply] = self.on_buff_apply
-        if self.spell.get_stat("heavy"):
-            self.global_triggers[EventOnBuffRemove] = self.on_buff_remove
 
     def on_advance(self):
         for unit in list(self.owner.level.units):
-            unit.deal_damage(1, random.choice([Tags.Dark, Tags.Ice]), self.spell)
+            dtype = random.choice([Tags.Dark, Tags.Ice])
+            starved = False
+            if self.starvation and are_hostile(unit, self.owner) and unit.resists[Tags.Heal] > 0:
+                unit.resists[dtype] -= unit.resists[Tags.Heal]
+                starved = True
+            dealt = unit.deal_damage(1, dtype, self.spell)
+            if starved:
+                unit.resists[dtype] += unit.resists[Tags.Heal]
+            if dealt and self.wendigo:
+                self.counter += 1
+                if self.counter >= 100:
+                    self.summon_wendigo()
+                    self.counter -= 100
     
+    def summon_wendigo(self):
+        unit = Yeti()
+        unit.name = "Wendigo"
+        unit.asset = ["MissingSynergies", "Units", "wendigo"]
+        apply_minion_bonuses(self.spell, unit)
+        unit.spells[0].drain = True
+        unit.spells[0].damage_type = Tags.Dark
+        unit.buffs[0].damage_type = [Tags.Ice, Tags.Dark]
+        unit.tags = [Tags.Ice, Tags.Dark, Tags.Undead]
+        self.spell.summon(unit, target=self.owner, radius=RANGE_GLOBAL, sort_dist=False)
+
     def on_pre_damaged(self, evt):
         if evt.damage_type != Tags.Heal or evt.damage >= 0:
             return
         targets = list(self.owner.level.units)
-        if self.mercy:
+        if self.ration:
             targets = [target for target in targets if are_hostile(self.owner, target)]
         if not targets:
             return
@@ -4127,33 +4149,34 @@ class BlackWinterBuff(Buff):
         num_targets = random.choice(range(1, len(targets) + 1))
         damage = -evt.damage//num_targets
         for target in targets[:num_targets]:
-            target.deal_damage(damage, random.choice([Tags.Dark, Tags.Ice]), self.spell)
+            dtype = random.choice([Tags.Dark, Tags.Ice])
+            starved = False
+            if self.starvation and are_hostile(target, self.owner) and target.resists[Tags.Heal] > 0:
+                target.resists[dtype] -= target.resists[Tags.Heal]
+                starved = True
+            target.deal_damage(damage, dtype, self.spell)
+            if starved:
+                target.resists[dtype] += target.resists[Tags.Heal]
 
-    def on_buff_apply(self, evt):
-        if isinstance(evt.buff, FrozenBuff) and are_hostile(evt.unit, self.owner):
-            evt.buff.turns_left += 1
+    def on_unapplied(self):
+        if self.wendigo and random.random() < self.counter/100:
+            self.summon_wendigo()
 
-    def on_buff_remove(self, evt):
-        if not isinstance(evt.buff, FrozenBuff) or evt.buff.break_dtype != Tags.Physical:
-            return
-        if not are_hostile(evt.unit, self.owner):
-            return
-        evt.unit.apply_buff(FrozenBuff(), 1)
-
-class BlackWinterSpell(Spell):
+class FrigidFamineSpell(Spell):
 
     def on_init(self):
-        self.name = "Black Winter"
-        self.asset = ["MissingSynergies", "Icons", "black_winter"]
+        self.name = "Frigid Famine"
+        self.asset = ["MissingSynergies", "Icons", "frigid_famine"]
         self.tags = [Tags.Dark, Tags.Ice, Tags.Enchantment]
         self.level = 6
         self.max_charges = 2
         self.duration = 10
         self.range = 0
 
-        self.upgrades["mercy"] = (1, 3, "Merciful Winter", "When a unit is healed, the resulting damage will now only target enemies.")
-        self.upgrades["heavy"] = (1, 7, "Heavy Ice", "When an enemy is unfrozen by [physical] damage, it is immediately [frozen] again for [1_turn:duration].")
-        self.upgrades["endless"] = (1, 5, "Endless Cold", "When an enemy is [frozen], the duration of that freeze is extended by [1_turn:duration].")
+        self.upgrades["ration"] = (1, 3, "Rationing", "When a unit is healed, the resulting damage will now only target enemies.")
+        self.upgrades["wendigo"] = (1, 5, "Summon Wendigo", "For every 100 damage dealt by this spell's per-turn effect, summon a wendigo at a random location.\nWendigos are [undead] minions with life-draining melee attacks and auras that deal [1_ice:ice] or [1_dark:dark] damage.\nWhen the effect expires, any accumulated damage will give a chance to summon a wendigo.")
+        self.upgrades["starvation"] = (1, 4, "Starvation", "The damage dealt by this spell penetrates enemy resistances by an amount equal to each enemy's [heal] resistance.\n[Heal] resistance prevents healing but does not prevent attempted healing from being converted into damage by this spell; it is usually inflicted by the [poison] debuff.")
+        self.upgrades["duration"] = (10, 2)
 
     def get_description(self):
         return ("Every turn, all units take [1_dark:dark] or [1_ice:ice] damage. This damage is fixed, and cannot be increased using shrines, skills, or buffs.\n"
@@ -4161,7 +4184,7 @@ class BlackWinterSpell(Spell):
                 "Lasts [{duration}_turns:duration].").format(**self.fmt_dict())
 
     def cast_instant(self, x, y):
-        self.owner.apply_buff(BlackWinterBuff(self), self.get_stat("duration"))
+        self.owner.apply_buff(FrigidFamineBuff(self), self.get_stat("duration"))
 
 class NegentropySpell(Spell):
 
@@ -6700,5 +6723,66 @@ class UnnaturalVitality(Upgrade):
             return
         evt.unit.resists[Tags.Heal] -= 100
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, BlackWinterSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell])
+class CosmicStasisBuff(Buff):
+
+    def __init__(self, spell):
+        self.freeze_extension = spell.get_stat("freeze_extension")
+        Buff.__init__(self)
+        if spell.get_stat("laser"):
+            self.global_triggers[EventOnDamaged] = self.on_damaged
+    
+    def on_init(self):
+        self.name = "Cosmic Stasis"
+        self.color = Tags.Ice.color
+        self.global_triggers[EventOnBuffApply] = self.on_buff_apply
+        self.global_triggers[EventOnBuffRemove] = self.on_buff_remove
+        self.to_refreeze = []
+
+    def on_buff_apply(self, evt):
+        if isinstance(evt.buff, FrozenBuff) and are_hostile(evt.unit, self.owner):
+            evt.buff.turns_left += self.freeze_extension
+
+    def on_buff_remove(self, evt):
+        if not isinstance(evt.buff, FrozenBuff) or evt.buff.break_dtype != Tags.Physical:
+            return
+        if not are_hostile(evt.unit, self.owner) or not evt.unit.is_alive():
+            return
+        self.to_refreeze.append(evt.unit)
+
+    def on_pre_advance(self):
+        for unit in self.to_refreeze:
+            unit.apply_buff(FrozenBuff(), 1)
+        self.to_refreeze = []
+
+    def on_damaged(self, evt):
+        if evt.damage_type != Tags.Arcane or not are_hostile(evt.unit, self.owner):
+            return
+        if random.random() < evt.damage/100:
+            evt.unit.apply_buff(FrozenBuff(), 1)
+
+class CosmicStasisSpell(Spell):
+
+    def on_init(self):
+        self.name = "Cosmic Stasis"
+        self.asset = ["MissingSynergies", "Icons", "cosmic_stasis"]
+        self.tags = [Tags.Arcane, Tags.Ice, Tags.Enchantment]
+        self.level = 5
+        self.max_charges = 3
+        self.range = 0
+        self.duration = 5
+        self.freeze_extension = 1
+
+        self.upgrades["duration"] = (5, 3)
+        self.upgrades["freeze_extension"] = (1, 3, "Freeze Extension", "When an enemy is [frozen], the duration of freeze is extended by [1:duration] more turn.")
+        self.upgrades["laser"] = (1, 5, "Laser Cooling", "When an enemy takes [arcane] damage, it has a chance of being [frozen] for [1_turn:duration] equal to the damage taken divided by 100, to a maximum of 100%.")
+    
+    def get_description(self):
+        return ("When an enemy is [frozen], the duration of freeze is extended by [{freeze_extension}_turns:duration].\n"
+                "When an enemy is unfrozen by [physical] damage, that enemy will be [frozen] again before the start of your next turn.\n"
+                "Lasts [{duration}_turns:duration].").format(**self.fmt_dict())
+
+    def cast_instant(self, x, y):
+        self.caster.apply_buff(CosmicStasisBuff(self), self.get_stat("duration"))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter, UnnaturalVitality])
