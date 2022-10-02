@@ -599,7 +599,6 @@ class BladeRushSpell(Spell):
     def on_init(self):
         self.name = "Blade Rush"
         self.asset = ["MissingSynergies", "Icons", "blade_rush"]
-        self.non_simultaneous = True
         
         self.tags = [Tags.Sorcery, Tags.Metallic, Tags.Translocation]
         self.level = 3
@@ -670,15 +669,16 @@ class BladeRushSpell(Spell):
                             for dtype in dtypes:
                                 self.caster.level.deal_damage(point.x, point.y, damage, dtype, self)
                         yield
-
+        
+        self.caster.invisible = True
+        if dest != Point(self.caster.x, self.caster.y):
+            self.caster.level.act_move(self.caster, dest.x, dest.y, teleport=True)
         for point in path[1:-2]:
             self.caster.level.leap_effect(point.x, point.y, Tags.Metallic.color, self.caster)
             for dtype in dtypes:
                 self.caster.level.deal_damage(point.x, point.y, damage, dtype, self)
             yield
-        if dest != Point(self.caster.x, self.caster.y):
-            self.caster.level.leap_effect(dest.x, dest.y, Tags.Metallic.color, self.caster)
-            self.caster.level.act_move(self.caster, dest.x, dest.y, teleport=True)
+        self.caster.invisible = False
         for dtype in dtypes:
             self.caster.level.deal_damage(x, y, damage, dtype, self)
         if spell:
@@ -2255,6 +2255,7 @@ class OrbOfFleshSpell(OrbSpell):
         for point in path[1:-1]:
             orb.level.show_effect(point.x, point.y, Tags.Tongue)
             yield
+        orb.invisible = True
         for point in path[1:-1]:
             orb.level.leap_effect(point.x, point.y, Tags.Tongue.color, orb)
             yield
@@ -2464,10 +2465,12 @@ class WarpLensStrike(LeapAttack):
         if distance(self.caster, Point(x, y), diag=True) > 1.5:
             leap_dest = self.get_leap_dest(x, y)
             path = self.caster.level.get_points_in_line(Point(self.caster.x, self.caster.y), Point(leap_dest.x, leap_dest.y), find_clear=not self.is_ghost)
+            self.caster.invisible = True
+            self.caster.level.act_move(self.caster, leap_dest.x, leap_dest.y, teleport=True)
             for point in path:
                 self.caster.level.leap_effect(point.x, point.y, Tags.Translocation.color, self.caster)
                 yield
-            self.caster.level.act_move(self.caster, leap_dest.x, leap_dest.y, teleport=True)
+            self.caster.invisible = False
 
         eyes_left = list(eyes)
         unit = self.caster.level.get_unit_at(x, y)
@@ -4535,7 +4538,7 @@ class SuperfluidityBuff(Buff):
         if not targets:
             return
         random.shuffle(targets)
-        self.owner.level.queue_spell(self.leap(targets, evt.damage), non_simultaneous=True)
+        self.owner.level.queue_spell(self.leap(targets, evt.damage))
         
     def leap(self, targets, damage):
 
@@ -4557,10 +4560,13 @@ class SuperfluidityBuff(Buff):
         if dest:
             if not self.owner.level.can_move(self.owner, dest.x, dest.y, teleport=True):
                 return
-            for point in self.owner.level.get_points_in_line(self.owner, dest):
+            old = Point(self.owner.x, self.owner.y)
+            self.owner.invisible = True
+            self.owner.level.act_move(self.owner, dest.x, dest.y, teleport=True)
+            for point in self.owner.level.get_points_in_line(old, dest):
                 self.owner.level.leap_effect(point.x, point.y, Tags.Ice.color, self.owner)
                 yield
-            self.owner.level.act_move(self.owner, dest.x, dest.y, teleport=True)
+            self.owner.invisible = False
         target.deal_damage(damage, Tags.Ice, self)
         if target.is_alive():
             target.apply_buff(FrozenBuff(), self.duration)
@@ -6424,10 +6430,13 @@ class MutantCyclopsMassTelekinesis(Spell):
         phase = not self.get_stat("requires_los")
         if unit:
             if (unit.x != x or unit.y != y):
-                for point in self.caster.level.get_points_in_line(unit, Point(x, y), find_clear=not phase):
+                old = Point(unit.x, unit.y)
+                unit.invisible = True
+                self.caster.level.act_move(unit, x, y, teleport=True)
+                for point in self.caster.level.get_points_in_line(old, Point(x, y), find_clear=not phase):
                     self.caster.level.leap_effect(point.x, point.y, Tags.Physical.color, unit)
                     yield
-                self.caster.level.act_move(unit, x, y, teleport=True)
+                unit.invisible = False
         else:
             for point in Bolt(self.caster.level, self.caster, Point(x, y), find_clear=not phase):
                 self.caster.level.show_effect(point.x, point.y, Tags.Physical, minor=True)
@@ -6479,7 +6488,7 @@ class MutantCyclopsMassTelekinesis(Spell):
         if not units:
             if num_thrown < num_targets and self.conjure:
                 for _ in range(num_targets - num_thrown):
-                    self.caster.level.queue_spell(self.throw(x, y, None), non_simultaneous=True)
+                    self.caster.level.queue_spell(self.throw(x, y, None))
             return
         
         target = self.get_throw_target(x, y, units[0])
