@@ -68,6 +68,7 @@ Spells:
 + Mutant Cyclops (Arcane/Conjuration)
 + Primordial Rot (Dark/Nature/Conjuration)
 + Cosmic Stasis (Arcane/Ice/Enchantment)
++ Well of Oblivion (Dark/Translocation/Sorcery)
 
 Skills:
 + Shivering Venom (Ice/Nature)

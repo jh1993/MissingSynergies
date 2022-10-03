@@ -6784,5 +6784,58 @@ class CosmicStasisSpell(Spell):
     def cast_instant(self, x, y):
         self.caster.apply_buff(CosmicStasisBuff(self), self.get_stat("duration"))
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell])
+class OblivionBuff(Buff):
+    def on_init(self):
+        self.name = "Oblivion"
+        self.asset = ["MissingSynergies", "Statuses", "oblivion"]
+        self.buff_type = BUFF_TYPE_CURSE
+        self.color = Tags.Dark.color
+        self.resists[Tags.Dark] = -100
+
+class WellOfOblivionSpell(Spell):
+
+    def on_init(self):
+        self.name = "Well of Oblivion"
+        self.asset = ["MissingSynergies", "Icons", "well_of_oblivion"]
+        self.tags = [Tags.Dark, Tags.Translocation, Tags.Sorcery]
+        self.level = 3
+        self.max_charges = 7
+        self.range = 0
+        self.radius = 6
+        self.duration = 5
+
+        self.upgrades["max_charges"] = (3, 2)
+        self.upgrades["radius"] = (3, 2)
+        self.upgrades["duration"] = (3, 3)
+        self.upgrades["dust"] = (1, 4, "To Dust", "Walls in the affected radius are destroyed.")
+        self.upgrades["encroach"] = (1, 5, "Encroaching Dark", "Affected enemies lose [100_dark:dark] resistance for the same duration.")
+
+    def get_description(self):
+        return ("All enemies in a [{radius}_tile:radius] radius are teleported as close to you as possible, and [stunned] for [{duration}_turns:duration].").format(**self.fmt_dict())
+
+    def cast_instant(self, x, y):
+
+        radius = self.get_stat("radius")
+        encroach = self.get_stat("encroach")
+        duration = self.get_stat("duration")
+        
+        if self.get_stat("dust"):
+            for point in self.caster.level.get_points_in_ball(self.caster.x, self.caster.y, radius):
+                if self.caster.level.tiles[point.x][point.y].is_wall():
+                    self.caster.level.make_floor(point.x, point.y)
+        
+        units = [unit for unit in self.caster.level.get_units_in_ball(self.caster, radius) if are_hostile(self.caster, unit)]
+        random.shuffle(units)
+        for unit in units:
+            points = [point for point in self.caster.level.get_points_in_ball(self.caster.x, self.caster.y, radius) if self.caster.level.can_move(unit, point.x, point.y, teleport=True)]
+            if not points:
+                continue
+            self.caster.level.show_effect(unit.x, unit.y, Tags.Translocation)
+            target = min(points, key=lambda point: distance(point, self.caster))
+            self.caster.level.act_move(unit, target.x, target.y, teleport=True)
+            unit.apply_buff(Stun(), duration)
+            if encroach:
+                unit.apply_buff(OblivionBuff(), duration)
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter, UnnaturalVitality])
