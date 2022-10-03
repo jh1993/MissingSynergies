@@ -6798,16 +6798,16 @@ class WellOfOblivionSpell(Spell):
         self.name = "Well of Oblivion"
         self.asset = ["MissingSynergies", "Icons", "well_of_oblivion"]
         self.tags = [Tags.Dark, Tags.Translocation, Tags.Sorcery]
-        self.level = 3
-        self.max_charges = 7
+        self.level = 5
+        self.max_charges = 4
         self.range = 0
         self.radius = 6
-        self.duration = 5
+        self.duration = 3
 
         self.upgrades["max_charges"] = (3, 2)
-        self.upgrades["radius"] = (3, 2)
+        self.upgrades["radius"] = (3, 3)
         self.upgrades["duration"] = (3, 3)
-        self.upgrades["dust"] = (1, 4, "To Dust", "Walls in the affected radius are destroyed.")
+        self.upgrades["dust"] = (1, 5, "To Dust", "Walls in the affected radius are destroyed.")
         self.upgrades["encroach"] = (1, 5, "Encroaching Dark", "Affected enemies lose [100_dark:dark] resistance for the same duration.")
 
     def get_description(self):
