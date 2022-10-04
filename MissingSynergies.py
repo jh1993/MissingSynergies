@@ -4293,8 +4293,10 @@ class StormProtectionBuff(Buff):
         self.name = "Storm Protection"
         self.asset = ["MissingSynergies", "Statuses", "storm_protection"]
         self.color = Tags.Lightning.color
-        self.resists[Tags.Lightning] = 200
-        self.resists[Tags.Ice] = 200
+        self.stack_type = STACK_REPLACE
+    def on_applied(self, owner):
+        self.resists[Tags.Lightning] = (100 - self.owner.resists[Tags.Lightning]) if self.owner.resists[Tags.Lightning] < 100 else 0
+        self.resists[Tags.Ice] = (100 - self.owner.resists[Tags.Ice]) if self.owner.resists[Tags.Ice] < 100 else 0
 
 class StormElementalBuff(Buff):
 
@@ -4362,7 +4364,7 @@ class GatheringStormSpell(Spell):
 
         self.upgrades["radius"] = (2, 4)
         self.upgrades["minion_range"] = (4, 2)
-        self.upgrades["protection"] = (1, 3, "Storm Protection", "Each turn, [elemental] allies within the storm elemental's arcing distance gain [200_lightning:lightning] and [200_ice:ice] resistance.\nThis effect is removed at the start of the storm elemental's next turn.")
+        self.upgrades["protection"] = (1, 3, "Storm Protection", "Each turn, [elemental] allies within the storm elemental's arcing distance gain [lightning] and [ice] resistances enough to put these resistances at 100.\nThis effect is removed at the start of the storm elemental's next turn.")
         self.upgrades["aggregate"] = (1, 5, "Elemental Aggregate", "When an [elemental] unit dies within the storm elemental's arcing distance, the storm elemental's max and current HP are increased by 20% of the dead elemental's HP.")
         self.upgrades["disperse"] = (1, 3, "Storm Dispersal", "When the storm elemental dies, it creates thunderstorm and blizzard clouds in an area around itself with radius equal to this spell's radius.")
 
