@@ -2827,15 +2827,13 @@ class MorbidSphereSpell(OrbSpell):
 class GoldenTricksterShot(Spell):
 
     def __init__(self, spell):
-        self.spell = spell
         Spell.__init__(self)
-    
-    def on_init(self):
         self.name = "Trick Shot"
-        self.damage = self.spell.get_stat("minion_damage")
-        self.range = self.spell.get_stat("minion_range")
-        self.requires_los = 0 if self.spell.get_stat("phase") else 1
-        self.description = "Does no actual damage but otherwise behaves as if fire, lightning, and physical damage are dealt. Randomly teleports the target up to 3 tiles away."
+        self.damage = spell.get_stat("minion_damage")
+        self.range = spell.get_stat("minion_range")
+        self.requires_los = 0 if spell.get_stat("phase") else 1
+        self.bravado = spell.get_stat("bravado")
+        self.description = "Pretends to deal damage. Hits 3 times. Randomly teleports the target up to 3 tiles away."
 
     def cast(self, x, y):
         for point in Bolt(self.caster.level, self.caster, Point(x, y), find_clear=self.requires_los):
@@ -2845,9 +2843,13 @@ class GoldenTricksterShot(Spell):
         if not unit:
             return
         damage = self.get_stat("damage")
-        for dtype in [Tags.Fire, Tags.Lightning, Tags.Physical]:
+        for _ in range(3):
+            dtype = random.choice([Tags.Fire, Tags.Lightning, Tags.Physical])
             self.caster.level.event_manager.raise_event(EventOnPreDamaged(unit, damage, dtype, self), unit)
             self.caster.level.event_manager.raise_event(EventOnDamaged(unit, damage, dtype, self), unit)
+        if self.bravado:
+            for dtype in [Tags.Fire, Tags.Lightning, Tags.Physical]:
+                self.caster.level.event_manager.raise_event(EventOnPreDamaged(unit, 30, dtype, self), unit)
         randomly_teleport(unit, 3)
 
 class GoldenTricksterAura(Buff):
@@ -2894,15 +2896,15 @@ class GoldenTricksterSpell(Spell):
         self.radius = 3
         self.shields = 1
 
-        self.upgrades["minion_damage"] = (20, 4)
         self.upgrades["radius"] = (2, 5)
         self.upgrades["shields"] = (5, 5)
         self.upgrades["phase"] = (1, 5, "Phase Shot", "The Golden Trickster's trick shot no longer requires line of sight.")
+        self.upgrades["bravado"] = (1, 3, "Fool's Bravado", "The Golden Trickster's trick shot now pretends to deal an additional [30_fire:fire], [30_lightning:lightning], and [30_physical:physical] damage, but all of this extra damage behaves as if it is fully resisted by the target.")
         self.upgrades["mage"] = (1, 6, "Trickster Mage", "The Golden Trickster can cast Chaos Shuffle with a 3 turn cooldown.\nThis Chaos Shuffle gains all of your upgrades and bonuses.")
     
     def get_description(self):
         return ("Summon a Golden Trickster, a flying minion with many resistances, [{minion_health}_HP:minion_health], and [{shields}_SH:shields].\n"
-                "It has a trick shot with [{minion_range}_range:minion_range]. Each hit inflicts no actual damage but otherwise behaves as if [{minion_damage}_fire:fire], [{minion_damage}_lightning:lightning], and [{minion_damage}_physical:physical] damage have been done to the target. The target is also randomly teleported up to [3_tiles:range] away.\n"
+                "It has a trick shot with [{minion_range}_range:minion_range], which hits 3 times. Each hit inflicts no actual damage but otherwise behaves as if [{minion_damage}_fire:fire], [{minion_damage}_lightning:lightning], or [{minion_damage}_physical:physical] damage have been done to the target. The target is also randomly teleported up to [3_tiles:range] away.\n"
                 "Each turn, for each enemy within [{radius}_tiles:radius], it behaves as if it has taken [1_dark:dark] damage from that enemy. It gains [1_SH:shields] whenever it takes damage, up to a max of [{shields}_SH:shields].").format(**self.fmt_dict())
 
     def cast_instant(self, x, y):
