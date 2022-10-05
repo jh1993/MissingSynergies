@@ -89,5 +89,6 @@ Skills:
 + Unnatural Vitality (Dark/Nature)
 + Shock Troops (Fire/Lightning)
 + Chaos Trick (Chaos/Fire/Lightning)
++ Soul Dregs (Holy/Dark)
 
 Credit to Bord Listian for the Golden Trickster sprite.

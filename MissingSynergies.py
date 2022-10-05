@@ -1,4 +1,4 @@
-from numpy import isin
+from numpy import isin, sort
 from RareMonsters import *
 from Upgrades import *
 from Spells import *
@@ -7029,5 +7029,106 @@ class ChaosTrick(Upgrade):
         if Tags.Chaos in evt.spell.tags:
             self.cast_dummy_spells(evt, [Tags.Fire, Tags.Lightning])
 
+class HolySoulDregsBuff(Buff):
+
+    def __init__(self, upgrade):
+        self.upgrade = upgrade
+        Buff.__init__(self)
+    
+    def on_init(self):
+        self.name = "Soul Dregs"
+        self.color = Tags.Holy.color
+        self.stack_type = STACK_DURATION
+    
+    def on_applied(self, owner):
+
+        existing = owner.get_buff(DarkSoulDregsBuff)
+        if not existing:
+            return
+        
+        if existing.turns_left < self.turns_left:
+            self.turns_left -= existing.turns_left
+            owner.remove_buff(existing)
+            self.upgrade.do_summon(existing.turns_left)
+            return
+        else:
+            if existing.turns_left > self.turns_left:
+                existing.turns_left -= self.turns_left
+            else:
+                owner.remove_buff(existing)
+            self.upgrade.do_summon(self.turns_left)
+            return ABORT_BUFF_APPLY
+
+class DarkSoulDregsBuff(Buff):
+
+    def __init__(self, upgrade):
+        self.upgrade = upgrade
+        Buff.__init__(self)
+    
+    def on_init(self):
+        self.name = "Soul Dregs"
+        self.color = Tags.Dark.color
+        self.stack_type = STACK_DURATION
+    
+    def on_applied(self, owner):
+
+        existing = owner.get_buff(HolySoulDregsBuff)
+        if not existing:
+            return
+        
+        if existing.turns_left < self.turns_left:
+            self.turns_left -= existing.turns_left
+            owner.remove_buff(existing)
+            self.upgrade.do_summon(existing.turns_left)
+            return
+        else:
+            if existing.turns_left > self.turns_left:
+                existing.turns_left -= self.turns_left
+            else:
+                owner.remove_buff(existing)
+            self.upgrade.do_summon(self.turns_left)
+            return ABORT_BUFF_APPLY
+
+class SoulDregs(Upgrade):
+
+    def on_init(self):
+        self.name = "Soul Dregs"
+        self.asset = ["MissingSynergies", "Icons", "soul_dregs"]
+        self.tags = [Tags.Dark, Tags.Holy]
+        self.level = 5
+        self.minion_health = 6
+        self.minion_damage = 1
+        self.owner_triggers[EventOnSpellCast] = self.on_spell_cast
+    
+    def get_description(self):
+        return ("Whenever you cast a [holy] spell, you gain [holy] soul dregs with duration equal to the level of the spell cast.\n"
+                "Whenever you cast a [dark] spell, you gain [dark] soul dregs with duration equal to the level of the spell cast.\n"
+                "If you would have both [holy] and [dark] soul dregs, consume 1 remaining turn from each type until only one type is left, then summon a number of soulfly swarms equal to the number of pairs consumed.\n"
+                "Soulfly swarms are flying [holy] [undead] minions with [{minion_health}_HP:minion_health] and melee attacks that deal [{minion_damage}_holy:holy] damage.").format(**self.fmt_dict())
+
+    def on_spell_cast(self, evt):
+        if not evt.spell.level:
+            return
+        if Tags.Holy in evt.spell.tags:
+            self.owner.apply_buff(HolySoulDregsBuff(self), evt.spell.level)
+        if Tags.Dark in evt.spell.tags:
+            self.owner.apply_buff(DarkSoulDregsBuff(self), evt.spell.level)
+
+    def do_summon(self, num):
+        minion_health = self.get_stat("minion_health")
+        minion_damage = self.get_stat("minion_damage")
+        for _ in range(num):
+            unit = Unit()
+            unit.name = "Soulfly Swarm"
+            unit.asset = ["MissingSynergies", "Units", "soulfly_swarm"]
+            unit.tags = [Tags.Holy, Tags.Dark, Tags.Undead]
+            unit.resists[Tags.Holy] = 100
+            unit.resists[Tags.Physical] = 75
+            unit.resists[Tags.Ice] = -50
+            unit.flying = True
+            unit.max_hp = minion_health
+            unit.spells = [SimpleMeleeAttack(damage=minion_damage, damage_type=Tags.Holy)]
+            self.summon(unit, radius=5, sort_dist=False)
+
 all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell])
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs])
