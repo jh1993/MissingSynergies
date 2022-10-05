@@ -1,3 +1,4 @@
+from numpy import isin
 from RareMonsters import *
 from Upgrades import *
 from Spells import *
@@ -499,8 +500,8 @@ class PlanarBindingBuff(Buff):
                 # Prevent infinite loop with Thorough Binding if the original location is blocked
                 self.x = point.x
                 self.y = point.y
-                self.owner.level.act_move(self.owner, point.x, point.y, teleport=True)
                 self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
+                self.owner.level.act_move(self.owner, point.x, point.y, teleport=True)
             return
         
         # We can't actually teleport the unit onto the same tile as itself, because that tile is occupied by itself
@@ -508,16 +509,14 @@ class PlanarBindingBuff(Buff):
         if self.spell.get_stat("redundancy") and self.owner.is_alive():
             self.owner.level.event_manager.raise_event(EventOnMoved(self.owner, self.x, self.y, teleport=True), self.owner)
             self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
-    
-        yield
 
     def on_advance(self):
-        self.owner.level.queue_spell(self.do_teleport())
+        self.do_teleport()
     
     def on_moved(self, evt):
         if not evt.teleport:
             return
-        self.owner.level.queue_spell(self.do_teleport())
+        self.do_teleport()
 
 class PlanarBindingSpell(Spell):
 
@@ -1235,7 +1234,10 @@ class RaiseDracolichBreath(BreathWeapon):
             if summoned and self.legacy:
                 sorcery = TouchedBySorcery(self.legacy)
                 # Gotta do this otherwise the game crashes due to some variants of this buff not having assets
-                sorcery.asset = ["MissingSynergies", "Statuses", "%s_eye" % self.legacy.name.lower()]
+                if self.legacy in [Tags.Fire, Tags.Ice, Tags.Lightning, Tags.Poison, Tags.Arcane, Tags.Physical, Tags.Holy, Tags.Dark]:
+                    sorcery.asset = ["MissingSynergies", "Statuses", "%s_eye" % self.legacy.name.lower()]
+                else:
+                    sorcery.asset = None
                 skeleton.apply_buff(sorcery)
 
 class RaiseDracolichSoulJar(LichSealSoulSpell):
@@ -6789,7 +6791,7 @@ class CosmicStasisSpell(Spell):
 class OblivionBuff(Buff):
     def on_init(self):
         self.name = "Oblivion"
-        self.asset = ["MissingSynergies", "Statuses", "oblivion"]
+        self.asset = ["MissingSynergies", "Statuses", "amplified_dark"]
         self.buff_type = BUFF_TYPE_CURSE
         self.color = Tags.Dark.color
         self.resists[Tags.Dark] = -100
@@ -6839,5 +6841,193 @@ class WellOfOblivionSpell(Spell):
             if encroach:
                 unit.apply_buff(OblivionBuff(), duration)
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell])
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter, UnnaturalVitality])
+class ShockTroops(Upgrade):
+
+    def on_init(self):
+        self.name = "Shock Troops"
+        self.asset = ["MissingSynergies", "Icons", "shock_troops"]
+        self.tags = [Tags.Fire, Tags.Lightning]
+        self.level = 6
+        self.num_targets = 2
+        self.radius = 1
+        self.range = 6
+        self.global_triggers[EventOnUnitAdded] = self.on_unit_added
+
+    def get_description(self):
+        return ("Whenever you summon a minion, it launches bombs at [{num_targets}:num_targets] targetable enemies in line of sight.\n"
+                "Each bomb has a range of [{range}_tiles:range], and deals [fire] or [lightning] damage to enemies in a [{radius}_tile:radius] burst equal to 25% of the minion's max HP.").format(**self.fmt_dict())
+
+    def boom(self, target, radius, damage):
+        for stage in Burst(self.owner.level, target, radius):
+            for point in stage:
+                unit = self.owner.level.get_unit_at(point.x, point.y)
+                if not unit or not are_hostile(unit, self.owner):
+                    self.owner.level.show_effect(point.x, point.y, random.choice([Tags.Fire, Tags.Lightning]))
+                else:
+                    unit.deal_damage(damage, random.choice([Tags.Fire, Tags.Lightning]), self)
+            yield
+
+    def on_unit_added(self, evt):
+
+        if evt.unit.is_player_controlled or are_hostile(evt.unit, self.owner):
+            return
+
+        targets = self.owner.level.get_units_in_ball(evt.unit, self.get_stat("range"))
+        targets = [target for target in targets if are_hostile(self.owner, target) and self.owner.level.can_see(evt.unit.x, evt.unit.y, target.x, target.y)]
+        if not targets:
+            return
+        targets = [Point(target.x, target.y) for target in targets]
+        random.shuffle(targets)
+        
+        radius = self.get_stat("radius")
+        damage = evt.unit.max_hp//4
+        self.owner.level.queue_spell(send_bolts(lambda point: self.owner.level.show_effect(point.x, point.y, random.choice([Tags.Fire, Tags.Lightning]), minor=True), lambda point: self.owner.level.queue_spell(self.boom(point, radius, damage)), evt.unit, targets[:self.get_stat("num_targets")]))
+
+class OverloadedBuff(Buff):
+
+    def __init__(self, tag, amount):
+        self.tag = tag
+        Buff.__init__(self)
+        self.resists[tag] = amount
+    
+    def on_init(self):
+        self.name = "%s Overloaded" % self.tag.name
+        if self.tag in [Tags.Fire, Tags.Ice, Tags.Lightning, Tags.Poison, Tags.Arcane, Tags.Physical, Tags.Holy, Tags.Dark]:
+            self.asset = ["MissingSynergies", "Statuses", "amplified_%s" % self.tag.name.lower()]
+        self.buff_type = BUFF_TYPE_CURSE
+        self.stack_type = STACK_INTENSITY
+        self.color = self.tag.color
+    
+    def on_attempt_apply(self, owner):
+        existing = None
+        for buff in owner.buffs:
+            if isinstance(buff, OverloadedBuff) and buff.tag == self.tag:
+                existing = buff
+                break
+        if existing:
+            self.turns_left = max(existing.turns_left, self.turns_left)
+            self.resists[self.tag] = min(self.resists[self.tag], existing.resists[self.tag])
+            owner.remove_buff(existing)
+        return True
+
+class AegisOverloadSpell(Spell):
+
+    def on_init(self):
+        self.name = "Aegis Overload"
+        self.asset = ["MissingSynergies", "Icons", "aegis_overload"]
+        self.tags = [Tags.Metallic, Tags.Chaos, Tags.Sorcery]
+        self.level = 4
+        self.max_charges = 6
+        self.range = 0
+        self.radius = 6
+        self.duration = 3
+
+        self.upgrades["max_charges"] = (3, 2)
+        self.upgrades["radius"] = (4, 2, "Radius", "Aegis Overload searches for enemy targets in a greater radius around each minion.")
+        self.upgrades["phase"] = (1, 3, "Phase Overload", "The bolts sent out by Aegis Overload can now pass through walls.")
+        self.upgrades["disrupt"] = (1, 5, "Disruptive Overload", "An enemy hit by a bolt from this spell will be inflicted with an overloaded debuff of the same element and magnitude as the one inflicted onto the minion who shot out that bolt.\nThis lasts [3_turns:duration] by default but benefits from this spell's bonuses to [duration].\nDamage dealt by this spell cannot benefit from the resistance reduction of overloaded debuffs on the target.")
+
+    def get_description(self):
+        return ("Each of your minions shoots out a bolt of energy for each of its resistances that is over 100.\n"
+                "Each bolt targets a random enemy in line of sight within [{radius}_tiles:radius], and deals damage of the same element as the resistance that created the bolt, equal to the minion's max HP multiplied by the percentage of the resistance that is over 100.\n"
+                "For each bolt the minion sent out, it is inflicted with an overloaded debuff of that element for [3_turns:duration], which reduces its resistance to that element to 100.").format(**self.fmt_dict())
+
+    def get_impacted_tiles(self, x, y):
+        eligible = []
+        for unit in self.caster.level.units:
+            if unit.is_player_controlled or are_hostile(unit, self.caster):
+                continue
+            for tag in unit.resists.keys():
+                if unit.resists[tag] > 100:
+                    eligible.append(unit)
+                    break
+        return [Point(unit.x, unit.y) for unit in eligible]
+
+    def bolt(self, unit, tag, target, resist, damage, disrupt, duration):
+
+        for point in Bolt(self.caster.level, unit, target, find_clear=False):
+            self.caster.level.show_effect(point.x, point.y, tag, minor=True)
+            yield
+        
+        existing = 0
+        for buff in target.buffs:
+            if isinstance(buff, OverloadedBuff) and buff.tag == tag:
+                existing = buff.resists[tag]
+                break
+        target.resists[tag] -= existing
+        target.deal_damage(damage, tag, self)
+        target.resists[tag] += existing
+
+        unit.apply_buff(OverloadedBuff(tag, -resist), 3)
+        if disrupt:
+            target.apply_buff(OverloadedBuff(tag, -resist), duration)
+
+    def cast_instant(self, x, y):
+
+        radius = self.get_stat("radius")
+        phase = self.get_stat("phase")
+        disrupt = self.get_stat("disrupt")
+        duration = self.get_stat("duration")
+
+        for unit in list(self.caster.level.units):
+            if unit.is_player_controlled or are_hostile(unit, self.caster):
+                continue
+            tags = []
+            for tag in unit.resists.keys():
+                if unit.resists[tag] <= 100:
+                    continue
+                tags.append(tag)
+            if not tags:
+                continue
+            for tag in tags:
+                targets = [target for target in self.caster.level.get_units_in_ball(unit, radius) if are_hostile(unit, target)]
+                if not phase:
+                    targets = [target for target in targets if self.caster.level.can_see(unit.x, unit.y, target.x, target.y)]
+                if not targets:
+                    break
+                resist = unit.resists[tag] - 100
+                damage = math.ceil(unit.max_hp*resist/100)
+                self.caster.level.queue_spell(self.bolt(unit, tag, random.choice(targets), resist, damage, disrupt, duration))
+
+class ChaosTrickDummySpell(Spell):
+    def __init__(self, tag, level):
+        Spell.__init__(self)
+        self.tags = [tag]
+        self.name = "%s Trick" % tag.name
+        self.range = RANGE_GLOBAL
+        self.requires_los = False
+        self.can_target_self = True
+        self.level = level
+    def cast_instant(self, x, y):
+        return
+
+class ChaosTrick(Upgrade):
+
+    def on_init(self):
+        self.name = "Chaos Trick"
+        self.asset = ["MissingSynergies", "Icons", "chaos_trick"]
+        self.tags = [Tags.Fire, Tags.Lightning, Tags.Chaos]
+        self.level = 4
+        self.description = "Whenever you cast a [fire] spell, you pretend to cast a [lightning] spell and a [chaos] spell of the same level.\nWhenever you cast a [lightning] spell, you pretend to cast a [fire] spell and a [chaos] spell of the same level.\nWhenever you cast a [chaos] spell, you pretend to cast a [fire] spell and a [lightning] spell of the same level.\nThese fake spells trigger all effects that are normally triggered when casting spells with their tags, and have no other tags.\nThis skill cannot trigger itself."
+        self.owner_triggers[EventOnSpellCast] = self.on_spell_cast
+    
+    def cast_dummy_spells(self, evt, tags):
+        random.shuffle(tags)
+        for tag in tags:
+            spell = ChaosTrickDummySpell(tag, evt.spell.level)
+            spell.caster = self.owner
+            spell.owner = self.owner
+            self.owner.level.event_manager.raise_event(EventOnSpellCast(spell, self.owner, evt.x, evt.y), self.owner)
+
+    def on_spell_cast(self, evt):
+        if isinstance(evt.spell, ChaosTrickDummySpell):
+            return
+        if Tags.Fire in evt.spell.tags:
+            self.cast_dummy_spells(evt, [Tags.Lightning, Tags.Chaos])
+        if Tags.Lightning in evt.spell.tags:
+            self.cast_dummy_spells(evt, [Tags.Fire, Tags.Chaos])
+        if Tags.Chaos in evt.spell.tags:
+            self.cast_dummy_spells(evt, [Tags.Fire, Tags.Lightning])
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick])

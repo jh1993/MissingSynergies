@@ -69,6 +69,7 @@ Spells:
 + Primordial Rot (Dark/Nature/Conjuration)
 + Cosmic Stasis (Arcane/Ice/Enchantment)
 + Well of Oblivion (Dark/Translocation/Sorcery)
++ Aegis Overload (Metallic/Chaos/Sorcery)
 
 Skills:
 + Shivering Venom (Ice/Nature)
@@ -86,5 +87,7 @@ Skills:
 + Hydromancy (Fire/Lightning/Ice)
 + Nuclear Winter (Lightning/Ice/Nature)
 + Unnatural Vitality (Dark/Nature)
++ Shock Troops (Fire/Lightning)
++ Chaos Trick (Chaos/Fire/Lightning)
 
 Credit to Bord Listian for the Golden Trickster sprite.
