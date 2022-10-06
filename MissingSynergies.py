@@ -7132,5 +7132,95 @@ class SoulDregs(Upgrade):
             unit.spells = [SimpleMeleeAttack(damage=minion_damage, damage_type=Tags.Holy)]
             self.summon(unit, radius=5, sort_dist=False)
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell])
+class PureglassKnightBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+    
+    def on_init(self):
+        self.name = "Pureglass"
+        self.color = Tags.Glass.color
+        self.description = "Whenever this unit loses SH, it has a 25% chance to summon another knight with 1 SH."
+        self.shards = self.spell.get_stat("shards")
+        self.radius = self.spell.get_stat("minion_range")
+        self.phase = self.spell.get_stat("phase")
+        self.damage = self.spell.get_stat("minion_damage")
+        self.owner_triggers[EventOnPreDamaged] = self.on_pre_damaged
+    
+    def on_pre_damaged(self, evt):
+        if evt.damage <= 0 or self.owner.resists[evt.damage_type] >= 100 or self.owner.shields <= 0:
+            return
+        if self.shards:
+            targets = [unit for unit in self.owner.level.get_units_in_ball(self.owner, self.radius) if are_hostile(unit, self.owner)]
+            if not self.phase:
+                targets = [unit for unit in targets if self.owner.level.can_see(unit.x, unit.y, self.owner.x, self.owner.y)]
+            if targets:
+                self.owner.level.queue_spell(self.shard(random.choice(targets)))
+        if random.random() < 0.25:
+            self.spell.summon_knight(self.owner, minor=True)
+
+    def shard(self, target):
+        for point in Bolt(self.owner.level, self.owner, target, find_clear=False):
+            self.owner.level.show_effect(point.x, point.y, Tags.Glassification)
+            yield
+        target.deal_damage(self.damage, Tags.Physical, self)
+
+class PureglassKnightSpell(Spell):
+
+    def on_init(self):
+        self.name = "Pureglass Knight"
+        self.asset = ["MissingSynergies", "Icons", "pureglass_knight"]
+        self.tags = [Tags.Holy, Tags.Arcane, Tags.Conjuration]
+        self.level = 6
+        self.max_charges = 3
+        self.must_target_empty = True
+        self.must_target_walkable = True
+
+        self.minion_health = 90
+        self.minion_damage = 10
+        self.minion_range = 6
+
+        self.upgrades["minion_health"] = (40, 3)
+        self.upgrades["glassify"] = (1, 5, "Glassifying Blade", "The knight's melee attack will inflict [glassify] for [3_turns:duration], which benefits from this spell's bonuses to [duration].")
+        self.upgrades["phase"] = (1, 5, "Phase Glass", "The knight's charge attack becomes a teleport attack.")
+        self.upgrades["shards"] = (1, 4, "Broken Shards", "Whenever the knight loses [SH:shields], it shoots out a glass shard at a random enemy in line of sight with range equal to this spell's [minion_range:minion_range], dealing damage equal to this spell's [minion_damage:minion_damage].\nIf you have the Phase Glass upgrade, the shard can pass through walls.")
+
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["shields"] = math.ceil(self.get_stat("minion_health")/10)
+        return stats
+
+    def get_description(self):
+        return ("Summon a [living] [holy] [arcane] [glass] knight. It has fixed 1 HP, but gains [1_SH:shields] per 10 bonus to [minion_health:minion_health] this spell has, rounded up (currently [{shields}_SH:shields]).\n"
+                "The knight has a melee attack and a charge attack with [{minion_range}_range:minion_range], both of which deal [{minion_damage}_physical:physical] damage.\n"
+                "Whenever the knight loses [SH:shields], it has a 25% chance to summon another knight with [1_SH:shields].").format(**self.fmt_dict())
+
+    def summon_knight(self, target, minor=False):
+        unit = Unit()
+        unit.asset = ["MissingSynergies", "Units", "pureglass_knight"]
+        unit.name = "Pureglass Knight"
+        unit.max_hp = 1
+        unit.shields = math.ceil(self.get_stat("minion_health")/10) if not minor else 1
+        unit.tags = [Tags.Living, Tags.Holy, Tags.Arcane, Tags.Glass]
+        unit.resists[Tags.Holy] = 75
+        unit.resists[Tags.Arcane] = 75
+        minion_damage = self.get_stat("minion_damage")
+        melee = SimpleMeleeAttack(damage=minion_damage)
+        if self.get_stat("glassify"):
+            melee.buff = GlassPetrifyBuff
+            melee.buff_name = "Glassed"
+            melee.buff_duration = self.get_stat("duration", base=3)
+            # For my No More Scams mod
+            melee.can_redeal = lambda target: target.resists[Tags.Physical] < 200 and not target.has_buff(GlassPetrifyBuff)
+        leap = LeapAttack(damage=minion_damage, range=self.get_stat("minion_range"), is_leap=False, is_ghost=self.get_stat("phase"))
+        leap.name = "Glass Charge"
+        unit.spells = [melee, leap]
+        unit.buffs = [PureglassKnightBuff(self)]
+        self.summon(unit, target=target, radius=5, sort_dist=not minor)
+
+    def cast_instant(self, x, y):
+        self.summon_knight(Point(x, y))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs])

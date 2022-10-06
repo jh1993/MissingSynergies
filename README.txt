@@ -70,6 +70,7 @@ Spells:
 + Cosmic Stasis (Arcane/Ice/Enchantment)
 + Well of Oblivion (Dark/Translocation/Sorcery)
 + Aegis Overload (Metallic/Chaos/Sorcery)
++ Pureglass Knight (Holy/Arcane/Conjuration)
 
 Skills:
 + Shivering Venom (Ice/Nature)
