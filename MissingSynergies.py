@@ -6849,7 +6849,7 @@ class ShockTroops(Upgrade):
         self.name = "Shock Troops"
         self.asset = ["MissingSynergies", "Icons", "shock_troops"]
         self.tags = [Tags.Fire, Tags.Lightning]
-        self.level = 6
+        self.level = 5
         self.num_targets = 2
         self.radius = 1
         self.range = 6
