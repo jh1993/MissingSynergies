@@ -71,6 +71,7 @@ Spells:
 + Well of Oblivion (Dark/Translocation/Sorcery)
 + Aegis Overload (Metallic/Chaos/Sorcery)
 + Pureglass Knight (Holy/Arcane/Conjuration)
++ Eternal Bomber (Holy/Conjuration/Sorcery)
 
 Skills:
 + Shivering Venom (Ice/Nature)
