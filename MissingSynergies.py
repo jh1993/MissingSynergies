@@ -7234,6 +7234,7 @@ class TransientBomberBuff(Buff):
         self.owner_triggers[EventOnDeath] = lambda evt: self.owner.level.queue_spell(self.boom())
     
     def boom(self):
+        damage = self.owner.max_hp
         for stage in Burst(self.owner.level, self.owner, self.radius, ignore_walls=self.phase):
             for point in stage:
                 unit = self.owner.level.get_unit_at(point.x, point.y)
@@ -7241,7 +7242,7 @@ class TransientBomberBuff(Buff):
                     if not unit or not are_hostile(unit, self.owner):
                         self.owner.level.show_effect(point.x, point.y, tag)
                     else:
-                        unit.deal_damage(self.owner.max_hp, tag, self.spell)
+                        unit.deal_damage(damage if tag == Tags.Holy else damage//2, tag, self.spell)
             yield
 
 class TransientBomberExplosion(Spell):
@@ -7264,7 +7265,7 @@ class TransientBomberExplosion(Spell):
         self.name = "Suicide Explosion"
         self.requires_los = not self.buff.phase
         self.damage_type = [Tags.Holy, Tags.Arcane, Tags.Fire]
-        self.description = "Deals holy, arcane, and fire damage equal to the user's max HP in a %i tile burst. Suicide attack; autocasts on death." % self.buff.radius
+        self.description = "Deals holy damage equal to the user's max HP then half fire and arcane damage, in a %i tile burst. Suicide attack; autocasts on death." % self.buff.radius
 
     def cast_instant(self, x, y):
         self.owner.cur_hp = 0
@@ -7357,7 +7358,7 @@ class EternalBomberSpell(Spell):
 
     def get_description(self):
         return ("Summon an immobile eternal bomber with [{total_hp}_HP:minion_health], which counts as spell damage and benefits from bonuses to [minion_health:minion_health], [minion_damage:minion_damage], and [damage]. It dies after 1 turn, and on death it deals [holy] damage equal to its max HP to enemies in a [{radius}_tile:radius] burst. If the eternal bomber dies without reincarnations, summon another eternal bomber on a random tile.\n"
-                "Each turn, the eternal bomber removes all reincarnations from itself to summon a transient bomber per reincarnation removed. Transient bombers have the same HP and no special abilities, but they are mobile and their explosions also deal [arcane] and [fire] damage.").format(**self.fmt_dict())
+                "Each turn, the eternal bomber removes all reincarnations from itself to summon a transient bomber per reincarnation removed. Transient bombers have the same HP and no special abilities, but they are mobile and their explosions also deal half [arcane] and [fire] damage.").format(**self.fmt_dict())
 
     def summon_bomber(self, target=None, minor=False):
         unit = Unit()
