@@ -7351,6 +7351,9 @@ class EternalBomberSpell(Spell):
         self.upgrades["extra"] = (1, 4, "Extra Bomber", "When you cast this spell, an additional transient bomber will also be summoned near the target.")
         self.add_upgrade(EternalBomberPhaseBomber())
 
+    def get_impacted_tiles(self, x, y):
+        return [p for stage in Burst(self.caster.level, Point(x, y), self.get_stat('radius')) for p in stage]
+
     def fmt_dict(self):
         stats = Spell.fmt_dict(self)
         stats["total_hp"] = self.get_stat("minion_health") + self.get_stat("minion_damage") + self.get_stat("damage")
