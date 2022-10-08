@@ -7352,7 +7352,7 @@ class EternalBomberSpell(Spell):
         self.add_upgrade(EternalBomberPhaseBomber())
 
     def get_impacted_tiles(self, x, y):
-        return [p for stage in Burst(self.caster.level, Point(x, y), self.get_stat('radius')) for p in stage]
+        return [p for stage in Burst(self.caster.level, Point(x, y), self.get_stat('radius'), ignore_walls=self.get_stat("phase")) for p in stage]
 
     def fmt_dict(self):
         stats = Spell.fmt_dict(self)
