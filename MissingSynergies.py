@@ -7390,5 +7390,149 @@ class EternalBomberSpell(Spell):
         if self.get_stat("extra"):
             self.summon_bomber(target=Point(x, y), minor=True)
 
+class RedheartSpiderBuff(Buff):
+
+    def on_init(self):
+        self.name = "Redheart Spider"
+        self.color = Tags.Spider.color
+        self.radius = 0
+        self.global_triggers[EventOnDeath] = self.on_death
+        self.global_triggers[EventOnDamaged] = self.on_damaged
+        self.global_bonuses["damage"] = 0
+        self.global_bonuses["range"] = 0
+    
+    def get_tooltip(self):
+        return "Enemies within %i tiles have their poison durations increased by 2 turns each turn, and have a 25%% chance to be blinded, stunned, or go berserk for 1 turn. Spider units that die in this radius are eaten, adding their max HP to this unit's and adding 1 SH.\n\nAttacks inflict duration-stacking poison with duration equal to damage done." % self.radius
+
+    def on_death(self, evt):
+        if Tags.Spider not in evt.unit.tags or distance(evt.unit, self.owner) > self.radius:
+            return
+        self.owner.level.queue_spell(self.eat(evt.unit))
+
+    def on_damaged(self, evt):
+        if not isinstance(evt.source, Spell) or evt.source.caster is not self.owner:
+            return
+        existing = evt.unit.get_buff(Poison)
+        if existing:
+            existing.turns_left += evt.damage
+        else:
+            evt.unit.apply_buff(Poison(), evt.damage)
+
+    def eat(self, unit):
+        for point in Bolt(self.owner.level, self.owner, unit, find_clear=False):
+            self.owner.level.leap_effect(point.x, point.y, Tags.Spider.color, self.owner)
+            yield
+        self.owner.max_hp += unit.max_hp
+        self.owner.deal_damage(-unit.max_hp, Tags.Heal, self)
+        self.owner.add_shields(1)
+        for point in Bolt(self.owner.level, unit, self.owner, find_clear=False):
+            self.owner.level.leap_effect(point.x, point.y, Tags.Spider.color, self.owner)
+            yield
+
+    def update_stats(self):
+        self.owner.global_bonuses["damage"] -= self.global_bonuses["damage"]
+        self.owner.global_bonuses["range"] -= self.global_bonuses["range"]
+        self.global_bonuses["damage"] = self.owner.max_hp//5
+        self.global_bonuses["range"] = self.owner.max_hp//10
+        self.owner.global_bonuses["damage"] += self.global_bonuses["damage"]
+        self.owner.global_bonuses["range"] += self.global_bonuses["range"]
+        self.radius = math.floor(math.sqrt(self.owner.max_hp))
+
+    def on_applied(self, owner):
+        self.update_stats()
+
+    def on_pre_advance(self):
+        self.update_stats()
+
+    def on_advance(self):
+        
+        effects_left = 7
+
+        for unit in self.owner.level.get_units_in_ball(self.owner, self.radius):
+            if not are_hostile(self.owner, unit):
+                continue
+            existing = unit.get_buff(Poison)
+            if existing:
+                existing.turns_left += 2
+            else:
+                unit.apply_buff(Poison(), 2)
+            if random.random() < 0.25:
+                unit.apply_buff(random.choice([BlindBuff, Stun, BerserkBuff])(), 1)
+            effects_left += 1
+
+        # Show some graphical indication of this aura if it didnt hit much
+        points = self.owner.level.get_points_in_ball(self.owner.x, self.owner.y, self.radius)
+        points = [p for p in points if not self.owner.level.get_unit_at(p.x, p.y)]
+        random.shuffle(points)
+        for _ in range(effects_left):
+            if not points:
+                break
+            p = points.pop()
+            self.owner.level.show_effect(p.x, p.y, Tags.Poison, minor=True)
+
+class RedheartSpiderBite(Spell):
+
+    def __init__(self, damage, range):
+        Spell.__init__(self)
+        self.damage = damage
+        self.range = range
+        self.name = "Bite"
+        self.description = "Temporarily detach the user's head to bite a target at range."
+        self.damage_type = Tags.Physical
+
+    def cast(self, x, y):
+        for point in Bolt(self.caster.level, self.caster, Point(x, y), find_clear=False):
+            self.caster.level.leap_effect(point.x, point.y, Tags.Spider.color, self.caster)
+            yield
+        self.caster.level.deal_damage(x, y, self.get_stat("damage"), self.damage_type, self)
+        for point in Bolt(self.caster.level, Point(x, y), self.caster, find_clear=False):
+            self.caster.level.leap_effect(point.x, point.y, Tags.Spider.color, self.caster)
+            yield
+
+class RedheartSpider(Upgrade):
+
+    def on_init(self):
+        self.name = "Redheart Spider"
+        self.asset = ["MissingSynergies", "Icons", "redheart_spider"]
+        self.tags = [Tags.Holy, Tags.Nature, Tags.Dark, Tags.Conjuration]
+        self.level = 7
+        self.minion_health = 70
+        self.minion_range = 2
+        self.minion_damage = 2
+        self.timer = 1
+        self.minion = None
+        self.owner_triggers[EventOnUnitAdded] = lambda evt: self.do_summon()
+
+    def get_description(self):
+        return ("Begin each level accompanied by the Redheart Spider. If it dies, it will be summoned again after [10_turns:duration].\n"
+                "The Redheart Spider is a [holy] [nature] [demon] [spider] minion with [{minion_health}_HP:minion_health] and an attack that deals [{minion_damage}_physical:physical] damage with [{minion_range}_range:minion_range]. Its attacks gain damage equal to 20% of its max HP, range equal to 10% of its max HP, and inflict duration-stacking [poison] with duration equal to damage dealt.\n"
+                "The Redheart Spider has an aura with radius equal to the square root of its max HP, rounded down. Each turn, enemies in this aura have their [poison] durations increased by [2_turns:duration], and have a 25% chance to be [blinded], [stunned], or go [berserk]. Whenever a [spider] dies within the aura, it will be eaten, adding its max HP to the Redheart Spider's and adding [1_SH:shields].").format(**self.fmt_dict())
+
+    def do_summon(self):
+        unit = Unit()
+        unit.name = "Redheart Spider"
+        unit.unique = True
+        unit.asset = ["MissingSynergies", "Units", "redheart_spider"]
+        unit.tags = [Tags.Holy, Tags.Nature, Tags.Demon, Tags.Spider]
+        unit.max_hp = self.get_stat("minion_health")
+        unit.shields = 1
+        unit.resists[Tags.Holy] = 100
+        unit.resists[Tags.Poison] = 100
+        unit.resists[Tags.Fire] = 100
+        unit.spells = [RedheartSpiderBite(self.get_stat("minion_damage"), self.get_stat("minion_range"))]
+        unit.buffs = [SpiderBuff(), RedheartSpiderBuff()]
+        success = self.summon(unit, radius=RANGE_GLOBAL)
+        if success:
+            self.minion = unit
+            self.timer = 10
+        else:
+            self.timer = 1
+
+    def on_advance(self):
+        if not self.minion or not self.minion.is_alive():
+            self.timer -= 1
+            if self.timer <= 0:
+                self.do_summon()
+
 all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell])
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider])

@@ -92,5 +92,6 @@ Skills:
 + Shock Troops (Fire/Lightning)
 + Chaos Trick (Chaos/Fire/Lightning)
 + Soul Dregs (Holy/Dark)
++ Redheart Spider (Holy/Nature/Dark/Conjuration)
 
 Credit to Bord Listian for the Golden Trickster sprite.
