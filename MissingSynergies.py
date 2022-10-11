@@ -192,16 +192,26 @@ class ShiveringVenomBuff(Buff):
         Buff.__init__(self)
         self.upgrade = upgrade
         self.buff_type = BUFF_TYPE_PASSIVE
-        self.resists[Tags.Ice] = 0
-        self.resists[Tags.Poison] = 0
-        
+
+    def on_applied(self, owner):
+        poison = self.owner.get_buff(Poison)
+        if poison:
+            self.resists[Tags.Ice] = -poison.turns_left
+        else:
+            self.resists[Tags.Ice] = 0
+        freeze = self.owner.get_buff(FrozenBuff)
+        if freeze:
+            self.resists[Tags.Poison] = -10*freeze.turns_left
+        else:
+            self.resists[Tags.Poison] = 0
+
     def on_advance(self):
-    
+
         # Remove this if an enemy becomes friendly via Dominate
         if not are_hostile(self.owner, self.upgrade.owner):
             self.owner.remove_buff(self)
             return
-            
+
         self.owner.resists[Tags.Ice] -= self.resists[Tags.Ice]
         poison = self.owner.get_buff(Poison)
         if poison:
@@ -239,16 +249,21 @@ class Electrolysis(Upgrade):
         self.name = "Electrolysis"
         self.asset = ["MissingSynergies", "Icons", "electrolysis"]
         self.tags = [Tags.Lightning, Tags.Nature]
-        self.level = 5
+        self.level = 6
         self.duration = 10
         self.radius = 6
         self.global_triggers[EventOnDamaged] = self.on_damaged
 
+    def fmt_dict(self):
+        stats = Upgrade.fmt_dict(self)
+        stats["total_duration"] = self.get_stat("duration") + self.get_stat("damage")
+        return stats
+
     def get_description(self):
         return ("If a [poisoned:poison] enemy takes [lightning] damage from a source other than this skill, its [poison] duration is reduced by half.\n"
-                "For every 10 turns of poison removed, rounded up, a random enemy in a [{radius}_tile:radius] burst is [acidified:poison], losing [100_poison:poison] resistance.\n"
-                "If that enemy is already [acidified:poison], it is instead [poisoned:poison] for [{duration}_turns:duration].\n"
-                "If this would increase its [poison] duration by less than [{duration}_turns:duration], the remainder is dealt as [lightning] damage.\n").format(**self.fmt_dict())
+                "For every 10 turns of poison removed, rounded up, a random enemy in a [{radius}_tile:radius] burst is [acidified:poison], losing [100_poison:poison] resistance. An enemy can be targeted multiple times, and the original enemy can also be targeted.\n"
+                "If the target enemy is already [acidified:poison], it is instead [poisoned:poison] for [{total_duration}_turns:duration]. This duration benefits from bonuses to both [duration] and [damage].\n"
+                "If this would increase its [poison] duration by less than [{total_duration}_turns:duration], the remainder is dealt as [lightning] damage.\n").format(**self.fmt_dict())
     
     def on_damaged(self, evt):
     
@@ -264,22 +279,25 @@ class Electrolysis(Upgrade):
             return
         amount = poison.turns_left//2
         poison.turns_left -= amount
+        radius = self.get_stat('radius')
+        duration = self.get_stat("duration") + self.get_stat("damage")
         
-        targets = self.owner.level.get_units_in_ball(evt.unit, self.get_stat('radius'))
-        targets = [t for t in targets if are_hostile(t, self.owner) and t is not evt.unit and self.owner.level.can_see(t.x, t.y, evt.unit.x, evt.unit.y)]
-        random.shuffle(targets)
-        self.owner.level.queue_spell(send_bolts(lambda point: self.visual(point), lambda target: self.electrolyze(target), evt.unit, targets[:math.ceil(amount/10)]))
+        for _ in range(math.ceil(amount/10)):
+            targets = self.owner.level.get_units_in_ball(evt.unit, radius)
+            targets = [t for t in targets if are_hostile(t, self.owner) and self.owner.level.can_see(t.x, t.y, evt.unit.x, evt.unit.y)]
+            if not targets:
+                return
+            self.owner.level.queue_spell(self.electrolyze(evt.unit, random.choice(targets), duration))
 
-    def visual(self, point):
-        self.owner.level.show_effect(point.x, point.y, Tags.Lightning, minor=True)
-        self.owner.level.show_effect(point.x, point.y, Tags.Poison, minor=True)
-
-    def electrolyze(self, target):
+    def electrolyze(self, origin, target, duration):
+        for point in Bolt(self.owner.level, origin, target):
+            self.owner.level.show_effect(point.x, point.y, Tags.Lightning, minor=True)
+            self.owner.level.show_effect(point.x, point.y, Tags.Poison, minor=True)
+            yield
         if not target.has_buff(Acidified):
             target.apply_buff(Acidified())
         else:
             poison = target.get_buff(Poison)
-            duration = self.get_stat("duration")
             if not poison:
                 target.apply_buff(Poison(), duration)
             else:
@@ -930,7 +948,7 @@ class CrystalHammerSpell(Spell):
         
         self.upgrades["damage"] = (50, 2)
         self.upgrades["extra_damage"] = (5, 3, "Extra Damage", "+5 extra damage per turn of [freeze] and [glassify].")
-        self.upgrades["shatter"] = (1, 4, "Shatter", "If the target is killed, release a number of shards equal to the number of turns of frozen and glassify on the target plus 1 per 20 max HP the target had.\nEach shard targets a random enemy in a [6_tile:radius] burst and deals [physical] damage equal to this spell's extra damage.")
+        self.upgrades["shatter"] = (1, 6, "Shatter", "If the target is killed, release a number of shards equal to the number of turns of frozen and glassify on the target plus 1 per 20 max HP the target had, rounded up.\nEach shard targets a random enemy in a [6_tile:radius] burst and deals [physical] damage equal to this spell's extra damage.\nThe same enemy can be hit more than once.")
     
     def get_description(self):
         return ("Deal [{damage}_physical:physical] damage to the target. For every turn of [freeze] and [glassify] on the target, deal [{extra_damage}:physical] extra damage. Remove all [freeze] and [glassify] on the target afterwards.").format(**self.fmt_dict())
@@ -948,18 +966,27 @@ class CrystalHammerSpell(Spell):
         glassify = unit.get_buff(GlassPetrifyBuff)
         if glassify:
             total_duration += glassify.turns_left
-        unit.deal_damage(self.get_stat("damage") + total_duration*self.get_stat("extra_damage"), Tags.Physical, self)
+        extra_damage = self.get_stat("extra_damage")
+        unit.deal_damage(self.get_stat("damage") + total_duration*extra_damage, Tags.Physical, self)
         if unit.is_alive():
             if glassify:
                 unit.remove_buff(glassify)
             return
         
         if self.get_stat("shatter"):
-            num_targets = total_duration + unit.max_hp//20
-            targets = self.caster.level.get_units_in_ball(unit, 6)
-            targets = [t for t in targets if t is not unit and are_hostile(t, self.caster) and self.caster.level.can_see(t.x, t.y, unit.x, unit.y)]
-            random.shuffle(targets)
-            self.caster.level.queue_spell(send_bolts(lambda point: self.caster.level.show_effect(point.x, point.y, Tags.Physical), lambda target: target.deal_damage(self.get_stat("extra_damage"), Tags.Physical, self), unit, targets[:num_targets]))
+            radius = self.get_stat("radius", base=6)
+            for _ in range(total_duration + math.ceil(unit.max_hp/20)):
+                targets = self.caster.level.get_units_in_ball(unit, radius)
+                targets = [t for t in targets if are_hostile(t, self.caster) and self.caster.level.can_see(t.x, t.y, unit.x, unit.y)]
+                if not targets:
+                    return
+                self.caster.level.queue_spell(self.bolt(unit, random.choice(targets), extra_damage))
+
+    def bolt(self, origin, target, damage):
+        for point in Bolt(self.caster.level, origin, target):
+            self.caster.level.show_effect(point.x, point.y, Tags.Physical, minor=True)
+            yield
+        target.deal_damage(damage, Tags.Physical, self)
 
 class ReturningArrowBuff(Buff):
 
@@ -7429,7 +7456,12 @@ class RedheartSpiderBuff(Buff):
             self.owner.level.leap_effect(point.x, point.y, Tags.Spider.color, self.owner)
             yield
 
-    def update_stats(self):
+    def on_applied(self, owner):
+        self.global_bonuses["damage"] = self.owner.max_hp//5
+        self.global_bonuses["range"] = self.owner.max_hp//10
+        self.radius = math.floor(math.sqrt(self.owner.max_hp))
+
+    def on_pre_advance(self):
         self.owner.global_bonuses["damage"] -= self.global_bonuses["damage"]
         self.owner.global_bonuses["range"] -= self.global_bonuses["range"]
         self.global_bonuses["damage"] = self.owner.max_hp//5
@@ -7437,12 +7469,6 @@ class RedheartSpiderBuff(Buff):
         self.owner.global_bonuses["damage"] += self.global_bonuses["damage"]
         self.owner.global_bonuses["range"] += self.global_bonuses["range"]
         self.radius = math.floor(math.sqrt(self.owner.max_hp))
-
-    def on_applied(self, owner):
-        self.update_stats()
-
-    def on_pre_advance(self):
-        self.update_stats()
 
     def on_advance(self):
         
