@@ -7591,19 +7591,14 @@ class RaiseWastewight(Upgrade):
     def on_init(self):
         self.name = "Raise Wastewight"
         self.level = 5
-        self.description = "When an enemy with wasting dies, it has a chance to be raised as a wastewight, equal to the percentage of max HP it has lost since it was afflicted with wasting.\nWastewights are [fire] [undead] minions with melee attacks that permanently drain 2 max HP, and instantly kill targets with 2 max HP or less."
+        self.description = "When an enemy with wasting dies, it has a chance to summon a wastewight, equal to twice the percentage of max HP it has lost since it was afflicted with wasting, with a minimum of 10%.\nWastewights are [fire] [undead] minions with melee attacks that permanently drain 2 max HP, and instantly kill targets with 2 max HP or less."
         self.global_triggers[EventOnDeath] = self.on_death
     
     def on_death(self, evt):
-
-        if evt.unit.has_been_raised:
-            return
-        
         wasting = evt.unit.get_buff(WastingBuff)
-        if not wasting or random.random() < evt.unit.max_hp/wasting.max_hp:
+        if not wasting or random.random() >= max(2*(wasting.max_hp - evt.unit.max_hp)/wasting.max_hp, 0.1):
             return
         
-        evt.unit.has_been_raised = True
         unit = BoneKnight()
         unit.name = "Wastewight"
         unit.asset = ["MissingSynergies", "Units", "wastewight"]
