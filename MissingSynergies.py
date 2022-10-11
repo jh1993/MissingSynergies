@@ -30,6 +30,14 @@ def send_bolts(effect_path, effect_target, origin, targets):
         bolts = [bolt for bolt in bolts if next(bolt)]
         yield
 
+def drain_max_hp_kill(unit, hp):
+    if unit.max_hp > hp:
+        drain_max_hp(unit, hp)
+    else:
+        unit.max_hp = 1
+        unit.cur_hp = 0
+        unit.kill()
+
 class BitterCurse(Buff):
     def __init__(self, spell):
         self.spell = spell
@@ -6653,12 +6661,7 @@ class PrimordialRotBuff(Buff):
         if self.wasting:
             evt.unit.apply_buff(WastingBuff(self))
         amount = min(evt.unit.max_hp, self.max_hp_steal)
-        if evt.unit.max_hp <= self.max_hp_steal:
-            evt.unit.max_hp = 1
-            evt.unit.cur_hp = 0
-            evt.unit.kill()
-        else:
-            drain_max_hp(evt.unit, self.max_hp_steal)
+        drain_max_hp_kill(evt.unit, self.max_hp_steal)
         self.owner.max_hp += amount
         self.owner.deal_damage(-amount, Tags.Heal, self)
         if evt.source.melee:
@@ -7560,5 +7563,105 @@ class RedheartSpider(Upgrade):
             if self.timer <= 0:
                 self.do_summon()
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell])
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider])
+class InexorableDecay(Upgrade):
+
+    def on_init(self):
+        self.name = "Inexorable Decay"
+        self.asset = ["MissingSynergies", "Icons", "inexorable_decay"]
+        self.tags = [Tags.Dark]
+        self.level = 5
+        self.description = "Whenever anything tries to deal [dark] damage to an enemy, that enemy permanently loses 2 max HP.\nIf it has 2 max HP or less, it will be instantly killed."
+        self.global_triggers[EventOnPreDamaged] = self.on_pre_damaged
+    
+    def on_pre_damaged(self, evt):
+        if not are_hostile(evt.unit, self.owner) or evt.damage <= 0 or evt.damage_type != Tags.Dark:
+            return
+        self.owner.level.queue_spell(self.decay(evt.unit))
+
+    def decay(self, unit):
+        drain_max_hp_kill(unit, 2)
+        yield
+
+    # For my No More Scams mod
+    def can_redeal(self, target, source, damage_type):
+        return damage_type == Tags.Dark
+
+class RaiseWastewight(Upgrade):
+
+    def on_init(self):
+        self.name = "Raise Wastewight"
+        self.level = 5
+        self.description = "When an enemy with wasting dies, it has a chance to be raised as a wastewight, equal to the percentage of max HP it has lost since it was afflicted with wasting.\nWastewights are [fire] [undead] minions with melee attacks that permanently drain 2 max HP, and instantly kill targets with 2 max HP or less."
+        self.global_triggers[EventOnDeath] = self.on_death
+    
+    def on_death(self, evt):
+
+        if evt.unit.has_been_raised:
+            return
+        
+        wasting = evt.unit.get_buff(WastingBuff)
+        if not wasting or random.random() < evt.unit.max_hp/wasting.max_hp:
+            return
+        
+        evt.unit.has_been_raised = True
+        unit = BoneKnight()
+        unit.name = "Wastewight"
+        unit.asset = ["MissingSynergies", "Units", "wastewight"]
+        unit.tags.append(Tags.Fire)
+        unit.resists[Tags.Fire] = 100
+        unit.spells[0].damage_type = Tags.Fire
+        unit.spells[0].onhit = lambda caster, target: drain_max_hp_kill(target, 2)
+        unit.spells[0].description = "Drains 2 max HP. Targets with less than 2 max HP are instantly killed."
+        # For my No More Scams mod
+        unit.spells[0].can_redeal = lambda target: True
+        apply_minion_bonuses(self.prereq, unit)
+        self.owner.level.queue_spell(self.do_summon(unit, evt.unit))
+
+    def do_summon(self, unit, target):
+        self.prereq.summon(unit, target)
+        yield
+
+class WastefireSpell(Spell):
+
+    def on_init(self):
+        self.name = "Wastefire"
+        self.asset = ["MissingSynergies", "Icons", "wastefire"]
+        self.tags = [Tags.Fire, Tags.Dark, Tags.Sorcery]
+        self.level = 5
+        self.max_charges = 6
+        self.range = 8
+        self.damage = 16
+        self.radius = 4
+
+        self.upgrades["max_charges"] = (4, 3)
+        self.upgrades["radius"] = (2, 3)
+        self.add_upgrade(RaiseWastewight())
+
+    def get_impacted_tiles(self, x, y):
+        return [p for stage in Burst(self.caster.level, Point(x, y), self.get_stat('radius')) for p in stage]
+
+    def get_description(self):
+        return ("Permanently inflict wasting to all enemies in a [{radius}_tile:radius] burst, which deals [dark] damage to the victim equal to the amount of max HP it has lost since being afflicted with the debuff.\n"
+                "Then deal [{damage}_fire:fire] damage to affected enemies, and drain max HP equal to 25% of the damage dealt; enemies with less max HP than that are instantly killed. If the enemy already has wasting, the percentage of max HP drain is doubled.").format(**self.fmt_dict())
+
+    def cast(self, x, y):
+        damage = self.get_stat("damage")
+        for stage in Burst(self.caster.level, Point(x, y), self.get_stat("radius")):
+            for point in stage:
+                self.caster.level.show_effect(point.x, point.y, Tags.Fire)
+                self.caster.level.show_effect(point.x, point.y, Tags.Dark)
+                unit = self.caster.level.get_unit_at(point.x, point.y)
+                if not unit or not are_hostile(unit, self.caster):
+                    continue
+                if unit.has_buff(WastingBuff):
+                    div = 2
+                else:
+                    unit.apply_buff(WastingBuff(self))
+                    div = 4
+                dealt = unit.deal_damage(damage, Tags.Fire, self)
+                if dealt:
+                    drain_max_hp_kill(unit, dealt//div)
+            yield
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay])

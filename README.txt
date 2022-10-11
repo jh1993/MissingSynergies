@@ -72,6 +72,7 @@ Spells:
 + Aegis Overload (Metallic/Chaos/Sorcery)
 + Pureglass Knight (Holy/Arcane/Conjuration)
 + Eternal Bomber (Holy/Conjuration/Sorcery)
++ Wastefire (Fire/Dark/Sorcery)
 
 Skills:
 + Shivering Venom (Ice/Nature)
@@ -93,5 +94,6 @@ Skills:
 + Chaos Trick (Chaos/Fire/Lightning)
 + Soul Dregs (Holy/Dark)
 + Redheart Spider (Holy/Nature/Dark/Conjuration)
++ Inexorable Decay (Dark)
 
 Credit to Bord Listian for the Golden Trickster sprite.
