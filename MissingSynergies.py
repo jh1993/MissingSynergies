@@ -7558,6 +7558,8 @@ class RedheartSpider(Upgrade):
             self.timer = 1
 
     def on_advance(self):
+        if all(u.team == TEAM_PLAYER for u in self.owner.level.units):
+            return
         if not self.minion or not self.minion.is_alive():
             self.timer -= 1
             if self.timer <= 0:
