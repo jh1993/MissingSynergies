@@ -774,7 +774,7 @@ class MaskOfTroublesSpell(Spell):
         
         self.upgrades["duration"] = (10, 4)
         self.upgrades["stability"] = (1, 2, "Stability", "You no longer randomly teleport for the duration, but still count as having teleported 1 extra time per turn.")
-        self.upgrades["shields"] = (3, 2)
+        self.upgrades["shields"] = (3, 2, "Shields", "Summoned troublers have an additional [3_SH:shields].")
         self.upgrades["endless"] = (1, 2, "Endless Troubles", "Summoned troublers respawn as baby troublers on death.")
     
     def get_description(self):
