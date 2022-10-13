@@ -7001,9 +7001,12 @@ class AegisOverloadSpell(Spell):
         disrupt = self.get_stat("disrupt")
         duration = self.get_stat("duration")
 
-        for unit in list(self.caster.level.units):
-            if unit.is_player_controlled or are_hostile(unit, self.caster):
-                continue
+        units = [unit for unit in self.caster.level.units if not unit.is_player_controlled and not are_hostile(unit, self.caster)]
+        if not units:
+            return
+        random.shuffle(units)
+
+        for unit in units:
             tags = []
             for tag in unit.resists.keys():
                 if unit.resists[tag] <= 100:
@@ -7660,5 +7663,85 @@ class WastefireSpell(Spell):
                     drain_max_hp_kill(unit, dealt//div)
             yield
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell])
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay])
+class FulguriteAlchemy(Upgrade):
+
+    def on_init(self):
+        self.name = "Fulgurite Alchemy"
+        self.asset = ["MissingSynergies", "Icons", "fulgurite_alchemy"]
+        self.tags = [Tags.Lightning, Tags.Arcane]
+        self.level = 4
+        self.description = "[Petrify] and [glassify] on enemies will now decrease [lightning] resistance by 100 rather than increase it."
+        self.global_triggers[EventOnBuffApply] = self.on_buff_apply
+    
+    def on_buff_apply(self, evt):
+        if not are_hostile(evt.unit, self.owner):
+            return
+        if not isinstance(evt.buff, PetrifyBuff) and not isinstance(evt.buff, GlassPetrifyBuff):
+            return
+        evt.unit.resists[Tags.Lightning] -= 200
+        evt.buff.resists[Tags.Lightning] = -100
+
+class ShieldBurstSpell(Spell):
+
+    def on_init(self):
+        self.name = "Shield Burst"
+        self.asset = ["MissingSynergies", "Icons", "shield_burst"]
+        self.tags = [Tags.Arcane, Tags.Sorcery]
+        self.level = 3
+        self.max_charges = 6
+        self.range = 0
+        self.damage = 12
+        self.radius = 6
+
+        self.upgrades["max_charges"] = (6, 3)
+        self.upgrades["radius"] = (4, 2, "Radius", "Shield Burst searches for enemy targets in a greater radius around each minion.")
+        self.upgrades["phase"] = (1, 4, "Phase Burst", "The bolts released by this spell can now pass through walls.")
+        self.upgrades["recycle"] = (1, 5, "Shield Recycle", "If a bolt kills an enemy, or if an already dead enemy is targeted by a bolt, the ally that shot that bolt gains [1_SH:shields].")
+    
+    def get_impacted_tiles(self, x, y):
+        points = []
+        for unit in self.caster.level.units:
+            if not are_hostile(unit, self.caster) and unit.shields > 0:
+                points.append(Point(unit.x, unit.y))
+        return points
+
+    def get_description(self):
+        return ("Each shielded ally takes a separate hit of [1_arcane:arcane] damage for every [SH:shields] they have, which ignores resistance.\n"
+                "For each [SH:shields] lost this way, that ally shoots out a bolt targeting a random enemy in line of sight up to [{radius}_tiles:radius] away, dealing [{damage}_arcane:arcane] damage.").format(**self.fmt_dict())
+
+    def bolt(self, origin, target, damage, recycle):
+        for point in Bolt(self.caster.level, origin, target, find_clear=False):
+            self.caster.level.show_effect(point.x, point.y, Tags.Arcane, minor=True)
+            yield
+        target.deal_damage(damage, Tags.Arcane, self)
+        if recycle and not target.is_alive():
+            origin.add_shields(1)
+
+    def cast_instant(self, x, y):
+
+        radius = self.get_stat("radius")
+        damage = self.get_stat("damage")
+        phase = self.get_stat("phase")
+        recycle = self.get_stat("recycle")
+
+        units = [unit for unit in self.caster.level.units if not are_hostile(unit, self.caster) and unit.shields > 0]
+        if not units:
+            return
+        random.shuffle(units)
+
+        for unit in units:
+            shields = unit.shields
+            for _ in range(shields):
+                targets = [target for target in self.caster.level.get_units_in_ball(unit, radius) if are_hostile(unit, target)]
+                if not phase:
+                    targets = [target for target in targets if self.caster.level.can_see(unit.x, unit.y, target.x, target.y)]
+                if not targets:
+                    break
+                old = unit.resists[Tags.Arcane]
+                unit.resists[Tags.Arcane] = 0
+                unit.deal_damage(1, Tags.Arcane, self)
+                unit.resists[Tags.Arcane] = old
+                self.caster.level.queue_spell(self.bolt(unit, random.choice(targets), damage, recycle))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy])

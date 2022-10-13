@@ -73,6 +73,7 @@ Spells:
 + Pureglass Knight (Holy/Arcane/Conjuration)
 + Eternal Bomber (Holy/Conjuration/Sorcery)
 + Wastefire (Fire/Dark/Sorcery)
++ Shield Burst (Arcane/Sorcery)
 
 Skills:
 + Shivering Venom (Ice/Nature)
@@ -95,5 +96,6 @@ Skills:
 + Soul Dregs (Holy/Dark)
 + Redheart Spider (Holy/Nature/Dark/Conjuration)
 + Inexorable Decay (Dark)
++ Fulgurite Alchemy (Arcane/Lightning)
 
 Credit to Bord Listian for the Golden Trickster sprite.
