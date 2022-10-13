@@ -2904,8 +2904,8 @@ class GoldenTricksterAura(Buff):
         enemies = [unit for unit in self.owner.level.get_units_in_ball(self.owner, self.radius) if are_hostile(self.owner, unit)]
         if not enemies:
             return
-        dummy_hit = SimpleMeleeAttack()
         for enemy in enemies:
+            dummy_hit = SimpleMeleeAttack()
             dummy_hit.owner = enemy
             dummy_hit.caster = enemy
             self.owner.level.event_manager.raise_event(EventOnPreDamaged(self.owner, 1, Tags.Dark, dummy_hit), self.owner)
