@@ -74,6 +74,7 @@ Spells:
 + Eternal Bomber (Holy/Conjuration/Sorcery)
 + Wastefire (Fire/Dark/Sorcery)
 + Shield Burst (Arcane/Sorcery)
++ Empyreal Ascension (Fire/Holy/Sorcery/Enchantment)
 
 Skills:
 + Shivering Venom (Ice/Nature)

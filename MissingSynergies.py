@@ -3176,7 +3176,7 @@ class SpiritBombBuff(Buff):
         bonus = self.get_bonus()
         damage = self.base_damage + 10*bonus
         radius = self.base_radius + bonus
-        for stage in Burst(self.owner.level, self.owner, radius, ignore_walls=True):
+        for stage in Burst(self.owner.level, Point(self.owner.x, self.owner.y), radius, ignore_walls=True):
             for point in stage:
                 unit = self.owner.level.get_unit_at(point.x, point.y)
                 if unit and are_hostile(unit, self.spell.caster):
@@ -4264,7 +4264,7 @@ class NegentropySpell(Spell):
         shock = self.get_stat("shock")
         thaw = self.get_stat("thaw")
 
-        for stage in reversed(list(Burst(self.caster.level, self.caster, self.get_stat("radius")))):
+        for stage in reversed(list(Burst(self.caster.level, Point(self.caster.x, self.caster.y), self.get_stat("radius")))):
             for point in stage:
                 unit = self.caster.level.get_unit_at(point.x, point.y)
                 if not unit or not are_hostile(unit, self.caster):
@@ -4279,7 +4279,7 @@ class NegentropySpell(Spell):
             yield
 
         if x == self.caster.x and y == self.caster.y:
-            for stage in Burst(self.caster.level, self.caster, self.get_stat("radius")):
+            for stage in Burst(self.caster.level, Point(self.caster.x, self.caster.y), self.get_stat("radius")):
                 for point in stage:
                     self.fire_hit(point, damage, count, shock, thaw, extra_damage=False)
                 yield
@@ -4756,7 +4756,7 @@ class SoakedBuff(Buff):
             self.owner.remove_buff(self)
 
     def burst(self, damage):
-        for stage in Burst(self.owner.level, self.owner, self.radius):
+        for stage in Burst(self.owner.level, Point(self.owner.x, self.owner.y), self.radius):
             for point in stage:
                 unit = self.owner.level.get_unit_at(point.x, point.y)
                 if not unit or not are_hostile(unit, self.upgrade.owner) or unit is self.owner:
@@ -5464,7 +5464,7 @@ class AfterlifeEchoesBuff(Buff):
 
         life = (self.echo_type == self.ECHO_LIFE) and (Tags.Nature in unit.tags or Tags.Living in unit.tags)
         damage = unit.max_hp//2
-        for stage in Burst(self.owner.level, unit, self.radius):
+        for stage in Burst(self.owner.level, Point(unit.x, unit.y), self.radius):
             for p in stage:
                 target = self.owner.level.get_unit_at(p.x, p.y)
                 if not target or not are_hostile(target, self.owner):
@@ -7268,7 +7268,7 @@ class TransientBomberBuff(Buff):
     
     def boom(self):
         damage = self.owner.max_hp
-        for stage in Burst(self.owner.level, self.owner, self.radius, ignore_walls=self.phase):
+        for stage in Burst(self.owner.level, Point(self.owner.x, self.owner.y), self.radius, ignore_walls=self.phase):
             for point in stage:
                 unit = self.owner.level.get_unit_at(point.x, point.y)
                 for tag in [Tags.Holy, Tags.Arcane, Tags.Fire]:
@@ -7287,7 +7287,7 @@ class TransientBomberExplosion(Spell):
     def can_cast(self, x, y):
         if not Spell.can_cast(self, x, y):
             return False
-        return Point(x, y) in [p for stage in Burst(self.caster.level, self.owner, self.buff.radius, ignore_walls=self.buff.phase) for p in stage]
+        return Point(x, y) in [p for stage in Burst(self.caster.level, Point(self.owner.x, self.owner.y), self.buff.radius, ignore_walls=self.buff.phase) for p in stage]
 
     def get_stat(self, attr, base=None):
         if attr == "range":
@@ -7337,7 +7337,7 @@ class EternalBomberBuff(Buff):
             self.spell.summon_bomber()
     
     def boom(self):
-        for stage in Burst(self.owner.level, self.owner, self.radius, ignore_walls=self.phase):
+        for stage in Burst(self.owner.level, Point(self.owner.x, self.owner.y), self.radius, ignore_walls=self.phase):
             for point in stage:
                 unit = self.owner.level.get_unit_at(point.x, point.y)
                 if not unit or not are_hostile(unit, self.owner):
@@ -7743,5 +7743,131 @@ class ShieldBurstSpell(Spell):
                 unit.resists[Tags.Arcane] = old
                 self.caster.level.queue_spell(self.bolt(unit, random.choice(targets), damage, recycle))
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell])
+class EmpyrealFormBuff(Buff):
+
+    def __init__(self, spell, charges):
+        self.spell = spell
+        self.max_hp = charges*50
+        Buff.__init__(self)
+
+    def on_init(self):
+        self.name = "Empyreal Form"
+        self.color = Tags.Holy.color
+        self.stack_type = STACK_TYPE_TRANSFORM
+        self.transform_asset_name = os.path.join("..", "..", "mods", "MissingSynergies", "Units", "empyreal_form")
+        tags = [Tags.Fire, Tags.Holy]
+        if self.spell.get_stat("storm"):
+            tags.extend([Tags.Ice, Tags.Lightning])
+        for tag in tags:
+            self.resists[tag] = 100
+        if self.spell.get_stat("champion"):
+            self.global_bonuses["minion_duration"] = 15
+            self.global_bonuses["minion_health"] = 10
+            self.global_bonuses["minion_damage"] = 5
+    
+    def on_applied(self, owner):
+        self.owner.max_hp += self.max_hp
+        self.owner.deal_damage(-self.max_hp, Tags.Heal, self.spell)
+
+    def on_unapplied(self):
+        drain_max_hp(self.owner, self.max_hp)
+
+    def on_advance(self):
+        self.owner.level.queue_spell(self.spell.boom())
+
+class EmpyrealAscensionSpell(Spell):
+
+    def on_init(self):
+        self.name = "Empyreal Ascension"
+        self.asset = ["MissingSynergies", "Icons", "empyreal_ascension"]
+        self.tags = [Tags.Holy, Tags.Fire, Tags.Sorcery, Tags.Enchantment]
+        self.level = 7
+        self.max_charges = 1
+        self.range = RANGE_GLOBAL
+        self.requires_los = False
+        self.can_target_self = True
+        self.must_target_walkable = True
+        self.radius = 6
+        self.damage = 33
+        self.duration = 5
+
+        self.upgrades["radius"] = (4, 3)
+        self.upgrades["storm"] = (1, 6, "Storm Herald", "Empyreal Form also grants [100_ice:ice] and [100_lightning:lightning] resistance.\nThe explosion of this spell has a chance to create thunderstorm and blizzard clouds, starting at 100% near you and decreasing to 0% at the edges of the radius.")
+        self.upgrades["juggernaut"] = (1, 5, "Juggernaut", "The explosion of this spell passes through walls and has a chance to destroy walls, starting at 100% near you and decreasing to 0% at the edges of the radius.")
+        self.upgrades["champion"] = (1, 5, "Divine Champion", "Empyreal Form also grants [15_minion_duration:minion_duration], [10_minion_health:minion_health], and [5_minion_damage:minion_damage].")
+
+    def get_description(self):
+        return ("Assume Empyreal Form for [{duration}_turns:duration], consuming all remaining charges of this spell to gain 50 max and current HP per charge spent, and [100_fire:fire] and [100_holy:holy] resistance. The max HP is lost when the buff expires.\n"
+                "While in Empyreal Form, you release an explosion in a [{radius}_tile:radius] burst around yourself each turn, dealing [{damage}_fire:fire] or [{damage}_holy:holy] damage to enemies near you, gradually decreasing to 0 at the edges of the radius.\n"
+                "You can cast this spell at 0 charge remaining during Empyreal Form, teleporting to the target tile, healing yourself for [{damage}:heal] HP and immediately releasing an explosion.").format(**self.fmt_dict())
+
+    def can_pay_costs(self):
+        if self.caster.has_buff(EmpyrealFormBuff) and self.cur_charges == 0:
+            return True
+        return Spell.can_pay_costs(self)
+
+    def pay_costs(self):
+        if self.cur_charges == 0:
+            return
+        Spell.pay_costs(self)
+
+    def get_impacted_tiles(self, x, y):
+        return [p for stage in Burst(self.caster.level, Point(x, y), self.get_stat('radius'), ignore_walls=self.get_stat("juggernaut")) for p in stage]
+
+    def can_cast(self, x, y):
+        if self.caster.has_buff(EmpyrealFormBuff):
+            unit = self.caster.level.get_unit_at(x, y)
+            if unit and unit is not self.caster:
+                return False
+            return Spell.can_cast(self, x, y)
+        else:
+            return x == self.caster.x and y == self.caster.y
+
+    def boom(self):
+
+        radius = self.get_stat("radius")
+        damage = self.get_stat("damage")
+        damage_bonus = damage - self.damage
+        storm = self.get_stat("storm")
+        duration = self.get_stat("duration", base=5)
+        juggernaut = self.get_stat("juggernaut")
+
+        power = radius + 1
+        for stage in Burst(self.caster.level, Point(self.caster.x, self.caster.y), radius, ignore_walls=juggernaut):
+            for point in stage:
+                dtype = random.choice([Tags.Fire, Tags.Holy])
+                unit = self.caster.level.get_unit_at(point.x, point.y)
+                if not unit or not are_hostile(unit, self.caster):
+                    self.caster.level.show_effect(point.x, point.y, dtype)
+                else:
+                    unit.deal_damage(math.ceil(damage*power/radius), dtype, self)
+                if juggernaut and self.caster.level.tiles[point.x][point.y].is_wall() and random.random() < power/radius:
+                    self.caster.level.make_floor(point.x, point.y)
+                if storm and not self.caster.level.tiles[point.x][point.y].is_wall() and random.random() < power/radius:
+                    if point.x == self.caster.x and point.y == self.caster.y:
+                        continue
+                    if random.choice([True, False]):
+                        cloud = BlizzardCloud(self.caster)
+                        cloud.damage += damage_bonus
+                    else:
+                        cloud = StormCloud(self.caster)
+                        cloud.damage += 2*damage_bonus
+                    cloud.duration = duration
+                    cloud.source = self
+                    self.caster.level.add_obj(cloud, point.x, point.y)
+            power -= 1
+            yield
+
+    def cast(self, x, y):
+        if self.caster.has_buff(EmpyrealFormBuff):
+            if x != self.caster.x or y != self.caster.y:
+                self.caster.level.show_effect(self.caster.x, self.caster.y, Tags.Translocation)
+                self.caster.level.act_move(self.caster, x, y, teleport=True)
+            self.caster.deal_damage(-self.get_stat("damage"), Tags.Heal, self)
+            yield from self.boom()
+        else:
+            self.caster.apply_buff(EmpyrealFormBuff(self, self.cur_charges + 1), self.get_stat("duration"))
+            self.cur_charges = 0
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy])
