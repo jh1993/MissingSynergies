@@ -1,4 +1,3 @@
-from numpy import isin, sort
 from RareMonsters import *
 from Upgrades import *
 from Spells import *
@@ -7869,5 +7868,127 @@ class EmpyrealAscensionSpell(Spell):
             self.caster.apply_buff(EmpyrealFormBuff(self, self.cur_charges + 1), self.get_stat("duration"))
             self.cur_charges = 0
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell])
+class IronTurtleAura(DamageAuraBuff):
+
+    def __init__(self, spell):
+        DamageAuraBuff.__init__(self, 1, [], spell.get_stat("radius"))
+        self.name = "Iron Turtle Aura"
+        self.color = Tags.Metallic.color
+    
+    def get_tooltip(self):
+        return "For every 100 resistance above 100, deal 1 damage of that type to enemies in a %i tile radius per turn. Excess resistances below 100 have a chance to deal damage." % self.radius
+
+    def on_advance(self):
+
+        self.damage_type = []
+        for tag in self.owner.resists.keys():
+            if self.owner.resists[tag] > 100:
+                self.damage_type.append(tag)
+        if not self.damage_type:
+            return
+
+        effects_left = 7
+        for unit in self.owner.level.get_units_in_ball(Point(self.owner.x, self.owner.y), self.radius):
+            if not are_hostile(self.owner, unit):
+                continue
+            for tag in self.damage_type:
+                amount = self.owner.resists[tag] - 100
+                while amount > 100:
+                    dealt = unit.deal_damage(1, tag, self)
+                    self.damage_dealt += dealt
+                    amount -= 100
+                if random.random() < amount/100:
+                    dealt = unit.deal_damage(1, tag, self)
+                    self.damage_dealt += dealt
+            effects_left -= 1
+
+        # Show some graphical indication of this aura if it didnt hit much
+        points = self.owner.level.get_points_in_ball(self.owner.x, self.owner.y, self.radius)
+        points = [p for p in points if not self.owner.level.get_unit_at(p.x, p.y)]
+        random.shuffle(points)
+        for _ in range(effects_left):
+            if not points:
+                break
+            p = points.pop()
+            self.owner.level.show_effect(p.x, p.y, random.choice(self.damage_type), minor=True)
+
+class IronTurtleBuff(TurtleBuff):
+
+    def __init__(self, spell):
+        TurtleBuff.__init__(self)
+        self.name = "Aura Cannon"
+        self.cleanse = spell.get_stat("cleanse")
+        if spell.get_stat("expert"):
+            self.owner_triggers[EventOnBuffApply] = self.on_buff_apply
+        self.cannon = spell.get_stat("cannon")
+
+    def on_pre_advance(self):
+        if not self.cleanse:
+            return
+        for buff in list(self.owner.buffs):
+            if buff.buff_type == BUFF_TYPE_CURSE and random.random() < 0.5:
+                self.owner.remove_buff(buff)
+
+    def on_buff_apply(self, evt):
+        for tag in evt.buff.resists.keys():
+            if evt.buff.resists[tag] > 0:
+                self.owner.resists[tag] += 25
+                evt.buff.resists[tag] += 25
+
+    def on_advance(self):
+        if not self.cannon:
+            return
+        for buff in self.owner.buffs:
+            if not isinstance(buff, DamageAuraBuff) or buff.damage_dealt <= 0:
+                continue
+            units = [unit for unit in self.owner.level.get_units_in_los(self.owner) if are_hostile(unit, self.owner)]
+            if not units:
+                return
+            amount = math.ceil(random.random()*buff.damage_dealt)
+            buff.damage_dealt -= amount
+            self.owner.level.queue_spell(self.bolt(random.choice(units), amount))
+
+    def bolt(self, target, damage):
+        for point in Bolt(self.owner.level, self.owner, target, find_clear=False):
+            self.owner.level.show_effect(point.x, point.y, random.choice([Tags.Fire, Tags.Lightning, Tags.Physical]), minor=True)
+            yield
+        target.deal_damage(damage, random.choice([Tags.Fire, Tags.Lightning, Tags.Physical]), self)
+
+class IronTurtleSpell(Spell):
+
+    def on_init(self):
+        self.name = "Iron Turtle"
+        self.asset = ["MissingSynergies", "Icons", "iron_turtle"]
+        self.tags = [Tags.Metallic, Tags.Nature, Tags.Conjuration]
+        self.level = 4
+        self.max_charges = 3
+        self.must_target_empty = True
+        self.must_target_walkable = True
+
+        self.radius = 7
+        self.minion_health = 95
+        self.minion_damage = 20
+
+        self.upgrades["radius"] = (3, 4)
+        self.upgrades["cleanse"] = (1, 2, "Iron Constitution", "Before the start of each of its turns, each of the iron turtle's debuffs has a 50% chance to be removed.")
+        self.upgrades["expert"] = (1, 6, "Defense Expert", "Whenever the iron turtle receives a buff or passive effect that increases its resistances, those resistances are increased by an additional 25 each.")
+        self.upgrades["cannon"] = (1, 4, "Aura Cannon", "All of the iron turtle's damage auras store the total amount of damage they have dealt.\nEach turn, the turtle fires a shot at a random enemy in line of sight for each of its damage auras that still has damage stored, expending a random amount of the stored damage to deal that much [fire], [lightning], or [physical] damage to the target.")
+
+    def get_description(self):
+        return ("Summon a [metallic] [nature] [construct] turtle minion with [{minion_health}_HP:minion_health] and a melee attack that deals [{minion_damage}_physical:physical] damage. It has [100_poison:poison], [100_lightning:lightning], [100_ice:ice], [50_fire:fire], and [50_physical:physical] resistance.\n"
+                "Whenever the turtle takes damage and is not [stunned], it withdraws into its shell for [3_turns:duration], [stunning:stun] itself while gaining [50_fire:fire], [50_lightning:lightning], and [50_physical:physical] resistances.\n"
+                "For every 100 resistance above 100, the turtle deal 1 damage of that type to enemies in a [{radius}_tile:radius] radius per turn. Excess resistances below 100 have a chance to deal damage.").format(**self.fmt_dict())
+
+    def cast_instant(self, x, y):
+        unit = Unit()
+        unit.name = "Iron Turtle"
+        unit.asset = ["MissingSynergies", "Units", "iron_turtle"]
+        unit.tags = [Tags.Metallic, Tags.Nature, Tags.Construct]
+        unit.max_hp = self.get_stat("minion_health")
+        unit.spells = [SimpleMeleeAttack(self.get_stat("minion_damage"))]
+        unit.resists[Tags.Poison] = 100
+        unit.buffs = [IronTurtleAura(self), IronTurtleBuff(self)]
+        self.summon(unit, target=Point(x, y))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy])

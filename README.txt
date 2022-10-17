@@ -75,6 +75,7 @@ Spells:
 + Wastefire (Fire/Dark/Sorcery)
 + Shield Burst (Arcane/Sorcery)
 + Empyreal Ascension (Fire/Holy/Sorcery/Enchantment)
++ Iron Turtle (Metallic/Nature/Conjuration)
 
 Skills:
 + Shivering Venom (Ice/Nature)
