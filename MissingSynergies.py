@@ -2237,18 +2237,18 @@ class OrbOfFleshBuff(Buff):
         yield
     
     def boom(self):
-        for stage in Burst(self.owner.level, Point(self.owner.x, self.owner.y), self.spell.get_stat("minion_range")//2):
+        for stage in Burst(self.owner.level, Point(self.owner.x, self.owner.y), math.ceil(self.spell.get_stat("minion_range")/2)):
             for point in stage:
                 dtype = random.choice([Tags.Physical, Tags.Poison])
                 unit = self.owner.level.get_unit_at(point.x, point.y)
                 if unit and not are_hostile(self.spell.caster, unit):
                     self.owner.level.show_effect(point.x, point.y, dtype)
                 else:
-                    self.owner.level.deal_damage(point.x, point.y, self.owner.max_hp//2, dtype, self.spell)
+                    self.owner.level.deal_damage(point.x, point.y, self.owner.max_hp//5, dtype, self.spell)
             yield
 
     def on_buff_apply(self, evt):
-        if not isinstance(evt.buff, ReincarnationBuff) or evt.buff.buff_type == BUFF_TYPE_PASSIVE:
+        if not isinstance(evt.buff, ReincarnationBuff):
             return
         evt.buff.max_hp -= self.hp_threshold
 
@@ -2263,17 +2263,19 @@ class OrbOfFleshSpell(OrbSpell):
         self.range = 9
 
         self.minion_health = 40
-        self.minion_range = 2
+        self.minion_range = 3
         self.minion_damage = 3
+        self.num_targets = 2
 
         self.upgrades["minion_range"] = (3, 2)
         self.upgrades["minion_damage"] = (2, 2)
+        self.upgrades["num_targets"] = (2, 4, "Num Targets", "The orb can affect [2:num_targets] more targets.")
         self.upgrades["symbiosis"] = (1, 2, "Symbiosis", "Can also fuse with your other minions, healing them each turn instead of dealing damage, and decreasing [heal] resistance instead of [poison] resistance.")
-        self.upgrades["explosion"] = (1, 4, "Gore Explosion", "On death, the affected unit explodes to randomly deal [poison] or [physical] damage equal to half of its max HP, to all enemies in a burst with radius equal to half of the orb's minion range, rounded down.")
+        self.upgrades["explosion"] = (1, 4, "Gore Explosion", "On death, the affected unit explodes to randomly deal [poison] or [physical] damage equal to 20% of its max HP, to all enemies in a burst with radius equal to half of the orb's minion range, rounded up.")
     
     def get_description(self):
-        return ("Summon a flesh orb with [{minion_health}_HP:minion_health] next to the caster. As soon as it can, the orb will pull itself toward and fuse with an enemy up to [{minion_range}_tiles:minion_range] away.\n"
-                "That enemy becomes [living], loses [100_poison:poison] resistance, and takes [{minion_damage}_poison:poison] damage per turn.\n"
+        return ("Summon a flesh orb with [{minion_health}_HP:minion_health] next to the caster. Each turn a piece of it detaches and fuses with a visible enemy up to [{minion_range}_tiles:minion_range] away, dying after [{num_targets}:num_targets] enemies are affected.\n"
+                "Each target becomes [living], loses [100_poison:poison] resistance, and takes [{minion_damage}_poison:poison] damage per turn.\n"
                 "Its max and current HP increases by amounts equal to the orb's max HP, but it will die instantly when its max HP drops to that amount or lower.\n"
                 "The orb has no will of its own, each turn it will float one tile towards the target.\n"
                 "The orb can be destroyed by poison damage.").format(**self.fmt_dict())
@@ -2281,22 +2283,22 @@ class OrbOfFleshSpell(OrbSpell):
     def on_make_orb(self, orb):
         orb.resists[Tags.Poison] = 0
         orb.asset = ["MissingSynergies", "Units", "orb_of_flesh"]
+        orb.targets_left = self.get_stat("num_targets")
     
     def on_orb_collide(self, orb, next_point):
         orb.level.show_effect(next_point.x, next_point.y, Tags.Tongue)
         yield
 
-    def pull(self, orb, target):
-        path = orb.level.get_points_in_line(orb, target)
-        for point in path[1:-1]:
+    def detach(self, orb, target):
+        for point in orb.level.get_points_in_line(orb, target):
             orb.level.show_effect(point.x, point.y, Tags.Tongue)
             yield
-        orb.invisible = True
-        for point in path[1:-1]:
-            orb.level.leap_effect(point.x, point.y, Tags.Tongue.color, orb)
-            yield
-        orb.kill(trigger_death_event=False)
         target.apply_buff(OrbOfFleshBuff(self))
+        orb.targets_left -= 1
+        if orb.targets_left <= 0:
+            orb.kill()
+            # In case the orb is resurrected
+            orb.targets_left = self.get_stat("num_targets")
 
     def on_orb_move(self, orb, next_point):
         targets = orb.level.get_units_in_ball(next_point, self.get_stat("minion_range"))
@@ -2307,7 +2309,7 @@ class OrbOfFleshSpell(OrbSpell):
         if not targets:
             return
         target = random.choice(targets)
-        self.caster.level.queue_spell(self.pull(orb, target))
+        self.caster.level.queue_spell(self.detach(orb, target))
 
 class ChaosEyeBuff(Spells.ElementalEyeBuff):
     def __init__(self, spell):
@@ -2615,6 +2617,10 @@ class MortalShackleBuff(Stun):
         weakness = self.spell.get_stat("resistance_reduction")
         self.resists[Tags.Physical] = -weakness
         self.resists[Tags.Poison] = -weakness
+        self.owner_triggers[EventOnBuffApply] = self.on_buff_apply
+    def on_buff_apply(self, evt):
+        if isinstance(evt.buff, ReincarnationBuff):
+            evt.unit.remove_buff(evt.buff)
 
 class MortalChainmailBuff(StunImmune):
     def __init__(self, spell):
@@ -2628,6 +2634,10 @@ class MortalChainmailBuff(StunImmune):
         weakness = self.spell.get_stat("resistance_reduction")
         self.resists[Tags.Physical] = weakness
         self.resists[Tags.Poison] = weakness
+        self.owner_triggers[EventOnBuffApply] = self.on_buff_apply
+    def on_buff_apply(self, evt):
+        if isinstance(evt.buff, ReincarnationBuff):
+            evt.unit.remove_buff(evt.buff)
 
 class MortalCoilSpell(Spell):
 
@@ -2638,7 +2648,7 @@ class MortalCoilSpell(Spell):
         self.level = 3
         self.max_charges = 9
         self.range = 9
-        self.requires_los = 0
+        self.requires_los = False
         self.can_target_empty = False
 
         self.damage = 15
@@ -2647,8 +2657,8 @@ class MortalCoilSpell(Spell):
 
         self.upgrades["extra_damage"] = (2, 2, "Extra Damage", "+2 extra damage per reincarnation lost.")
         self.upgrades["resistance_reduction"] = (25, 2)
-        self.upgrades["delusion"] = (2, 4, "Mortal Delusion", "Every target will be affected as if it lost 2 additional reincarnations.\nThis does not allow the spell to chain to more targets.")
-        self.upgrades["friendly"] = (1, 6, "Life Binding", "Mortal Coil can now also affect your minions, instead healing them for an amount equal to this spell's damage plus extra damage per reincarnation lost, and granting them [Chainmail:metallic], which increases [physical] and [poison] resistance and provides [stun] immunity for the duration.")
+        self.upgrades["delusion"] = (2, 3, "Mortal Delusion", "Every target will be affected as if it lost 2 additional reincarnations.\nThis does not allow the spell to chain to more targets, or trigger additional false deaths.")
+        self.upgrades["friendly"] = (1, 4, "Life Binding", "Mortal Coil can now also affect your minions, instead healing them for an amount equal to this spell's damage plus extra damage per reincarnation lost, and granting them Chainmail, which increases [physical] and [poison] resistance and provides [stun] immunity for the duration.\nThe target still cannot gain reincarnations for the duration of Chainmail.")
     
     def can_cast(self, x, y):
         if not Spell.can_cast(self, x, y):
@@ -2662,15 +2672,13 @@ class MortalCoilSpell(Spell):
             return self.get_stat("friendly")
 
     def get_description(self):
-        return ("The target enemy loses all reincarnations, and is [Shackled:metallic] for a duration equal to the number of reincarnations lost, during which it is [stunned:stun] and loses [{resistance_reduction}_physical:physical] and [{resistance_reduction}_poison:poison] resistance.\n"
-                "The target then takes [{damage}_physical:physical] and [{damage}_poison:poison] damage. For each reincarnation lost, it takes an additional [{extra_damage}_physical:physical] and [{extra_damage}_poison:poison] damage, and experiences its death once, triggering all on-death effects.\n"
-                "For each reincarnation it removes, this spell chains to a random new target in range.\n"
-                "This spell cannot remove reincarnations from units that can gain clarity.").format(**self.fmt_dict())
+        return ("The target enemy loses all reincarnations, and is Shackled for a duration equal to the number of lives lost, during which it is [stunned], loses [{resistance_reduction}_physical:physical] and [{resistance_reduction}_poison:poison] resistance, and cannot gain reincarnations.\n"
+                "The target then takes [{damage}_physical:physical] and [{damage}_poison:poison] damage. For each life lost, it takes an additional [{extra_damage}_physical:physical] and [{extra_damage}_poison:poison] damage, triggers all on-death effects, and the spell chains to a new target in range.\n"
+                "This spell cannot remove lives from units that can gain clarity, or fake deaths if it fails to inflict Shackle.").format(**self.fmt_dict())
     
     def chain(self, start, end, already_hit, chains=1):
 
-        path = list(Bolt(self.caster.level, start, end, find_clear=False))
-        for point in path[:-1]:
+        for point in Bolt(self.caster.level, start, end, find_clear=False):
             self.caster.level.show_effect(point.x, point.y, Tags.Physical, minor=True)
             self.caster.level.show_effect(point.x, point.y, Tags.Poison, minor=True)
             yield
@@ -2696,11 +2704,13 @@ class MortalCoilSpell(Spell):
             if effective_lives:
                 unit.apply_buff(MortalChainmailBuff(self), effective_lives)
             unit.deal_damage(-damage, Tags.Heal, self)
-        for _ in range(effective_lives):
-            self.caster.level.event_manager.raise_event(EventOnDeath(unit, None), unit)
-        if unit.is_alive():
-            already_hit.append(unit)
         
+        if unit.has_buff(MortalShackleBuff) or unit.has_buff(MortalChainmailBuff):
+            for _ in range(lives):
+                self.caster.level.event_manager.raise_event(EventOnDeath(unit, None), unit)
+        
+        if unit.is_alive():
+            already_hit.append(unit)        
         chains = chains - 1 + lives
         if not chains:
             return
@@ -2711,8 +2721,7 @@ class MortalCoilSpell(Spell):
             self.caster.level.queue_spell(self.chain(end, random.choice(targets), already_hit, chains=chains))
     
     def cast(self, x, y):
-        self.caster.level.queue_spell(self.chain(self.caster, Point(x, y), []))
-        yield
+        yield from self.chain(self.caster, Point(x, y), [])
 
 BestowImmortality.get_description = lambda self: "Target unit gains the ability to reincarnate on death for [{duration}_turns:duration].".format(**self.fmt_dict())
 
