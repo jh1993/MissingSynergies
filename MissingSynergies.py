@@ -8018,7 +8018,7 @@ class FadingBuff(Buff):
             return False
         if owner.turns_to_death is not None:
             self.spell.caster.apply_buff(StolenEssenceBuff(), owner.turns_to_death)
-            owner.level.show_effect(owner.x, owner.y, Tags.Arcane)
+            owner.level.show_effect(owner.x, owner.y, Tags.Translocation)
             owner.cur_hp = 0
             owner.kill()
             return False
