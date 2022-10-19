@@ -64,7 +64,7 @@ Spells:
 + Mad Werewolf (Dark/Nature/Arcane/Conjuration)
 + Parlor Trick (Chaos/Sorcery)
 + Grudge Reaper (Dark/Conjuration)
-+ Death Metal (Dark/Metallic/Sorcery/Conjuration)
++ Death Metal (Dark/Metallic/Conjuration)
 + Mutant Cyclops (Arcane/Conjuration)
 + Primordial Rot (Dark/Nature/Conjuration)
 + Cosmic Stasis (Arcane/Ice/Enchantment)
@@ -76,6 +76,7 @@ Spells:
 + Shield Burst (Arcane/Sorcery)
 + Empyreal Ascension (Fire/Holy/Sorcery/Enchantment)
 + Iron Turtle (Metallic/Nature/Conjuration)
++ Essence Leech (Arcane/Dark/Enchantment)
 
 Skills:
 + Shivering Venom (Ice/Nature)

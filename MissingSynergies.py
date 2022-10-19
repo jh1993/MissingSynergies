@@ -6402,15 +6402,15 @@ class DeathMetalSpell(Spell):
     def on_init(self):
         self.name = "Death Metal"
         self.asset = ["MissingSynergies", "Icons", "death_metal"]
-        self.tags = [Tags.Metallic, Tags.Dark, Tags.Sorcery, Tags.Conjuration]
-        self.level = 7
+        self.tags = [Tags.Metallic, Tags.Dark, Tags.Conjuration]
+        self.level = 6
         self.max_charges = 3
         self.range = 0
 
         self.minion_health = 78
         self.minion_damage = 13
         self.minion_range = 7
-        self.minion_duration = 6
+        self.minion_duration = 3
         self.num_summons = 4
 
         self.upgrades["num_summons"] = (2, 3, "Num Summons", "Up to [2:num_summons] more metalheads can be summoned.")
@@ -6419,8 +6419,8 @@ class DeathMetalSpell(Spell):
         self.upgrades["discord"] = (1, 6, "Discordian Tune", "Each turn, each enemy has a 25% chance to take [1_dark:dark] or [1_physical:physical] damage.\nEnemies that take [physical] damage are [stunned] for [1_turn:duration].\nEnemies that take [dark] damage go [berserk] for [1_turn:duration].\nThese durations are fixed and unaffected by bonuses.")
 
     def get_description(self):
-        return ("Channel this spell to create aggressive otherworldly music each turn to motivate your temporary minions, increasing their remaining durations by [1_turn:minion_duration].\n"
-                "In addition, summon a metalhead near you each turn for [{minion_duration}_turns:minion_duration], which is a stationary flying [metallic] [undead] minion with [{minion_health}_HP:minion_health]. It has a wailing attack that deals [{minion_damage}_dark:dark] damage to enemies in a [{minion_range}_tile:minion_range] cone, and a headbanging leap attack that deals [{minion_damage}_physical:physical] with double the range.\n"
+        return ("Channel this spell to create aggressive otherworldly music each turn to summon a metalhead near you and increase the remaining durations of all metalheads by [1_turn:minion_duration].\n"
+                "Metalheads are stationary flying [metallic] [undead] minions with [{minion_health}_HP:minion_health] that last [{minion_duration}_turns:minion_duration]. They have wailing attack that deal [{minion_damage}_dark:dark] damage to enemies in a [{minion_range}_tile:minion_range] cone, and headbanging leap attacks that deal [{minion_damage}_physical:physical] with double the range.\n"
                 "At most [{num_summons}:num_summons] metalheads can be summoned.\n").format(**self.fmt_dict())
 
     def cast(self, x, y, channel_cast=False):
@@ -6467,7 +6467,7 @@ class DeathMetalSpell(Spell):
             else:
                 if unit.is_player_controlled:
                     continue
-                if unit.turns_to_death is not None:
+                if unit.source is self:
                     unit.turns_to_death += 1
                 if gore:
                     unit.apply_buff(BloodrageBuff(1), minion_duration)
@@ -7999,5 +7999,89 @@ class IronTurtleSpell(Spell):
         unit.buffs = [IronTurtleAura(self), IronTurtleBuff(self)]
         self.summon(unit, target=Point(x, y))
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell])
+class FadingBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+    
+    def on_init(self):
+        self.name = "Fading"
+        self.buff_type = BUFF_TYPE_CURSE
+        self.color = Tags.Arcane.color
+        self.asset = ["MissingSynergies", "Statuses", "fading"]
+        self.damage = self.spell.get_stat("damage")
+        self.agony = self.spell.get_stat("agony")
+    
+    def on_attempt_apply(self, owner):
+        if owner.has_buff(FadingBuff):
+            return False
+        if owner.turns_to_death is not None:
+            self.spell.caster.apply_buff(StolenEssenceBuff(), owner.turns_to_death)
+            owner.level.show_effect(owner.x, owner.y, Tags.Arcane)
+            owner.cur_hp = 0
+            owner.kill()
+            return False
+        return True
+
+    def on_applied(self, owner):
+        self.owner.turns_to_death = math.ceil(self.owner.max_hp/self.damage)
+    
+    def on_advance(self):
+        self.spell.caster.apply_buff(StolenEssenceBuff(), math.ceil(self.damage/10))
+        if self.agony:
+            self.owner.level.event_manager.raise_event(EventOnPreDamaged(self.owner, self.damage, Tags.Arcane, self.spell), self.owner)
+            self.owner.level.event_manager.raise_event(EventOnDamaged(self.owner, self.damage, Tags.Arcane, self.spell), self.owner)
+
+    def on_unapplied(self):
+        self.owner.turns_to_death = None
+
+class StolenEssenceBuff(Buff):
+    
+    def on_init(self):
+        self.name = "Stolen Essence"
+        self.stack_type = STACK_DURATION
+        self.color = Tags.Arcane.color
+    
+    def on_advance(self):
+        units = [unit for unit in self.owner.level.units if not are_hostile(self.owner, unit) and unit.turns_to_death is not None]
+        if not units:
+            return
+        random.shuffle(units)
+        for unit in units:
+            unit.turns_to_death += 1
+            self.turns_left -= 1
+            if self.turns_left <= 0:
+                self.owner.remove_buff(self)
+                return
+
+class EssenceLeechSpell(Spell):
+
+    def on_init(self):
+        self.name = "Essence Leech"
+        self.asset = ["MissingSynergies", "Icons", "essence_leech"]
+        self.tags = [Tags.Arcane, Tags.Dark, Tags.Enchantment]
+        self.level = 4
+        self.max_charges = 7
+        self.range = 9
+        self.damage = 10
+        self.radius = 3
+
+        self.upgrades["max_charges"] = (7, 4)
+        self.upgrades["requires_los"] = (-1, 2, "Blindcasting", "Essence Leech can be cast without line of sight.")
+        self.upgrades["radius"] = (2, 3)
+        self.upgrades["agony"] = (1, 3, "Fading Agony", "Fading enemies behave as if they have taken [arcane] damage each turn equal to this spell's [damage] stat, triggering all effects that are normally triggered when enemies are damaged.")
+
+    def get_description(self):
+        return ("Drain essence from enemies in a [{radius}_tile:radius] radius, causing them to begin fading, automatically dying after a number of turns equal to their max HP divided [{damage}:arcane], rounded up, as if they are temporarily summoned units. This number benefits from this spell's bonuses to [damage].\n"
+                "Each turn, each fading enemy grants you 1 turn of Stolen Essence per 10 [damage] this spell has, rounded up. Your temporary minions will expend remaining duration of Stolen Essence before their own remaining lifetimes.\n"
+                "Temporary enemies are instantly killed, and their remaining lifetimes given to you as Stolen Essence.").format(**self.fmt_dict())
+
+    def cast_instant(self, x, y):
+        for unit in self.owner.level.get_units_in_ball(Point(x, y), self.get_stat("radius")):
+            if not are_hostile(unit, self.caster):
+                continue
+            unit.apply_buff(FadingBuff(self))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy])
