@@ -2439,7 +2439,7 @@ class DivineGazeSpell(Spell):
             self.caster.level.deal_damage(point.x, point.y, eye.damage if eye else damage, eye.element if eye else Tags.Holy, eye.spell if eye else self)
             if eye and unit:
                 eye.on_shoot(point)
-            yield
+        yield
 
     def cast_instant(self, x, y):
         eyes = [None]
@@ -3431,7 +3431,7 @@ class LocusOfEnergy(Upgrade):
             return
         for point in Bolt(self.owner.level, self.owner, random.choice(targets)):
             self.owner.level.deal_damage(point.x, point.y, damage, random.choice([Tags.Lightning, Tags.Arcane]), self)
-            yield
+        yield
 
 class AshenAvatarBuff(BlindBuff):
 
@@ -4294,7 +4294,7 @@ class NegentropySpell(Spell):
         else:
             for point in Bolt(self.caster.level, self.caster, Point(x, y)):
                 self.fire_hit(point, damage, count, shock, thaw)
-                yield
+            yield
 
     def fire_hit(self, target, damage, count, shock, thaw, extra_damage=True):
 
@@ -4329,11 +4329,10 @@ class StormBeam(Spell):
         self.damage_type = [Tags.Lightning, Tags.Ice]
         self.description = "Beam attack. Deals lightning and ice damage equal to 10% of the user's max HP."
     
-    def cast(self, x, y):
+    def cast_instant(self, x, y):
         for point in Bolt(self.caster.level, self.caster, Point(x, y)):
             self.caster.level.deal_damage(point.x, point.y, self.caster.max_hp//10, Tags.Lightning, self)
             self.caster.level.deal_damage(point.x, point.y, self.caster.max_hp//10, Tags.Ice, self)
-            yield
 
 class StormProtectionBuff(Buff):
     def on_init(self):
@@ -4378,7 +4377,7 @@ class StormElementalBuff(Buff):
         for point in list(Bolt(self.owner.level, self.owner, unit))[:-1]:
             self.owner.level.deal_damage(point.x, point.y, damage, Tags.Lightning, self)
             self.owner.level.deal_damage(point.x, point.y, damage, Tags.Ice, self)
-            yield
+        yield
 
     def on_death(self, evt):
 
@@ -4587,7 +4586,7 @@ class SuperconductivityBuff(Buff):
         for target in targets[:self.num_targets]:
             for point in Bolt(self.owner.level, self.owner, target):
                 self.owner.level.deal_damage(point.x, point.y, damage, Tags.Lightning, self)
-                yield
+            yield
 
 class SuperfluidityBuff(Buff):
 
