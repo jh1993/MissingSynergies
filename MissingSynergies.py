@@ -390,8 +390,8 @@ class FrozenSpaceBuff(Buff):
     def effect(self, unit):
         if unit is self.owner:
             return
-        if not are_hostile(unit, self.owner) and self.shielding:
-            if unit.shields < 3:
+        if not are_hostile(unit, self.owner):
+            if self.shielding and unit.shields < 3:
                 unit.add_shields(1)
             return
         unit.deal_damage(self.damage, Tags.Ice, self.spell)
