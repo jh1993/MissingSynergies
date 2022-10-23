@@ -8082,5 +8082,183 @@ class EssenceLeechSpell(Spell):
                 continue
             unit.apply_buff(FadingBuff(self))
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell])
+class BloodyMassBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+    
+    def on_init(self):
+        self.name = "Bloody Regrowth"
+        self.color = Tags.Demon.color
+        self.description = "Regenerates 5% of its max HP per turn. When damaged, heal its summoner for half of that damage."
+        self.owner_triggers[EventOnDamaged] = self.on_damaged
+    
+    def on_damaged(self, evt):
+        self.owner.source.caster.deal_damage(-evt.damage//2, Tags.Heal, self)
+    
+    def on_advance(self):
+        if self.owner.cur_hp < self.owner.max_hp:
+            self.owner.deal_damage(-math.ceil(self.owner.max_hp/20), Tags.Heal, self)
+
+class BloodyMassBloodSplatter(SimpleRangedAttack):
+
+    def __init__(self, spell):
+        SimpleRangedAttack.__init__(self, name="Blood Splatter", damage=spell.get_stat("minion_damage"), damage_type=Tags.Dark, range=spell.get_stat("minion_range"), radius=1)
+        self.tags = [Tags.Dark]
+        self.description = "Only damages enemies."
+        self.bloodrage = spell.get_stat("bloodrage")
+        self.duration = 10
+        self.penetration = spell.get_stat("penetration")
+    
+    def get_penetration(self):
+        summoner = self.caster.source.caster
+        return math.ceil(100*(summoner.max_hp - summoner.cur_hp)/summoner.max_hp) if self.penetration else 0
+
+    def hit(self, x, y):
+        unit = self.caster.level.get_unit_at(x, y)
+        if not unit or not are_hostile(unit, self.caster):
+            self.caster.level.show_effect(x, y, Tags.Dark)
+        else:
+            penetration = self.get_penetration()
+            unit.resists[Tags.Dark] -= penetration
+            unit.deal_damage(self.get_stat("damage"), Tags.Dark, self)
+            unit.resists[Tags.Dark] += penetration
+            if self.bloodrage:
+                self.caster.source.caster.apply_buff(BloodrageBuff(1), self.get_stat("duration"))
+
+    # For my No More Scams mod
+    def can_redeal(self, target):
+        return target.resists[Tags.Dark] - self.get_penetration() < 100
+
+    def get_stat(self, attr, base=None):
+        bonus = 0
+        if attr == "radius":
+            bonus = math.floor(math.sqrt(self.owner.max_hp/10))
+        if attr == "range":
+            bonus = self.owner.max_hp//10
+        return Spell.get_stat(self, attr, base) + bonus
+
+class FleshSacrificeSpell(Spell):
+
+    def on_init(self):
+        self.name = "Flesh Sacrifice"
+        self.asset = ["MissingSynergies", "Icons", "flesh_sacrifice"]
+        self.tags = [Tags.Dark, Tags.Conjuration]
+        self.level = 5
+        self.max_charges = 6
+        self.range = 10
+        self.requires_los = False
+        self.must_target_empty = True
+        self.must_target_walkable = True
+
+        self.damage = 25
+        self.minion_range = 2
+        self.minion_damage = 19
+
+        self.upgrades["max_charges"] = (6, 3)
+        self.upgrades["damage"] = (25, 3)
+        self.upgrades["bloodrage"] = (1, 6, "Bloodbath", "Whenever the bloody mass's blood splatter hits an enemy, you gain bloodlust for [10_turns:duration], increasing the damage of all of your spells by 1.\nThis duration benefits from your bonuses to [duration].")
+        self.upgrades["penetration"] = (1, 5, "Power of Pain", "The bloody mass's blood splatter penetrates enemies' [dark] resistance by an amount equal to your percentage of missing HP.")
+    
+    def get_description(self):
+        return ("Sacrifice some of your flesh and blood, dealing [{damage}_dark:dark] damage to yourself and summoning a bloody mass with max HP equal to twice the damage dealt, or teleport an existing bloody mass to the target tile and add to its max HP.\n"
+                "The bloody mass is a [living] [demon] minion that regenerates 5% of its max HP per turn. Whenever it takes damage, you recover the lost flesh, healing yourself for half of the damage taken. It has a blood splatter attack with [{minion_range}_range:minion_range], [1_radius:radius], and [{minion_damage}_dark:dark] damage, which gains bonus range equal to 10% of its max HP and bonus radius equal to the square root of that amount, rounded down. It otherwise benefits from your stat bonuses rather than its own.").format(**self.fmt_dict())
+
+    def get_impacted_tiles(self, x, y):
+        return [Point(x, y)]
+
+    def cast_instant(self, x, y):
+
+        dealt = self.caster.deal_damage(self.get_stat("damage"), Tags.Dark, self)
+        if not dealt:
+            return
+        
+        existing = None
+        for unit in self.caster.level.units:
+            if unit.source is self:
+                existing = unit
+                break
+        if existing:
+            existing.max_hp += dealt
+            existing.deal_damage(-dealt, Tags.Heal, self)
+            self.caster.level.show_effect(existing.x, existing.y, Tags.Translocation)
+            self.caster.level.act_move(existing, x, y, teleport=True)
+            return
+        
+        unit = Unit()
+        unit.unique = True
+        unit.name = "Bloody Mass"
+        unit.asset = ["MissingSynergies", "Units", "bloody_mass"]
+        unit.max_hp = 2*dealt
+        unit.tags = [Tags.Demon, Tags.Living]
+        unit.resists[Tags.Physical] = -50
+        spell = BloodyMassBloodSplatter(self)
+        spell.statholder = self.caster
+        unit.spells = [spell]
+        unit.buffs = [BloodyMassBuff(self)]
+        self.summon(unit, Point(x, y))
+
+class QuantumOverlayBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+
+    def on_init(self):
+        self.name = "Quantum Overlay"
+        self.color = Tags.Arcane.color
+        self.stack_type = STACK_REPLACE
+        if self.spell.get_stat("bifurcation"):
+            self.global_bonuses["num_targets"] = 1
+        self.overlays = self.spell.get_stat("overlays")
+        self.global_triggers[EventOnDamaged] = self.on_damaged
+        self.group = self.spell.get_stat("group")
+
+    def on_damaged(self, evt):
+
+        if evt.source is self.spell:
+            return
+
+        if evt.unit is self.owner or (self.group and not are_hostile(evt.unit, self.owner)):
+            for _ in range(self.overlays):
+                evt.unit.deal_damage(evt.damage//4, evt.damage_type, self.spell)
+        
+        if not evt.source or not evt.source.owner:
+            return
+        
+        if evt.source.owner is not self.owner and (not self.group or are_hostile(evt.source.owner, self.owner)):
+            return
+
+        for _ in range(self.overlays):
+            evt.unit.deal_damage(evt.damage//2, evt.damage_type, self.spell)
+
+class QuantumOverlaySpell(Spell):
+
+    def on_init(self):
+        self.name = "Quantum Overlay"
+        self.asset = ["MissingSynergies", "Icons", "quantum_overlay"]
+        self.tags = [Tags.Chaos, Tags.Arcane, Tags.Enchantment]
+        self.level = 6
+        self.max_charges = 3
+        self.range = 0
+
+        self.duration = 5
+        self.overlays = 1
+
+        self.upgrades["duration"] = (5, 3)
+        self.upgrades["overlays"] = (1, 5, "Double Overlay", "Quantum Overlay will now redeal damage an additional time, to both you and enemies.")
+        self.upgrades["group"] = (1, 5, "Group Overlay", "Quantum Overlay now also affects damage dealt to and by your minions.")
+        self.upgrades["bifurcation"] = (1, 4, "Bifurcation", "For its duration, Quantum Overlay now gives a bonus of [1:num_targets] to [num_targets:num_targets].")
+    
+    def get_description(self):
+        return ("The existence of another you from a parallel world is partially overlaid onto yours.\n"
+                "Whenever you deal damage, this spell redeals 50% of that damage to the same target. Whenever you take damage, this spell redeals 25% of that damage to you.\n"
+                "This spell cannot trigger itself.\n"
+                "Lasts [{duration}_turns:duration].").format(**self.fmt_dict())
+
+    def cast_instant(self, x, y):
+        self.caster.apply_buff(QuantumOverlayBuff(self), self.get_stat("duration"))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy])

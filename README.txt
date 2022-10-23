@@ -77,6 +77,8 @@ Spells:
 + Empyreal Ascension (Fire/Holy/Sorcery/Enchantment)
 + Iron Turtle (Metallic/Nature/Conjuration)
 + Essence Leech (Arcane/Dark/Enchantment)
++ Flesh Sacrifice (Dark/Conjuration)
++ Quantum Overlay (Arcane/Chaos/Enchantment)
 
 Skills:
 + Shivering Venom (Ice/Nature)
