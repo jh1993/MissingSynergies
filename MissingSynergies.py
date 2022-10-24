@@ -8285,7 +8285,7 @@ class Ataraxia(Upgrade):
         self.asset = ["MissingSynergies", "Icons", "ataraxia"]
         self.tags = [Tags.Sorcery, Tags.Enchantment, Tags.Conjuration]
         self.level = 7
-        self.description = "For every 2 unspent SP you have, all spells and skills gain [1_damage:damage] and [1_minion_health:minion_health].\nFor every 4 unspent SP you have, all spells and skills gain [1_range:range], [1_duration:duration], [1_minion_damage:minion_damage], [1_minion_duration:minion_duration], and [1_cascade_range:cascade_range].\nFor every 8 unspent SP you have, all spells and skills gain [1_radius:radius], [1_num_targets:num_targets], [1_minion_range:minion_range], and [1_num_summons:num_summons]."
+        self.description = "For every 2 unspent SP you have, all spells and skills gain [1_damage:damage] and [1_minion_health:minion_health].\nFor every 4 unspent SP you have, all spells and skills gain [1_range:range], [1_duration:duration], [1_minion_damage:minion_damage], [1_minion_duration:minion_duration], and [1_cascade_range:cascade_range].\nFor every 8 unspent SP you have, all spells and skills gain [1_num_targets:num_targets], [1_minion_range:minion_range], and [1_num_summons:num_summons].\nAll spells and skills gain bonus [radius] equal to the square root of 1/8 of your unspent SP, rounded down."
         # Don't use self.global_bonuses, otherwise the description becomes too long
         self.bonuses = defaultdict(lambda: 0)
         self.owner_triggers[EventOnBuffApply] = self.on_buff_apply
@@ -8300,8 +8300,9 @@ class Ataraxia(Upgrade):
             self.update_stat(stat, self.owner.xp//2)
         for stat in ["range", "duration", "minion_damage", "minion_duration", "cascade_range"]:
             self.update_stat(stat, self.owner.xp//4)
-        for stat in ["radius", "num_targets", "minion_range", "num_summons"]:
+        for stat in ["num_targets", "minion_range", "num_summons"]:
             self.update_stat(stat, self.owner.xp//8)
+        self.update_stat("radius", math.floor(math.sqrt(self.owner.xp/8)))
 
     def on_applied(self, owner):
         self.on_advance()
