@@ -8260,5 +8260,59 @@ class QuantumOverlaySpell(Spell):
     def cast_instant(self, x, y):
         self.caster.apply_buff(QuantumOverlayBuff(self), self.get_stat("duration"))
 
+class FracturedMemories(Upgrade):
+
+    def on_init(self):
+        self.name = "Fractured Memories"
+        self.asset = ["MissingSynergies", "Icons", "fractured_memories"]
+        self.tags = [Tags.Arcane, Tags.Chaos]
+        self.level = 5
+        self.description = "Each turn, each enemy has a 0.5% chance to be [blinded], [stunned], or go [berserk] per total level of spells you have.\nThe duration of these debuffs is [1_turn:duration], which is unaffected by bonuses."
+    
+    def on_advance(self):
+        level = 0
+        for spell in self.owner.spells:
+            level += spell.level
+        for unit in list(self.owner.level.units):
+            if not are_hostile(unit, self.owner) or random.random() >= level*0.005:
+                continue
+            unit.apply_buff(random.choice([BlindBuff, Stun, BerserkBuff])(), 1)
+
+class Ataraxia(Upgrade):
+
+    def on_init(self):
+        self.name = "Ataraxia"
+        self.asset = ["MissingSynergies", "Icons", "ataraxia"]
+        self.tags = [Tags.Sorcery, Tags.Enchantment, Tags.Conjuration]
+        self.level = 7
+        self.description = "For every 2 unspent SP you have, all spells and skills gain [1_damage:damage] and [1_minion_health:minion_health].\nFor every 4 unspent SP you have, all spells and skills gain [1_range:range], [1_duration:duration], [1_minion_damage:minion_damage], [1_minion_duration:minion_duration], and [1_cascade_range:cascade_range].\nFor every 8 unspent SP you have, all spells and skills gain [1_radius:radius], [1_num_targets:num_targets], [1_minion_range:minion_range], and [1_num_summons:num_summons]."
+        # Don't use self.global_bonuses, otherwise the description becomes too long
+        self.bonuses = defaultdict(lambda: 0)
+        self.owner_triggers[EventOnBuffApply] = self.on_buff_apply
+
+    def update_stat(self, stat, value):
+        self.owner.global_bonuses[stat] -= self.bonuses[stat]
+        self.bonuses[stat] = value
+        self.owner.global_bonuses[stat] += value
+
+    def on_advance(self):
+        for stat in ["damage", "minion_health"]:
+            self.update_stat(stat, self.owner.xp//2)
+        for stat in ["range", "duration", "minion_damage", "minion_duration", "cascade_range"]:
+            self.update_stat(stat, self.owner.xp//4)
+        for stat in ["radius", "num_targets", "minion_range", "num_summons"]:
+            self.update_stat(stat, self.owner.xp//8)
+
+    def on_applied(self, owner):
+        self.on_advance()
+
+    def on_add_spell(self, spell):
+        self.on_advance()
+
+    def on_buff_apply(self, evt):
+        if not isinstance(evt.buff, Upgrade):
+            return
+        self.on_advance()
+
 all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell])
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia])

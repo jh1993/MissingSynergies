@@ -102,5 +102,8 @@ Skills:
 + Redheart Spider (Holy/Nature/Dark/Conjuration)
 + Inexorable Decay (Dark)
 + Fulgurite Alchemy (Arcane/Lightning)
++ Fractured Memories (Arcane/Chaos)
++ Ataraxia (Sorcery/Enchantment/Conjuration)
 
 Credit to Bord Listian for the Golden Trickster sprite.
+The sprite for Ataraxia is an adaptation of the icon of its namesake from Nova Drift.
