@@ -7442,10 +7442,13 @@ class RedheartSpiderBuff(Buff):
         self.global_bonuses["range"] = 0
     
     def get_tooltip(self):
-        return "Enemies within %i tiles have their poison durations increased by 2 turns each turn, and have a 25%% chance to be blinded, stunned, or go berserk for 1 turn. Spider units that die in this radius are eaten, adding their max HP to this unit's and adding 1 SH.\n\nAttacks inflict duration-stacking poison with duration equal to damage done." % self.radius
+        return "Enemies within %i tiles have their poison durations increased by 2 turns each turn, and have a 25%% chance to be stunned or go berserk for 1 turn. Spider units that die in this radius are eaten, adding their max HP to this unit's and adding 1 SH.\n\nAttacks inflict duration-stacking poison with duration equal to damage done." % self.radius
 
     def on_death(self, evt):
         if Tags.Spider not in evt.unit.tags or distance(evt.unit, self.owner) > self.radius:
+            return
+        # This can happen with Mortal Coil
+        if evt.unit is self.owner:
             return
         self.owner.level.queue_spell(self.eat(evt.unit))
 
@@ -7496,7 +7499,7 @@ class RedheartSpiderBuff(Buff):
             else:
                 unit.apply_buff(Poison(), 2)
             if random.random() < 0.25:
-                unit.apply_buff(random.choice([BlindBuff, Stun, BerserkBuff])(), 1)
+                unit.apply_buff(random.choice([Stun, BerserkBuff])(), 1)
             effects_left += 1
 
         # Show some graphical indication of this aura if it didnt hit much
@@ -7545,7 +7548,7 @@ class RedheartSpider(Upgrade):
     def get_description(self):
         return ("Begin each level accompanied by the Redheart Spider. If it dies, it will be summoned again after [10_turns:duration].\n"
                 "The Redheart Spider is a [holy] [nature] [demon] [spider] minion with [{minion_health}_HP:minion_health] and an attack that deals [{minion_damage}_physical:physical] damage with [{minion_range}_range:minion_range]. Its attacks gain damage equal to 20% of its max HP, range equal to 10% of its max HP, and inflict duration-stacking [poison] with duration equal to damage dealt.\n"
-                "The Redheart Spider has an aura with radius equal to the square root of its max HP, rounded down. Each turn, enemies in this aura have their [poison] durations increased by [2_turns:duration], and have a 25% chance to be [blinded], [stunned], or go [berserk]. Whenever a [spider] dies within the aura, it will be eaten, adding its max HP to the Redheart Spider's and adding [1_SH:shields].").format(**self.fmt_dict())
+                "The Redheart Spider has an aura with radius equal to the square root of its max HP, rounded down. Each turn, enemies in this aura have their [poison] durations increased by [2_turns:duration], and have a 25% chance to be [stunned] or go [berserk]. Whenever a [spider] dies within the aura, it will be eaten, adding its max HP to the Redheart Spider's and adding [1_SH:shields].").format(**self.fmt_dict())
 
     def do_summon(self):
         unit = Unit()
@@ -8267,7 +8270,7 @@ class FracturedMemories(Upgrade):
         self.asset = ["MissingSynergies", "Icons", "fractured_memories"]
         self.tags = [Tags.Arcane, Tags.Chaos]
         self.level = 5
-        self.description = "Each turn, each enemy has a 0.5% chance to be [blinded], [stunned], or go [berserk] per total level of spells you have.\nThe duration of these debuffs is [1_turn:duration], which is unaffected by bonuses."
+        self.description = "Each turn, each enemy has a 0.5% chance to be [stunned] or go [berserk] per total level of spells you have.\nThe duration of these debuffs is [1_turn:duration], which is unaffected by bonuses."
     
     def on_advance(self):
         level = 0
@@ -8276,7 +8279,7 @@ class FracturedMemories(Upgrade):
         for unit in list(self.owner.level.units):
             if not are_hostile(unit, self.owner) or random.random() >= level*0.005:
                 continue
-            unit.apply_buff(random.choice([BlindBuff, Stun, BerserkBuff])(), 1)
+            unit.apply_buff(random.choice([Stun, BerserkBuff])(), 1)
 
 class Ataraxia(Upgrade):
 
