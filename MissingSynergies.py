@@ -268,7 +268,7 @@ class Electrolysis(Upgrade):
 
     def get_description(self):
         return ("If a [poisoned:poison] enemy takes [lightning] damage from a source other than this skill, its [poison] duration is reduced by half.\n"
-                "For every 10 turns of poison removed, rounded up, a random enemy in a [{radius}_tile:radius] burst is [acidified:poison], losing [100_poison:poison] resistance. An enemy can be targeted multiple times, and the original enemy can also be targeted.\n"
+                "For every 10 turns of poison removed, rounded up, a random enemy in a [{radius}_tile:radius] radius is [acidified:poison], losing [100_poison:poison] resistance. An enemy can be targeted multiple times, and the original enemy can also be targeted.\n"
                 "If the target enemy is already [acidified:poison], it is instead [poisoned:poison] for [{total_duration}_turns:duration]. This duration benefits from bonuses to both [duration] and [damage].\n"
                 "If this would increase its [poison] duration by less than [{total_duration}_turns:duration], the remainder is dealt as [lightning] damage.\n").format(**self.fmt_dict())
     
@@ -290,8 +290,7 @@ class Electrolysis(Upgrade):
         duration = self.get_stat("duration") + self.get_stat("damage")
         
         for _ in range(math.ceil(amount/10)):
-            targets = self.owner.level.get_units_in_ball(evt.unit, radius)
-            targets = [t for t in targets if are_hostile(t, self.owner) and self.owner.level.can_see(t.x, t.y, evt.unit.x, evt.unit.y)]
+            targets = [t for t in self.owner.level.get_units_in_ball(evt.unit, radius) if are_hostile(t, self.owner)]
             if not targets:
                 return
             self.owner.level.queue_spell(self.electrolyze(evt.unit, random.choice(targets), duration))
@@ -8319,5 +8318,102 @@ class Ataraxia(Upgrade):
             return
         self.on_advance()
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell])
+class StaticBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+    
+    def on_init(self):
+        self.name = "Static"
+        self.asset = ["MissingSynergies", "Statuses", "static"]
+        self.color = Tags.Lightning.color
+        self.buff_type = BUFF_TYPE_CURSE
+        self.stack_type = STACK_INTENSITY
+        self.shocking = self.spell.get_stat("shocking")
+        self.owner_triggers[EventOnBuffApply] = self.on_buff_apply
+    
+    def discharge(self, stun):
+        if not self.owner.gets_clarity and random.random() < 0.5:
+            stun.turns_left += 1
+        if self.shocking:
+            # Queue this so it triggers after Fulgurite Alchemy
+            self.owner.level.queue_spell(self.shock())
+    
+    def shock(self):
+        self.owner.deal_damage(2, Tags.Lightning, self.spell)
+        yield
+
+    def on_applied(self, owner):
+        stuns = []
+        for buff in self.owner.buffs:
+            if isinstance(buff, Stun):
+                stuns.append(buff)
+        if stuns:
+            self.discharge(random.choice(stuns))
+            return ABORT_BUFF_APPLY
+    
+    def on_buff_apply(self, evt):
+        if not isinstance(evt.buff, Stun):
+            return
+        self.discharge(evt.buff)
+        self.owner.remove_buff(self)
+
+class StaticFieldBuff(DamageAuraBuff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        DamageAuraBuff.__init__(self, damage=2, damage_type=Tags.Lightning, radius=spell.get_stat("radius"))
+        self.name = "Static Field"
+        self.spontaneous = spell.get_stat("spontaneous")
+
+    def on_advance(self):
+
+        effects_left = 7
+
+        for unit in self.owner.level.get_units_in_ball(Point(self.owner.x, self.owner.y), self.radius):
+            if not are_hostile(unit, self.owner):
+                continue
+            self.damage_dealt += unit.deal_damage(2, Tags.Lightning, self.spell)
+            unit.apply_buff(StaticBuff(self.spell))
+            if self.spontaneous and random.random() < unit.get_buff_stacks(StaticBuff)*0.05:
+                unit.apply_buff(Stun(), 1)
+            effects_left -= 1
+
+        # Show some graphical indication of this aura if it didnt hit much
+        points = self.owner.level.get_points_in_ball(self.owner.x, self.owner.y, self.radius)
+        points = [p for p in points if not self.owner.level.get_unit_at(p.x, p.y)]
+        random.shuffle(points)
+        for _ in range(effects_left):
+            if not points:
+                break
+            p = points.pop()
+            self.owner.level.show_effect(p.x, p.y, Tags.Lightning, minor=True)
+
+class StaticFieldSpell(Spell):
+
+    def on_init(self):
+        self.name = "Static Field"
+        self.asset = ["MissingSynergies", "Icons", "static_field"]
+        self.tags = [Tags.Lightning, Tags.Enchantment]
+        self.level = 5
+        self.max_charges = 3
+        self.range = 0
+        self.radius = 7
+        self.duration = 30
+
+        self.upgrades["radius"] = (3, 3)
+        self.upgrades["duration"] = (15, 2)
+        self.upgrades["shocking"] = (1, 4, "Shocking Discharge", "When a stack of static is discharged from an enemy, it deals [2_lightning:lightning] damage, which is fixed and cannot be increased using shrines, skills, or buffs.\nThis damage occurs even if the enemy can gain clarity.")
+        self.upgrades["spontaneous"] = (1, 4, "Spontaneous Discharge", "Each turn, Static Field has a 10% chance to [stun] each enemy in its radius for [1_turn:duration], which does not benefit from bonuses but can be extended by static.\nThe chance is equal to the target's number of static stacks times 5%.")
+    
+    def get_description(self):
+        return ("For [{duration}_turns:duration], deal [2_lightning:lightning] damage and apply a stack of static per turn to each enemy in a [{radius}_tile:radius] radius. This damage is fixed, and cannot be increased using shrines, skills, or buffs.\n"
+                "When an enemy is inflicted with [stun], [freeze], [petrify], [glassify], or a similar incapacitating debuff, discharge all stacks of static on it. Each stack discharged has an independent 50% chance to increase the duration of that debuff by [1_turn:duration]. Static will be discharged immediately if applied to a target that already has one of these debuffs.\n"
+                "Static cannot extend debuff duration on a target that can gain clarity.").format(**self.fmt_dict())
+
+    def cast_instant(self, x, y):
+        self.caster.apply_buff(StaticFieldBuff(self), self.get_stat("duration"))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia])
