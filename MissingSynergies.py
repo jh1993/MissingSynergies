@@ -5823,6 +5823,7 @@ class RevelationBuff(Buff):
         self.stack_type = STACK_INTENSITY
         self.color = Tags.Dark.color
         self.resists[Tags.Dark] = -10
+        self.asset = ["MissingSynergies", "Statuses", "amplified_dark"]
 
 class CultOfDarknessSpell(Spell):
 
