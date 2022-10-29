@@ -6782,7 +6782,7 @@ class CosmicStasisBuff(Buff):
         self.to_refreeze = []
 
     def on_buff_apply(self, evt):
-        if isinstance(evt.buff, FrozenBuff) and are_hostile(evt.unit, self.owner):
+        if isinstance(evt.buff, FrozenBuff) and are_hostile(evt.unit, self.owner) and not evt.unit.gets_clarity:
             evt.buff.turns_left += self.freeze_extension
 
     def on_buff_remove(self, evt):
@@ -6820,7 +6820,7 @@ class CosmicStasisSpell(Spell):
         self.upgrades["laser"] = (1, 5, "Laser Cooling", "When an enemy takes [arcane] damage, it has a chance of being [frozen] for [1_turn:duration] equal to the damage taken divided by 100, to a maximum of 100%.")
     
     def get_description(self):
-        return ("When an enemy is [frozen], the duration of freeze is extended by [{freeze_extension}_turns:duration].\n"
+        return ("When an enemy is [frozen], the duration of freeze is extended by [{freeze_extension}_turns:duration]. Does not work on targets that can gain clarity.\n"
                 "When an enemy is unfrozen by [physical] damage, that enemy will be [frozen] again before the start of your next turn.\n"
                 "Lasts [{duration}_turns:duration].").format(**self.fmt_dict())
 
