@@ -256,7 +256,7 @@ class Electrolysis(Upgrade):
         self.name = "Electrolysis"
         self.asset = ["MissingSynergies", "Icons", "electrolysis"]
         self.tags = [Tags.Lightning, Tags.Nature]
-        self.level = 6
+        self.level = 5
         self.duration = 10
         self.radius = 6
         self.global_triggers[EventOnDamaged] = self.on_damaged
@@ -268,8 +268,9 @@ class Electrolysis(Upgrade):
 
     def get_description(self):
         return ("If a [poisoned:poison] enemy takes [lightning] damage from a source other than this skill, its [poison] duration is reduced by half.\n"
-                "For every 10 turns of poison removed, rounded up, a random enemy in a [{radius}_tile:radius] radius is [acidified:poison], losing [100_poison:poison] resistance. An enemy can be targeted multiple times, and the original enemy can also be targeted.\n"
-                "If the target enemy is already [acidified:poison], it is instead [poisoned:poison] for [{total_duration}_turns:duration]. This duration benefits from bonuses to both [duration] and [damage].\n"
+                "For every 10 turns of poison removed, rounded up, a bolt of toxic lightning is shot from the original enemy toward a random enemy within a [{radius}_tile:radius] burst. An enemy can be hit by multiple bolts, and the original enemy can also be hit.\n"
+                "An enemy hit by a bolt is [acidified:poison], losing [100_poison:poison] resistance.\n"
+                "If the hit enemy is already [acidified:poison], it is instead [poisoned:poison] for [{total_duration}_turns:duration]. This duration benefits from bonuses to both [duration] and [damage].\n"
                 "If this would increase its [poison] duration by less than [{total_duration}_turns:duration], the remainder is dealt as [lightning] damage.\n").format(**self.fmt_dict())
     
     def on_damaged(self, evt):
@@ -291,6 +292,7 @@ class Electrolysis(Upgrade):
         
         for _ in range(math.ceil(amount/10)):
             targets = [t for t in self.owner.level.get_units_in_ball(evt.unit, radius) if are_hostile(t, self.owner)]
+            targets = [t for t in targets if self.owner.level.can_see(t.x, t.y, evt.unit.x, evt.unit.y)]
             if not targets:
                 return
             self.owner.level.queue_spell(self.electrolyze(evt.unit, random.choice(targets), duration))

@@ -113,6 +113,7 @@ Level 4:
 Level 5:
 + Bombastic Arrival (Fire/Translocation)
 + Draconian Brutality (Dragon/Nature/Translocation)
++ Electrolysis (Lightning/Nature)
 + Fractured Memories (Arcane/Chaos)
 + Inexorable Decay (Dark)
 + Orb Substitution (Orb/Translocation)
@@ -122,7 +123,6 @@ Level 5:
 Level 6:
 + Abyssal Insight (Dark/Eye)
 + Dragon Archmage (Dragon/Sorcery)
-+ Electrolysis (Lightning/Nature)
 + Hydromancy (Fire/Lightning/Ice)
 + Locus of Energy (Arcane/Lightning)
 + Shivering Venom (Ice/Nature)
