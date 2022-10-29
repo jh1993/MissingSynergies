@@ -296,7 +296,7 @@ class Electrolysis(Upgrade):
             self.owner.level.queue_spell(self.electrolyze(evt.unit, random.choice(targets), duration))
 
     def electrolyze(self, origin, target, duration):
-        for point in Bolt(self.owner.level, origin, target):
+        for point in Bolt(self.owner.level, origin, target, find_clear=False):
             self.owner.level.show_effect(point.x, point.y, Tags.Lightning, minor=True)
             self.owner.level.show_effect(point.x, point.y, Tags.Poison, minor=True)
             yield
