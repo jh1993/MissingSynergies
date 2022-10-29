@@ -3491,7 +3491,7 @@ class AshenAvatarSpell(Spell):
     def on_init(self):
         self.name = "Ashen Avatar"
         self.asset = ["MissingSynergies", "Icons", "ashen_avatar"]
-        self.tags = [Tags.Fire, Tags.Enchantment, Tags.Conjuration]
+        self.tags = [Tags.Fire, Tags.Dark, Tags.Nature, Tags.Enchantment, Tags.Conjuration]
         self.level = 4
         self.max_charges = 4
         self.range = 0

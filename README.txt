@@ -36,7 +36,7 @@ Level 3:
 Level 4:
 + Aegis Overload (Metallic/Chaos/Sorcery)
 + Afterlife Echoes (Holy/Dark/Enchantment)
-+ Ashen Avatar (Fire/Enchantment/Conjuration)
++ Ashen Avatar (Fire/Dark/Nature/Enchantment/Conjuration)
 + Brimstone Cluster (Fire/Dark/Nature/Enchantment)
 + Chaos Concoction (Chaos/Sorcery)
 + Divine Gaze (Holy/Eye/Sorcery)
