@@ -4383,15 +4383,23 @@ class StormElementalBuff(Buff):
     def on_death(self, evt):
 
         if evt.unit is self.owner and self.disperse:
+            damage = self.spell.get_stat("damage")
+            duration = self.spell.get_stat("duration")
             points = [point for point in self.owner.level.get_points_in_ball(self.owner.x, self.owner.y, self.spell.get_stat("radius")) if self.owner.level.can_see(self.owner.x, self.owner.y, point.x, point.y)]
             random.shuffle(points)
             for point in points:
-                cloud_type = random.choice([StormCloud, BlizzardCloud])
-                cloud = cloud_type(self.spell.caster)
+                if random.choice([True, False]):
+                    cloud = BlizzardCloud(self.spell.caster)
+                    cloud.damage += damage
+                else:
+                    cloud = StormCloud(self.spell.caster)
+                    cloud.damage += 2*damage
+                cloud.duration += duration
+                cloud.source = self.spell
                 self.owner.level.add_obj(cloud, point.x, point.y)
             return
     
-        if self.aggregate and Tags.Elemental in evt.unit.tags and evt.unit is not self and distance(evt.unit, self.owner) <= self.radius and self.owner.level.can_see(self.owner.x, self.owner.y, evt.unit.x, evt.unit.y):
+        if self.aggregate and Tags.Elemental in evt.unit.tags and evt.unit is not self.owner and distance(evt.unit, self.owner) <= self.radius and self.owner.level.can_see(self.owner.x, self.owner.y, evt.unit.x, evt.unit.y):
             self.owner.max_hp += evt.unit.max_hp//5
             self.owner.cur_hp += evt.unit.max_hp//5
 
