@@ -6104,7 +6104,7 @@ class MadWerewolfSpell(Spell):
     def on_init(self):
         self.name = "Mad Werewolf"
         self.asset = ["MissingSynergies", "Icons", "mad_werewolf"]
-        self.tags = [Tags.Dark, Tags.Arcane, Tags.Nature, Tags.Conjuration]
+        self.tags = [Tags.Dark, Tags.Arcane, Tags.Nature, Tags.Translocation, Tags.Conjuration]
         self.level = 3
         self.max_charges = 6
         self.requires_los = False
@@ -6124,7 +6124,7 @@ class MadWerewolfSpell(Spell):
     def get_description(self):
         return ("Summon a demonically possessed werewolf with [{minion_health}_HP:minion_health] and [{shields}_SH:shields]. It has a melee attack and teleport attack with [{minion_range}_range:minion_range] that deal [{minion_damage}_arcane:arcane] damage.\n"
                 "The werewolf has Phase Insanity, and its melee attack inflicts Phase Insanity and teleports enemies away. Units with Phase Insanity have 25% chance on teleport and 100% chance on death to summon an insanity hound allied to the wizard.\n"
-                "On reaching 0 HP, the werewolf transforms into a wild man that inflicts Phase Insanity on nearby enemies and teleports them away while fleeing, until it transforms into a werewolf again in [20_turns:duration].").format(**self.fmt_dict())
+                "On reaching 0 HP, the werewolf transforms into a wild man that inflicts Phase Insanity on nearby enemies and teleports them away while fleeing, until it becomes a werewolf again in [20_turns:duration].").format(**self.fmt_dict())
 
     def get_werewolf(self):
 

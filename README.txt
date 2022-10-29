@@ -26,7 +26,7 @@ Level 3:
 + Eye of the Tyrant (Dragon/Eye/Enchantment)
 + Frozen Space (Ice/Translocation/Enchantment)
 + Grudge Reaper (Dark/Conjuration)
-+ Mad Werewolf (Dark/Nature/Arcane/Conjuration)
++ Mad Werewolf (Dark/Nature/Arcane/Translocation/Conjuration)
 + Mortal Coil (Nature/Metallic/Enchantment/Sorcery)
 + Negentropy (Fire/Ice/Sorcery)
 + Planar Binding (Holy/Translocation/Enchantment)
