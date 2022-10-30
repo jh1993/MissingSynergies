@@ -6063,21 +6063,30 @@ class PhaseInsanityBuff(Buff):
     def on_init(self):
         self.name = "Phase Insanity"
         self.color = Tags.Arcane.color
-        self.description = "25% chance on teleport and 100% chance on death to summon an insanity hound allied to the wizard."
+        self.description = "20% chance on teleport and 50% chance on death to summon an insanity hound allied to the wizard."
         self.owner_triggers[EventOnMoved] = self.on_moved
-        self.owner_triggers[EventOnDeath] = lambda evt: self.spell.summon(self.spell.get_hound(), target=self.owner, radius=5)
+        self.owner_triggers[EventOnDeath] = self.on_death
     
     def on_applied(self, owner):
         if are_hostile(self.owner, self.spell.caster):
             self.buff_type = BUFF_TYPE_CURSE
+            if self.owner.debuff_immune:
+                return ABORT_BUFF_APPLY
         else:
             self.buff_type = BUFF_TYPE_PASSIVE
+            if self.owner.buff_immune:
+                return ABORT_BUFF_APPLY
         if self.spell.get_stat("distortion"):
             self.global_bonuses["range"] = -2 if self.buff_type == BUFF_TYPE_CURSE else 2
             self.global_bonuses["radius"] = -1 if self.buff_type == BUFF_TYPE_CURSE else 1
     
+    def on_death(self, evt):
+        if random.random() >= 0.5:
+            return
+        self.spell.summon(self.spell.get_hound(), target=self.owner, radius=5)
+
     def on_moved(self, evt):
-        if not evt.teleport or random.random() >= 0.25:
+        if not evt.teleport or random.random() >= 0.2:
             return
         self.spell.summon(self.spell.get_hound(), target=self.owner, radius=5)
 
@@ -6131,7 +6140,7 @@ class MadWerewolfSpell(Spell):
 
     def get_description(self):
         return ("Summon a demonically possessed werewolf with [{minion_health}_HP:minion_health] and [{shields}_SH:shields]. It has a melee attack and teleport attack with [{minion_range}_range:minion_range] that deal [{minion_damage}_arcane:arcane] damage.\n"
-                "The werewolf has Phase Insanity, and its melee attack inflicts Phase Insanity and teleports enemies away. Units with Phase Insanity have 25% chance on teleport and 100% chance on death to summon an insanity hound allied to the wizard.\n"
+                "The werewolf has Phase Insanity, and its melee attack inflicts Phase Insanity and teleports enemies away. Units with Phase Insanity have 20% chance on teleport and 50% chance on death to summon an insanity hound allied to the wizard.\n"
                 "On reaching 0 HP, the werewolf transforms into a wild man that inflicts Phase Insanity on nearby enemies and teleports them away while fleeing, until it becomes a werewolf again in [20_turns:duration].").format(**self.fmt_dict())
 
     def get_werewolf(self):
