@@ -3575,6 +3575,7 @@ class CriticalInstabilityBuff(Buff):
 
     def __init__(self, spell):
         self.spell = spell
+        self.applier = spell.caster
         Buff.__init__(self)
 
     def on_init(self):
@@ -3588,12 +3589,14 @@ class CriticalInstabilityBuff(Buff):
         self.owner.level.queue_spell(self.spell.cast(self.owner.x, self.owner.y))
 
 class AstralDecayBuff(Buff):
-    def on_init(self):
+    def __init__(self, applier):
+        Buff.__init__(self)
         self.name = "Astral Decay"
         self.color = Tags.Arcane.color
         self.buff_type = BUFF_TYPE_CURSE
         self.resists[Tags.Arcane] = -100
         self.show_effect = False
+        self.applier = applier
 
 class AstralMeltdownSpell(Spell):
 
@@ -3634,7 +3637,7 @@ class AstralMeltdownSpell(Spell):
                 if unit:
                     unit.apply_buff(CriticalInstabilityBuff(self))
                     if decay:
-                        unit.apply_buff(AstralDecayBuff())
+                        unit.apply_buff(AstralDecayBuff(self.caster))
                 if self.caster.level.tiles[p.x][p.y].is_wall():
                     self.caster.level.make_floor(p.x, p.y)
                 self.caster.level.deal_damage(p.x, p.y, damage, Tags.Arcane, self)
@@ -4370,6 +4373,7 @@ class StormProtectionBuff(Buff):
         self.asset = ["MissingSynergies", "Statuses", "storm_protection"]
         self.color = Tags.Lightning.color
         self.stack_type = STACK_REPLACE
+        self.show_effect = False
     def on_applied(self, owner):
         self.resists[Tags.Lightning] = (100 - self.owner.resists[Tags.Lightning]) if self.owner.resists[Tags.Lightning] < 100 else 0
         self.resists[Tags.Ice] = (100 - self.owner.resists[Tags.Ice]) if self.owner.resists[Tags.Ice] < 100 else 0
@@ -8569,6 +8573,12 @@ class WebOfFireSpell(Spell):
             else:
                 self.caster.level.deal_damage(p.x, p.y, damage, Tags.Fire, self)
 
+class AntiEnergizeBuff(Buff):
+    def __init__(self, applier):
+        Buff.__init__(self)
+        self.buff_type = BUFF_TYPE_PASSIVE
+        self.applier = applier
+
 class ElectricNetSpell(Spell):
 
     def on_init(self):
@@ -8585,7 +8595,7 @@ class ElectricNetSpell(Spell):
 
         self.upgrades["radius"] = (2, 3)
         self.upgrades["duration"] = (12, 4)
-        self.upgrades["energize"] = (1, 6, "Energize", "Your [spider] minions affected by this spell have a 50% chance to immediately use one of their attacks.")
+        self.upgrades["energize"] = (1, 6, "Energize", "Your [spider] minions affected by this spell have a 50% chance to immediately use one of their attacks.\nA unit can only be energized once per turn, refreshing before the beginning of the turn of this spell's caster.")
 
     def get_impacted_tiles(self, x, y):
         return [p for stage in Burst(self.caster.level, Point(x, y), self.get_stat('radius')) for p in stage]
@@ -8617,7 +8627,8 @@ class ElectricNetSpell(Spell):
                 elif unit and are_hostile(unit, self.caster):
                     unit.apply_buff(Stun(), 1)
                     unit.deal_damage(duration//2, Tags.Lightning, self)
-                if energize and unit and not are_hostile(unit, self.caster) and Tags.Spider in unit.tags and random.random() < 0.5:
+                if energize and unit and not are_hostile(unit, self.caster) and Tags.Spider in unit.tags and not unit.has_buff(AntiEnergizeBuff) and random.random() < 0.5:
+                    unit.apply_buff(AntiEnergizeBuff(self.caster))
                     for spell in unit.spells:
                         if not spell.can_pay_costs():
                             continue
@@ -8627,6 +8638,9 @@ class ElectricNetSpell(Spell):
                         self.caster.level.act_cast(unit, spell, target.x, target.y)
                         break
             yield
+        
+        if energize:
+            self.caster.apply_buff(RemoveBuffOnPreAdvance(AntiEnergizeBuff))
 
 class ReflexArcSpell(Spell):
 
