@@ -3945,6 +3945,8 @@ class MassOfCursesBuff(Buff):
         self.global_triggers[EventOnSpellCast] = self.on_spell_cast
         self.color = Tags.Enchantment.color
         self.description = "When the wizard casts a single-target enchantment spell on this unit, cast a copy of that spell on each valid enemy target within %i tiles." % self.radius
+        if not self.phase:
+            self.description += " Can only affect enemies in line of sight."
     
     def on_spell_cast(self, evt):
         if not evt.caster.is_player_controlled or Tags.Enchantment not in evt.spell.tags:
@@ -3954,20 +3956,32 @@ class MassOfCursesBuff(Buff):
         spell_copy = type(evt.spell)()
         spell_copy.max_charges = 0
         spell_copy.cur_charges = 0
-        spell_copy.statholder = evt.caster
-        spell_copy.owner = self.owner
-        spell_copy.caster = self.owner
-        if self.phase:
-            spell_copy.requires_los = 0
-            spell_copy.range = RANGE_GLOBAL if spell_copy.range >= 2 else spell_copy.range
+        spell_copy.owner = evt.caster
+        spell_copy.caster = evt.caster
+        spell_copy.requires_los = 0
+        spell_copy.range = RANGE_GLOBAL
         targets = [unit for unit in self.owner.level.get_units_in_ball(self.owner, self.radius) if are_hostile(unit, evt.caster) and spell_copy.can_cast(unit.x, unit.y)]
+        if not self.phase:
+            targets = [target for target in targets if self.owner.level.can_see(self.owner.x, self.owner.y, target.x, target.y)]
         duration = spell_copy.get_stat("duration")
         for target in targets:
-            self.owner.level.act_cast(self.owner, spell_copy, target.x, target.y, pay_costs=False)
+            self.owner.level.queue_spell(spell_copy.cast(target.x, target.y))
             if self.agony and duration:
-                target.deal_damage(duration*2, Tags.Dark, self.spell)
+                self.owner.level.queue_spell(self.do_damage(target, duration))
         self.owner.cur_hp = 0
         self.owner.kill()
+
+    def do_damage(self, target, duration):
+        target.deal_damage(duration*2, Tags.Dark, self.spell)
+        yield
+
+class PhaseCurses(Upgrade):
+    def on_init(self):
+        self.name = "Phase Curses"
+        self.level = 4
+        self.spell_bonuses[MassOfCursesSpell]["requires_los"] = -1
+        self.spell_bonuses[MassOfCursesSpell]["phase"] = 1
+        self.description = "Mass of Curses can be cast without line of sight.\nThe mass of curses now ignores line of sight when copying spells."
 
 class MassOfCursesSpell(Spell):
     
@@ -3982,12 +3996,12 @@ class MassOfCursesSpell(Spell):
 
         self.upgrades["range"] = (5, 2)
         self.upgrades["radius"] = (1, 4)
-        self.upgrades["phase"] = (1, 3, "Phase Curses", "The mass of curses now ignores the copied spell's range and line of sight restrictions when copying it.")
         self.upgrades["agony"] = (1, 3, "Agonizing Curses", "The mass of curses now also deals [dark] damage to each affected enemy equal to twice the duration of the copied spell.")
+        self.add_upgrade(PhaseCurses())
 
     def get_description(self):
         return ("Summon a mass of curses, a stationary flying unit with fixed 1 HP, 200% resistance to all damage, and immunity to buffs and debuffs.\n"
-                "When you cast a single-target [enchantment] spell targeting the mass of curses, the mass of curses is sacrificed to copy that spell onto every valid enemy target within [{radius}_tiles:radius] of itself.").format(**self.fmt_dict())
+                "When you cast a single-target [enchantment] spell targeting the mass of curses, the mass of curses is sacrificed to copy that spell onto every valid enemy target in line of sight within [{radius}_tiles:radius] of itself.").format(**self.fmt_dict())
 
     def cast_instant(self, x, y):
         unit = Unit()
