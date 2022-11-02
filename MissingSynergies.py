@@ -1841,8 +1841,8 @@ class ElementalChaosSpell(Spell):
         self.hp_gain = 5
         self.thorns = 4
 
-        self.upgrades["fire_focus"] = (1, 2, "Fire Focus", "The storm spirit is replaced by two fire spirits.", "focus")
-        self.upgrades["lightning_focus"] = (1, 2, "Lightning Focus", "The starfire spirit is replaced by two spark spirits.", "focus")
+        self.upgrades["fire_focus"] = (1, 2, "Fire Focus", "The storm spirit is replaced by two fire spirits.\nAdditional fire spirits are summoned based on bonuses to [num_summons:num_summons].", "focus")
+        self.upgrades["lightning_focus"] = (1, 2, "Lightning Focus", "The starfire spirit is replaced by two spark spirits.\nAdditional spark spirits are summoned based on bonuses to [num_summons:num_summons].", "focus")
         self.upgrades["hp_gain"] = (2, 3, "Max HP Gain", "Spirits gain [2:minion_health] more max HP when witnessing spells of their elements.")
         self.upgrades["thorns"] = (2, 2, "Melee Retaliation", "Spirits gain [2:minion_damage] more melee retaliation damage.")
         self.upgrades["power"] = (1, 6, "Elemental Power", "The attacks of hybrid spirits deal damage of both of their elements instead of randomly one of them.\nThe attacks of pure spirits hit twice.")
@@ -1867,13 +1867,16 @@ class ElementalChaosSpell(Spell):
         return spirit
     
     def cast_instant(self, x, y):
+        num_summons = self.get_stat("num_summons", base=2)
         spirits = [self.get_spirit([Tags.Fire, Tags.Lightning])]
         if self.get_stat("fire_focus"):
-            spirits.extend([self.get_spirit([Tags.Fire]), self.get_spirit([Tags.Fire])])
+            for _ in range(num_summons):
+                spirits.append(self.get_spirit([Tags.Fire]))
         else:
             spirits.append(self.get_spirit([Tags.Lightning, Tags.Ice]))
         if self.get_stat("lightning_focus"):
-            spirits.extend([self.get_spirit([Tags.Lightning]), self.get_spirit([Tags.Lightning])])
+            for _ in range(num_summons):
+                spirits.append(self.get_spirit([Tags.Lightning]))
         else:
             spirits.append(self.get_spirit([Tags.Fire, Tags.Arcane]))
         for spirit in spirits:
@@ -8288,10 +8291,10 @@ class QuantumOverlayBuff(Buff):
 
     def on_damaged(self, evt):
 
-        if evt.source is self.spell:
+        if isinstance(evt.source, QuantumOverlaySpell):
             return
         
-        if hasattr(evt.source, "prereq") and evt.source.prereq is self.spell:
+        if hasattr(evt.source, "prereq") and isinstance(evt.source.prereq, QuantumOverlaySpell):
             return
 
         if evt.unit is self.owner or (self.group and not are_hostile(evt.unit, self.owner)):
