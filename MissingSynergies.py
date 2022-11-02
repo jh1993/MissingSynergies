@@ -3614,7 +3614,7 @@ class AstralMeltdownSpell(Spell):
 
         self.upgrades["damage"] = (10, 4)
         self.upgrades["radius"] = (2, 6)
-        self.upgrades["decay"] = (1, 5, "Astral Decay", "Inflict Astral Decay on targets for [1_turn:duration] before dealing damage; this duration is fixed and unaffected by bonuses.\nUnits with Astral Decay lose [100_arcane:arcane] resistance.")
+        self.upgrades["decay"] = (1, 5, "Astral Decay", "Inflict Astral Decay on targets before dealing damage, which is removed before the start of your next turn.\nUnits with Astral Decay lose [100_arcane:arcane] resistance.")
         self.upgrades["vacuum"] = (1, 5, "Vacuum Burst", "Each explosion of this spell has a 20% chance to trigger another explosion on a random tile within the original explosion radius.")
     
     def get_description(self):
