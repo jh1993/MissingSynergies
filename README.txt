@@ -32,6 +32,7 @@ Level 3:
 + Planar Binding (Holy/Translocation/Enchantment)
 + Shield Burst (Arcane/Sorcery)
 + Urticating Rain (Nature/Sorcery)
++ Web of Fire (Nature/Fire/Sorcery)
 
 Level 4:
 + Aegis Overload (Metallic/Chaos/Sorcery)
@@ -40,6 +41,7 @@ Level 4:
 + Brimstone Cluster (Fire/Dark/Nature/Enchantment)
 + Chaos Concoction (Chaos/Sorcery)
 + Divine Gaze (Holy/Eye/Sorcery)
++ Electric Net (Nature/Lightning/Sorcery)
 + Essence Leech (Arcane/Dark/Enchantment)
 + Iron Turtle (Metallic/Nature/Conjuration)
 + Orb of Flesh (Nature/Orb/Conjuration)
@@ -117,6 +119,7 @@ Level 5:
 + Fractured Memories (Arcane/Chaos)
 + Inexorable Decay (Dark)
 + Orb Substitution (Orb/Translocation)
++ Reflex Arc (Nature/Lightning/Sorcery)
 + Shock Troops (Fire/Lightning)
 + Soul Dregs (Holy/Dark)
 

@@ -3713,58 +3713,65 @@ class UrticatingRainSpell(Spell):
         self.range = 0
 
         self.upgrades["max_charges"] = (8, 2)
-        self.upgrades["poison"] = (1, 2, "Venomous Nettle", "Urticating Rain also inflicts [10_turns:duration] of [poison].")
+        self.upgrades["poison"] = (1, 2, "Venomous Nettle", "Urticating Rain also inflicts [10_turns:duration] of [poison], which benefits from bonuses to [duration].")
         self.upgrades["blind"] = (1, 3, "Eye Irritant", "Urticating Rain also inflicts [1_turn:duration] of [blind].\nThis duration is fixed and unaffected by bonuses.")
         self.upgrades["fire"] = (1, 4, "Searing Pain", "Urticating Rain also deals [fire] damage.")
     
     def get_description(self):
-        return ("Each of your [spider] allies, [thorn:nature] allies, and allies with [melee_retaliation:minion_damage] deals [3_physical:physical] damage to all enemies in a radius equal to its max HP divided by 10, rounded up.\n"
+        return ("Each of your [spider] allies, [thorn:nature] allies, and allies with [melee_retaliation:damage] deals [3_physical:physical] damage to all enemies in a radius equal to its max HP divided by 10, rounded up.\n"
+                "Allies fulfilling multiple criteria, including multiple instances of melee retaliation, will deal damage multiple times.\n"
                 "This damage is fixed, and cannot be increased using shrines, skills, or buffs.").format(**self.fmt_dict())
 
-    def qualifies(self, u):
-        return not are_hostile(u, self.caster) and (Tags.Spider in u.tags or "thorn" in u.name.lower() or u.has_buff(Thorns))
-
     def get_impacted_tiles(self, x, y):
-        return [Point(u.x, u.y) for u in self.caster.level.units if self.qualifies(u)]
+        return [Point(u.x, u.y) for u in self.caster.level.units if not are_hostile(u, self.caster) and Tags.Spider in u.tags or "thorn" in u.name.lower() or u.has_buff(Thorns)]
     
     def cast_instant(self, x, y):
+
+        for origin in [unit for unit in list(self.caster.level.units) if not are_hostile(unit, self.caster)]:
+            if Tags.Spider in origin.tags:
+                self.effect(origin)
+            if "thorn" in origin.name.lower():
+                self.effect(origin)
+            for buff in origin.buffs:
+                if isinstance(buff, Thorns):
+                    self.effect(origin)
+
+    def effect(self, origin):
 
         poison = self.get_stat("poison")
         poison_duration = self.get_stat("duration", base=10)
         blind = self.get_stat("blind")
         fire = self.get_stat("fire")
 
-        for origin in [unit for unit in self.caster.level.units if self.qualifies(unit)]:
+        effects_left = 7
 
-            effects_left = 7
+        for unit in self.caster.level.get_units_in_ball(origin, math.ceil(origin.max_hp/10)):
 
-            for unit in self.caster.level.get_units_in_ball(origin, math.ceil(origin.max_hp/10)):
+            if not self.caster.level.are_hostile(self.caster, unit):
+                continue
+            
+            unit.deal_damage(3, Tags.Physical, self)
+            if poison:
+                unit.apply_buff(Poison(), poison_duration)
+            if blind:
+                unit.apply_buff(BlindBuff(), 1)
+            if fire:
+                unit.deal_damage(3, Tags.Fire, self)
+            effects_left -= 1
 
-                if not self.caster.level.are_hostile(self.caster, unit):
-                    continue
-                
-                unit.deal_damage(3, Tags.Physical, self)
-                if poison:
-                    unit.apply_buff(Poison(), poison_duration)
-                if blind:
-                    unit.apply_buff(BlindBuff(), 1)
-                if fire:
-                    unit.deal_damage(3, Tags.Fire, self)
-                effects_left -= 1
-
-            # Show some graphical indication of this aura if it didnt hit much
-            points = self.caster.level.get_points_in_ball(origin.x, origin.y, origin.max_hp//10)
-            points = [p for p in points if not self.caster.level.get_unit_at(p.x, p.y)]
-            random.shuffle(points)
-            for _ in range(effects_left):
-                if not points:
-                    break
-                p = points.pop()
-                if fire:
-                    damage_type = random.choice([Tags.Physical, Tags.Fire])
-                else:
-                    damage_type = Tags.Physical
-                self.caster.level.show_effect(p.x, p.y, damage_type, minor=True)
+        # Show some graphical indication of this aura if it didnt hit much
+        points = self.caster.level.get_points_in_ball(origin.x, origin.y, origin.max_hp//10)
+        points = [p for p in points if not self.caster.level.get_unit_at(p.x, p.y)]
+        random.shuffle(points)
+        for _ in range(effects_left):
+            if not points:
+                break
+            p = points.pop()
+            if fire:
+                damage_type = random.choice([Tags.Physical, Tags.Fire])
+            else:
+                damage_type = Tags.Physical
+            self.caster.level.show_effect(p.x, p.y, damage_type, minor=True)
 
 class ChaosCatalystBuff(Buff):
 
@@ -8258,10 +8265,15 @@ class QuantumOverlayBuff(Buff):
         self.overlays = self.spell.get_stat("overlays")
         self.global_triggers[EventOnDamaged] = self.on_damaged
         self.group = self.spell.get_stat("group")
+        self.antimatter = self.spell.get_stat("antimatter")
+        self.damage = self.spell.get_stat("damage", base=20)
 
     def on_damaged(self, evt):
 
         if evt.source is self.spell:
+            return
+        
+        if hasattr(evt.source, "prereq") and evt.source.prereq is self.spell:
             return
 
         if evt.unit is self.owner or (self.group and not are_hostile(evt.unit, self.owner)):
@@ -8276,6 +8288,9 @@ class QuantumOverlayBuff(Buff):
 
         for _ in range(self.overlays):
             evt.unit.deal_damage(evt.damage//2, evt.damage_type, self.spell)
+        if self.antimatter:
+            evt.unit.deal_damage(self.damage, evt.damage_type, self.spell)
+            evt.source.owner.deal_damage(1, evt.damage_type, self.spell)
 
 class QuantumOverlaySpell(Spell):
 
@@ -8294,15 +8309,22 @@ class QuantumOverlaySpell(Spell):
         self.upgrades["overlays"] = (1, 5, "Double Overlay", "Quantum Overlay will now redeal damage an additional time, to both you and enemies.")
         self.upgrades["group"] = (1, 5, "Group Overlay", "Quantum Overlay now also affects damage dealt to and by your minions.")
         self.upgrades["bifurcation"] = (1, 4, "Bifurcation", "For its duration, Quantum Overlay now gives a bonus of [1:num_targets] to [num_targets:num_targets].")
+        self.upgrades["antimatter"] = (1, 7, "Antimatter Infusion", "Whenever you deal damage with anything other than Quantum Overlay, Quantum Overlay now also deals [20_damage:damage] of the same type to the target, and [1_damage:damage] of the same type to you.\nThe former benefits from bonuses to [damage] while the latter is fixed.")
     
     def get_description(self):
         return ("The existence of another you from a parallel world is partially overlaid onto yours.\n"
                 "Whenever you deal damage, this spell redeals 50% of that damage to the same target. Whenever you take damage, this spell redeals 25% of that damage to you.\n"
-                "This spell cannot trigger itself.\n"
-                "Lasts [{duration}_turns:duration].").format(**self.fmt_dict())
+                "This spell and shrines attached to it cannot trigger itself.\n"
+                "Lasts [{duration}_turns:duration].\n"
+                "Casting this spell while the effect is active will cancel the effect and refund a charge.").format(**self.fmt_dict())
 
     def cast_instant(self, x, y):
-        self.caster.apply_buff(QuantumOverlayBuff(self), self.get_stat("duration"))
+        existing = self.caster.get_buff(QuantumOverlayBuff)
+        if existing:
+            self.caster.remove_buff(existing)
+            self.cur_charges = min(self.get_stat("max_charges"), self.cur_charges + 1)
+        else:
+            self.caster.apply_buff(QuantumOverlayBuff(self), self.get_stat("duration"))
 
 class FracturedMemories(Upgrade):
 
@@ -8456,5 +8478,214 @@ class StaticFieldSpell(Spell):
     def cast_instant(self, x, y):
         self.caster.apply_buff(StaticFieldBuff(self), self.get_stat("duration"))
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell])
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia])
+class FireCoatingBuff(Thorns):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Thorns.__init__(self, spell.get_stat("damage")//2, Tags.Fire)
+        self.resists[Tags.Fire] = 100
+        self.name = "Fire Coating"
+        self.asset = ['status', 'magma_shell']
+
+    def do_thorns(self, unit):
+        unit.deal_damage(self.damage, self.dtype, self.spell)
+        yield
+
+class VenomousFlame(Upgrade):
+
+    def on_init(self):
+        self.name = "Venomous Flame"
+        self.level = 3
+        self.description = "Whenever Web of Fire deals damage to an enemy, that enemy is [poisoned] for a number of turns equal to the damage dealt."
+        self.global_triggers[EventOnDamaged] = self.on_damaged
+    
+    def on_damaged(self, evt):
+        if evt.source is not self.prereq or not are_hostile(evt.unit, self.owner):
+            return
+        evt.unit.apply_buff(Poison(), evt.damage)
+
+class WebOfFireSpell(Spell):
+
+    def on_init(self):
+        self.name = "Web of Fire"
+        self.asset = ["MissingSynergies", "Icons", "web_of_fire"]
+        self.tags = [Tags.Nature, Tags.Fire, Tags.Sorcery]
+        self.level = 3
+        self.max_charges = 9
+        self.damage = 8
+        self.range = 10
+
+        self.upgrades["max_charges"] = (9, 2)
+        self.upgrades["damage"] = (8, 3)
+        self.upgrades["requires_los"] = (-1, 2, "Blindcasting", "Web of Fire can be cast without line of sight.")
+        self.upgrades["coating"] = (1, 4, "Fire Coating", "Your minions in affected tiles will now gain a fire coating for [5_turns:duration] (which benefits from bonuses to [duration]), giving them [100_fire:fire] resistance and a melee retaliation effect that deals [fire] damage equal to half of this spell's [damage].\nThe melee retaliation damage counts as damage dealt by this spell.")
+        self.add_upgrade(VenomousFlame())
+
+    def get_description(self):
+        return ("Must target a tile occupied by a unit or spider web.\n"
+                "Starting from the target tile, fire spreads through all adjacent tiles occupied by units or spider webs, dealing [{damage}_fire:fire] damage and destroying webs.\n"
+                "The effect will spread through allies but not harm them.").format(**self.fmt_dict())
+
+    def can_cast(self, x, y):
+        if not Spell.can_cast(self, x, y):
+            return False
+        unit = self.caster.level.get_unit_at(x, y)
+        cloud = self.caster.level.tiles[x][y].cloud
+        return bool(unit) or isinstance(cloud, SpiderWeb)
+
+    def get_impacted_tiles(self, x, y):
+
+        candidates = set([Point(x, y)])
+        point_group = set()
+
+        while candidates:
+            candidate = candidates.pop()
+            if candidate in point_group:
+                continue
+            unit = self.caster.level.get_unit_at(candidate.x, candidate.y)
+            cloud = self.caster.level.tiles[candidate.x][candidate.y].cloud
+            if unit or isinstance(cloud, SpiderWeb):
+                point_group.add(candidate)
+                for p in self.caster.level.get_adjacent_points(candidate, filter_walkable=False):
+                    candidates.add(p)
+
+        return list(point_group)
+
+    def cast_instant(self, x, y):
+        
+        damage = self.get_stat("damage")
+        coating = self.get_stat("coating")
+        duration = self.get_stat("duration", base=5)
+
+        for p in self.get_impacted_tiles(x, y):
+            unit = self.caster.level.get_unit_at(p.x, p.y)
+            cloud = self.caster.level.tiles[p.x][p.y].cloud
+            if isinstance(cloud, SpiderWeb):
+                cloud.kill()
+            if unit and not are_hostile(unit, self.caster):
+                self.caster.level.show_effect(p.x, p.y, Tags.Fire)
+                if coating and unit is not self.caster:
+                    unit.apply_buff(FireCoatingBuff(self), duration)
+            else:
+                self.caster.level.deal_damage(p.x, p.y, damage, Tags.Fire, self)
+
+class ElectricNetSpell(Spell):
+
+    def on_init(self):
+        self.name = "Electric Net"
+        self.asset = ["MissingSynergies", "Icons", "electric_net"]
+        self.tags = [Tags.Nature, Tags.Lightning, Tags.Sorcery]
+        self.level = 4
+        self.max_charges = 9
+
+        self.damage = 7
+        self.duration = 12
+        self.radius = 4
+        self.range = 10
+
+        self.upgrades["radius"] = (2, 3)
+        self.upgrades["duration"] = (12, 4)
+        self.upgrades["energize"] = (1, 6, "Energize", "Your [spider] minions affected by this spell have a 50% chance to immediately use one of their attacks.")
+
+    def get_impacted_tiles(self, x, y):
+        return [p for stage in Burst(self.caster.level, Point(x, y), self.get_stat('radius')) for p in stage]
+
+    def get_description(self):
+        return ("Throw an electrified net that expands in a [{radius}_tile:radius] burst.\n"
+                "Enemies take [{damage}_lightning:lightning] damage.\n"
+                "Empty tiles and tiles occupied by [spider] units are filled with spider webs that last [{duration}_turns:duration].\n"
+                "Enemies that are not [spiders:spider] are [stunned] for [1_turn:duration] and take [lightning] damage equal to half of the duration of the spider webs.").format(**self.fmt_dict())
+
+    def cast(self, x, y):
+
+        damage = self.get_stat("damage")
+        duration = self.get_stat("duration")
+        energize = self.get_stat("energize")
+        
+        for stage in Burst(self.caster.level, Point(x, y), self.get_stat("radius")):
+            for p in stage:
+                unit = self.caster.level.get_unit_at(p.x, p.y)
+                if not unit or not are_hostile(unit, self.caster):
+                    self.caster.level.show_effect(p.x, p.y, Tags.Lightning)
+                else:
+                    unit.deal_damage(damage, Tags.Lightning, self)
+                if not unit or Tags.Spider in unit.tags:
+                    web = SpiderWeb()
+                    web.owner = self.caster
+                    web.duration = duration
+                    self.caster.level.add_obj(web, p.x, p.y)
+                elif unit and are_hostile(unit, self.caster):
+                    unit.apply_buff(Stun(), 1)
+                    unit.deal_damage(duration//2, Tags.Lightning, self)
+                if energize and unit and not are_hostile(unit, self.caster) and Tags.Spider in unit.tags and random.random() < 0.5:
+                    for spell in unit.spells:
+                        if not spell.can_pay_costs():
+                            continue
+                        target = spell.get_ai_target()
+                        if not target:
+                            continue
+                        self.caster.level.act_cast(unit, spell, target.x, target.y)
+                        break
+            yield
+
+class ReflexArcSpell(Spell):
+
+    def __init__(self, upgrade):
+        self.upgrade = upgrade
+        Spell.__init__(self)
+    
+    def on_init(self):
+        self.name = "Reflex Arc"
+        self.level = 1
+        self.tags = self.upgrade.tags
+        self.damage_type = [Tags.Lightning, Tags.Poison]
+    
+    def get_stat(self, attr, base=None):
+        return self.upgrade.get_stat(attr, base)
+
+    def cast(self, x, y):
+        for p in Bolt(self.caster.level, self.caster, Point(x, y)):
+            self.caster.level.show_effect(p.x, p.y, Tags.Lightning, minor=True)
+            self.caster.level.show_effect(p.x, p.y, Tags.Poison, minor=True)
+            yield
+        damage = self.get_stat("damage")
+        unit = self.caster.level.get_unit_at(x, y)
+        if unit:
+            unit.apply_buff(Poison(), self.get_stat("duration")*10)
+        self.caster.level.deal_damage(x, y, damage, Tags.Lightning, self)
+        self.caster.level.deal_damage(x, y, damage, Tags.Poison, self)
+
+class ReflexArc(Upgrade):
+
+    def on_init(self):
+        self.name = "Reflex Arc"
+        self.asset = ["MissingSynergies", "Icons", "reflex_arc"]
+        self.tags = [Tags.Nature, Tags.Lightning, Tags.Sorcery]
+        self.level = 5
+        self.damage = 6
+        self.range = 10
+        self.duration = 1
+    
+    def on_applied(self, owner):
+        self.spell = ReflexArcSpell(self)
+        self.spell.owner = self.owner
+        self.spell.caster = self.owner
+
+    def fmt_dict(self):
+        stats = Upgrade.fmt_dict(self)
+        stats["poison_duration"] = 10*self.get_stat("duration")
+        return stats
+
+    def get_description(self):
+        return ("Each turn, apply [{poison_duration}_turns:duration] of [poison] and deal [{damage}_lightning:lightning] and [{damage}_poison:poison] damage to a random enemy in line of sight within [{range}_tiles:range] of yourself. Enemies immune to both damage types will not be targeted.\n"
+                "This counts as you casting a level 1 [nature] [lightning] [sorcery] spell.\n"
+                "This skill benefits 10 times from bonuses to [duration].").format(**self.fmt_dict())
+
+    def on_advance(self):
+        target = self.spell.get_ai_target()
+        if not target:
+            return
+        self.owner.level.act_cast(self.owner, self.spell, target.x, target.y)
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc])
