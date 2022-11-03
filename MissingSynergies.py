@@ -8281,8 +8281,6 @@ class QuantumOverlayBuff(Buff):
         self.name = "Quantum Overlay"
         self.color = Tags.Arcane.color
         self.stack_type = STACK_REPLACE
-        if self.spell.get_stat("bifurcation"):
-            self.global_bonuses["num_targets"] = 1
         self.overlays = self.spell.get_stat("overlays")
         self.global_triggers[EventOnDamaged] = self.on_damaged
         self.group = self.spell.get_stat("group")
@@ -8329,7 +8327,6 @@ class QuantumOverlaySpell(Spell):
         self.upgrades["duration"] = (5, 3)
         self.upgrades["overlays"] = (1, 5, "Double Overlay", "Quantum Overlay will now redeal damage an additional time, to both you and enemies.")
         self.upgrades["group"] = (1, 5, "Group Overlay", "Quantum Overlay now also affects damage dealt to and by your minions.")
-        self.upgrades["bifurcation"] = (1, 4, "Bifurcation", "For its duration, Quantum Overlay now gives a bonus of [1:num_targets] to [num_targets:num_targets].")
         self.upgrades["antimatter"] = (1, 7, "Antimatter Infusion", "Whenever you deal damage with anything other than Quantum Overlay or a shrine attached to it, Quantum Overlay now also deals [20_damage:damage] of the same type to the target, and [1_damage:damage] of the same type to you.\nThe former benefits from bonuses to [damage] while the latter is fixed.")
     
     def get_description(self):
