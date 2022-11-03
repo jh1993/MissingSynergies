@@ -8337,13 +8337,21 @@ class QuantumOverlaySpell(Spell):
                 "Whenever you deal damage, this spell redeals 50% of that damage to the same target. Whenever you take damage, this spell redeals 25% of that damage to you.\n"
                 "This spell and shrines attached to it cannot trigger itself.\n"
                 "Lasts [{duration}_turns:duration].\n"
-                "Casting this spell while the effect is active will cancel the effect and refund a charge.").format(**self.fmt_dict())
+                "Casting this spell while the effect is active will cancel the effect and not consume a charge. This can be done even if the spell has no charges left.").format(**self.fmt_dict())
+
+    def can_pay_costs(self):
+        if self.caster.has_buff(QuantumOverlayBuff) and self.cur_charges == 0:
+            return True
+        return Spell.can_pay_costs(self)
+    
+    def pay_costs(self):
+        if not self.caster.has_buff(QuantumOverlayBuff):
+            Spell.pay_costs(self)
 
     def cast_instant(self, x, y):
         existing = self.caster.get_buff(QuantumOverlayBuff)
         if existing:
             self.caster.remove_buff(existing)
-            self.cur_charges = min(self.get_stat("max_charges"), self.cur_charges + 1)
         else:
             self.caster.apply_buff(QuantumOverlayBuff(self), self.get_stat("duration"))
 
