@@ -6172,8 +6172,8 @@ class MadWerewolfSpell(Spell):
         self.name = "Mad Werewolf"
         self.asset = ["MissingSynergies", "Icons", "mad_werewolf"]
         self.tags = [Tags.Dark, Tags.Arcane, Tags.Nature, Tags.Translocation, Tags.Conjuration]
-        self.level = 3
-        self.max_charges = 6
+        self.level = 5
+        self.max_charges = 3
         self.requires_los = False
         self.must_target_empty = True
         self.must_target_walkable = True
