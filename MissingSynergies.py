@@ -3629,18 +3629,21 @@ class AstralMeltdownSpell(Spell):
             return [p for stage in Burst(self.caster.level, Point(x, y), self.get_stat('radius'), ignore_walls=True) for p in stage]
     
     def cast(self, x, y):
-        self.caster.apply_buff(RemoveBuffOnPreAdvance(CriticalInstabilityBuff))
         damage = self.get_stat("damage")
         decay = self.get_stat("decay")
-        if decay:
-            self.caster.apply_buff(RemoveBuffOnPreAdvance(AstralDecayBuff))
+        alive = self.caster.is_alive()
+        if alive:
+            self.caster.apply_buff(RemoveBuffOnPreAdvance(CriticalInstabilityBuff))
+            if decay:
+                self.caster.apply_buff(RemoveBuffOnPreAdvance(AstralDecayBuff))
         for stage in Burst(self.caster.level, Point(x, y), self.get_stat('radius'), ignore_walls=True):
             for p in stage:
-                unit = self.caster.level.get_unit_at(p.x, p.y)
-                if unit:
-                    unit.apply_buff(CriticalInstabilityBuff(self))
-                    if decay:
-                        unit.apply_buff(AstralDecayBuff(self.caster))
+                if alive:
+                    unit = self.caster.level.get_unit_at(p.x, p.y)
+                    if unit:
+                        unit.apply_buff(CriticalInstabilityBuff(self))
+                        if decay:
+                            unit.apply_buff(AstralDecayBuff(self.caster))
                 if self.caster.level.tiles[p.x][p.y].is_wall():
                     self.caster.level.make_floor(p.x, p.y)
                 self.caster.level.deal_damage(p.x, p.y, damage, Tags.Arcane, self)
@@ -8636,7 +8639,10 @@ class ElectricNetSpell(Spell):
 
         damage = self.get_stat("damage")
         duration = self.get_stat("duration")
-        energize = self.get_stat("energize")
+        energize = self.get_stat("energize") and self.caster.is_alive()
+        
+        if energize:
+            self.caster.apply_buff(RemoveBuffOnPreAdvance(AntiEnergizeBuff))
         
         for stage in Burst(self.caster.level, Point(x, y), self.get_stat("radius")):
             for p in stage:
@@ -8664,24 +8670,25 @@ class ElectricNetSpell(Spell):
                         self.caster.level.act_cast(unit, spell, target.x, target.y)
                         break
             yield
-        
-        if energize:
-            self.caster.apply_buff(RemoveBuffOnPreAdvance(AntiEnergizeBuff))
 
 class ReflexArcSpell(Spell):
 
-    def __init__(self, upgrade):
+    # .upgrade defaults to none to not crash with unmodded Chimera Familiar.
+    def __init__(self, upgrade=None):
         self.upgrade = upgrade
         Spell.__init__(self)
     
     def on_init(self):
         self.name = "Reflex Arc"
         self.level = 1
-        self.tags = self.upgrade.tags
+        self.damage = 6
+        self.range = 10
+        self.duration = 1
+        self.tags = [Tags.Nature, Tags.Lightning, Tags.Sorcery]
         self.damage_type = [Tags.Lightning, Tags.Poison]
     
     def get_stat(self, attr, base=None):
-        return self.upgrade.get_stat(attr, base)
+        return self.upgrade.get_stat(attr, base) if self.upgrade else Spell.get_stat(self, attr, base)
 
     def cast(self, x, y):
         for p in Bolt(self.caster.level, self.caster, Point(x, y)):
@@ -8705,6 +8712,7 @@ class ReflexArc(Upgrade):
         self.damage = 6
         self.range = 10
         self.duration = 1
+        self.requires_los = True
     
     def on_applied(self, owner):
         self.spell = ReflexArcSpell(self)
