@@ -5685,10 +5685,11 @@ class TimeDilationSpell(Spell):
         if x == self.caster.x and y == self.caster.y:
             self.caster.level.show_effect(x, y, Tags.Arcane)
             self.cur_charges -= 2
-            for buff in self.caster.buffs:
-                if selective and buff.buff_type == BUFF_TYPE_CURSE:
-                    continue
-                for _ in range(turns):
+            for _ in range(turns):
+                for buff in list(self.caster.buffs):
+                    if selective and buff.buff_type == BUFF_TYPE_CURSE:
+                        continue
+                    buff.on_pre_advance()
                     buff.on_advance()
             return
         
@@ -5696,10 +5697,11 @@ class TimeDilationSpell(Spell):
             if unit is self.caster:
                 continue
             self.caster.level.show_effect(unit.x, unit.y, Tags.Arcane)
-            for buff in unit.buffs:
-                if selective and (are_hostile(self.caster, unit) == (buff.buff_type != BUFF_TYPE_CURSE)):
-                    continue
-                for _ in range(turns):
+            for _ in range(turns):
+                for buff in list(unit.buffs):
+                    if selective and (are_hostile(self.caster, unit) == (buff.buff_type != BUFF_TYPE_CURSE)):
+                        continue
+                    buff.on_pre_advance()
                     buff.on_advance()
 
 class CultOfDarknessPassive(Buff):
