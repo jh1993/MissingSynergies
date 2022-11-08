@@ -3886,7 +3886,7 @@ class HighSorcerySpell(Spell):
         self.tags = [Tags.Fire, Tags.Lightning, Tags.Ice, Tags.Sorcery]
         self.level = 6
         self.max_charges = 15
-        self.range = 5
+        self.range = 10
         self.radius = 6
         self.damage = 13
         self.can_target_self = True
@@ -3895,21 +3895,23 @@ class HighSorcerySpell(Spell):
         self.upgrades["max_charges"] = (10, 3)
         self.upgrades["range"] = (5, 2)
         self.upgrades["radius"] = (3, 2)
-        self.upgrades["anathema"] = (1, 4, "Anathema", "When dealing damage to an enemy, High Sorcery will always deal the damage type among [fire], [lightning], and [ice] that the enemy has the least resistance to.")
+        self.upgrades["anathema"] = (1, 6, "Anathema", "When dealing damage to an enemy, High Sorcery will always deal the damage type among [fire], [lightning], and [ice] that the enemy has the least resistance to.")
 
     def get_description(self):
         return ("If targeting yourself, randomly deal [{damage}_fire:fire], [{damage}_lightning:lightning], or [{damage}_ice:ice] damage in a [{radius}_tile:radius] burst.\n"
-                "Otherwise, deal damage in a cone whose angle is 360 degrees divided by 1 plus twice the distance between you and the target tile, and whose height is this spell's radius plus that distance.\n"
-                "For every tile between you and the target tile, this spell gains bonus damage percentage equal to 1 divided by the current number of tiles between you and the target tile. For example, targeting 3 tiles away will deal 1 + 1/2 + 1/3 times more damage.").format(**self.fmt_dict())
+                "Otherwise, deal damage in a cone whose angle is 360 degrees divided by 1 plus the distance between you and the target tile, and whose height starts as the [radius] stat of this spell and linearly approaches the [range] stat of this spell.\n"
+                "This spell gains bonus damage percentage equal to 100% times the square root of the distance between you and the target tile.").format(**self.fmt_dict())
 
     def aoe(self, x, y):
         target = Point(x, y)
-        dist = distance(self.caster, target)
-        angle = math.pi/(1 + 2*dist)
+        radius = self.get_stat('radius')
+        max_range = self.get_stat("range")
+        dist = math.floor(distance(self.caster, target))
+        bonus = max((max_range - radius)*dist/max_range, 0)
         return Burst(self.caster.level, 
                     Point(self.caster.x, self.caster.y), 
-                    self.get_stat('radius') + math.ceil(dist), 
-                    burst_cone_params=BurstConeParams(target, angle))
+                    radius + math.ceil(bonus), 
+                    burst_cone_params=BurstConeParams(target, math.pi/(1 + dist)))
 
     def get_impacted_tiles(self, x, y):
         return [p for stage in self.aoe(x, y) for p in stage]
@@ -3927,12 +3929,9 @@ class HighSorcerySpell(Spell):
         self.caster.level.deal_damage(x, y, damage, random.choice(dtypes), self)
     
     def cast(self, x, y):
-        dist = distance(self.caster, Point(x, y))
-        mult = 1
+        dist = math.floor(distance(self.caster, Point(x, y)))
         anathema = self.get_stat("anathema")
-        for i in range(1, math.ceil(dist) + 1):
-            mult += 1/i
-        damage = math.ceil(self.get_stat("damage")*mult)
+        damage = math.ceil(self.get_stat("damage")*(1 + math.sqrt(dist)))
         for stage in self.aoe(x, y):
             for point in stage:
                 self.hit(point.x, point.y, damage, anathema)
