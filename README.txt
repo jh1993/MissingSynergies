@@ -133,6 +133,7 @@ Level 6:
 Level 7:
 + Ataraxia (Sorcery/Enchantment/Conjuration)
 + Breath of Annihilation (Dragon/Chaos)
++ Dying Star (Fire)
 + Redheart Spider (Holy/Nature/Dark/Conjuration)
 
 ---
