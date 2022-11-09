@@ -7,7 +7,7 @@ from Monsters import *
 from Variants import *
 import random, math, os, sys
 
-from mods.BugsAndScams.Bugfixes import RemoveBuffOnPreAdvance
+from mods.BugsAndScams.BugsAndScams import RemoveBuffOnPreAdvance
 import mods.BugsAndScams.Bugfixes
 
 if "mods.BugsAndScams.NoMoreScams" in sys.modules:
@@ -3085,9 +3085,7 @@ class RainbowBreath(BreathWeapon):
         unit = self.caster.level.get_unit_at(x, y)
         if unit and are_hostile(self.caster, unit):
             amount = (self.caster.resists[self.damage_type]//2 if self.caster.resists[self.damage_type] >= 0 else 0) + self.penetration
-            unit.resists[self.damage_type] -= amount
-            unit.deal_damage(self.get_stat("damage"), self.damage_type, self)
-            unit.resists[self.damage_type] += amount
+            unit.deal_damage(self.get_stat("damage"), self.damage_type, self, penetration=amount)
         else:
             self.caster.level.deal_damage(x, y, self.get_stat("damage"), self.damage_type, self)
     
@@ -4211,14 +4209,7 @@ class FrigidFamineBuff(Buff):
 
     def on_advance(self):
         for unit in list(self.owner.level.units):
-            dtype = random.choice([Tags.Dark, Tags.Ice])
-            starved = False
-            if self.starvation and are_hostile(unit, self.owner) and unit.resists[Tags.Heal] > 0:
-                unit.resists[dtype] -= unit.resists[Tags.Heal]
-                starved = True
-            dealt = unit.deal_damage(1, dtype, self.spell)
-            if starved:
-                unit.resists[dtype] += unit.resists[Tags.Heal]
+            dealt = unit.deal_damage(1, random.choice([Tags.Dark, Tags.Ice]), self.spell, penetration=unit.resists[Tags.Heal] if self.starvation and are_hostile(unit, self.owner) and unit.resists[Tags.Heal] > 0 else 0)
             if dealt and self.wendigo:
                 self.counter += 1
                 if self.counter >= 100:
@@ -4248,14 +4239,7 @@ class FrigidFamineBuff(Buff):
         num_targets = random.choice(range(1, len(targets) + 1))
         damage = -evt.damage//num_targets
         for target in targets[:num_targets]:
-            dtype = random.choice([Tags.Dark, Tags.Ice])
-            starved = False
-            if self.starvation and are_hostile(target, self.owner) and target.resists[Tags.Heal] > 0:
-                target.resists[dtype] -= target.resists[Tags.Heal]
-                starved = True
-            target.deal_damage(damage, dtype, self.spell)
-            if starved:
-                target.resists[dtype] += target.resists[Tags.Heal]
+            target.deal_damage(damage, random.choice([Tags.Dark, Tags.Ice]), self.spell, penetration=target.resists[Tags.Heal] if self.starvation and are_hostile(target, self.owner) and target.resists[Tags.Heal] > 0 else 0)
 
     def on_unapplied(self):
         if self.wendigo and random.random() < self.counter/100:
@@ -5030,14 +5014,10 @@ class AgonizingStormSpell(Spell):
                 continue
             if stun:
                 unit.remove_buff(stun)
-                unit.resists[Tags.Lightning] -= penetration
-                unit.deal_damage(damage + stun.turns_left, Tags.Lightning, self)
-                unit.resists[Tags.Lightning] += penetration
+                unit.deal_damage(damage + stun.turns_left, Tags.Lightning, self, penetration=penetration)
             if berserk:
                 unit.remove_buff(berserk)
-                unit.resists[Tags.Dark] -= penetration
-                unit.deal_damage(damage + berserk.turns_left, Tags.Dark, self)
-                unit.resists[Tags.Dark] += penetration
+                unit.deal_damage(damage + berserk.turns_left, Tags.Dark, self, penetration=penetration)
 
         if effects_left <= 0:
             return
@@ -7066,9 +7046,7 @@ class AegisOverloadSpell(Spell):
             if isinstance(buff, OverloadedBuff) and buff.tag == tag:
                 existing = buff.resists[tag]
                 break
-        target.resists[tag] -= existing
-        target.deal_damage(damage, tag, self)
-        target.resists[tag] += existing
+        target.deal_damage(damage, tag, self, penetration=existing)
 
         unit.apply_buff(OverloadedBuff(tag, -resist), 3)
         if disrupt:
@@ -8196,10 +8174,7 @@ class BloodyMassBloodSplatter(SimpleRangedAttack):
         if not unit or not are_hostile(unit, self.caster):
             self.caster.level.show_effect(x, y, Tags.Dark)
         else:
-            penetration = self.get_penetration()
-            unit.resists[Tags.Dark] -= penetration
-            unit.deal_damage(self.get_stat("damage"), Tags.Dark, self)
-            unit.resists[Tags.Dark] += penetration
+            unit.deal_damage(self.get_stat("damage"), Tags.Dark, self, penetration=self.get_penetration())
             if self.bloodrage:
                 self.caster.source.caster.apply_buff(BloodrageBuff(1), self.get_stat("duration"))
 
@@ -8745,17 +8720,18 @@ class DyingStar(Upgrade):
     
     def get_description(self):
         return ("Each turn, deal [fire] damage to all units.\n"
-                "The damage starts at [{damage}:damage], multiplied by 100% plus your percentage of missing HP, and decreases by 1 per tile away from you.\n"
+                "The damage starts at [{damage}:damage], and decreases by 1 per tile away from you. It penetrates [fire] resistance by an amount equal to your percentage of missing HP.\n"
                 "The maximum damage benefits from your bonuses to [damage].\n"
                 "This skill does not activate when there are no enemies on the level, but otherwise cannot be paused.").format(**self.fmt_dict())
 
     def on_advance(self):
         if all(u.team == TEAM_PLAYER for u in self.owner.level.units):
             return
-        max_damage = self.get_stat("damage")*(1 + (self.owner.max_hp - self.owner.cur_hp)/self.owner.max_hp)
+        max_damage = self.get_stat("damage")
+        penetration = math.ceil(100*(self.owner.max_hp - self.owner.cur_hp)/self.owner.max_hp)
         for unit in list(self.owner.level.units):
             damage = max(0, max_damage - math.floor(distance(self.owner, unit)))
-            unit.deal_damage(damage, Tags.Fire, self)
+            unit.deal_damage(damage, Tags.Fire, self, penetration=penetration)
 
 all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar])
