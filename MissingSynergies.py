@@ -5,6 +5,7 @@ from Level import *
 from CommonContent import *
 from Monsters import *
 from Variants import *
+from Shrines import *
 import random, math, os, sys
 
 from mods.BugsAndScams.BugsAndScams import RemoveBuffOnPreAdvance
@@ -7238,7 +7239,7 @@ class PureglassKnightBuff(Buff):
     def on_init(self):
         self.name = "Pureglass"
         self.color = Tags.Glass.color
-        self.description = "Whenever this unit loses SH, it has a 25% chance to summon another knight with 1 SH."
+        self.description = "Whenever this unit is hit by damage it is not immune to, it has a 25% chance to summon another knight with 1 SH."
         self.shards = self.spell.get_stat("shards")
         self.radius = self.spell.get_stat("minion_range")
         self.phase = self.spell.get_stat("phase")
@@ -7246,7 +7247,7 @@ class PureglassKnightBuff(Buff):
         self.owner_triggers[EventOnPreDamaged] = self.on_pre_damaged
     
     def on_pre_damaged(self, evt):
-        if evt.damage <= 0 or self.owner.resists[evt.damage_type] >= 100 or self.owner.shields <= 0:
+        if evt.damage <= 0 or self.owner.resists[evt.damage_type] >= 100:
             return
         if self.shards:
             targets = [unit for unit in self.owner.level.get_units_in_ball(self.owner, self.radius) if are_hostile(unit, self.owner)]
@@ -7291,7 +7292,7 @@ class PureglassKnightSpell(Spell):
     def get_description(self):
         return ("Summon a [living] [holy] [arcane] [glass] knight. It has fixed 1 HP, but gains [1_SH:shields] per 10 bonus to [minion_health:minion_health] this spell has, rounded up (currently [{shields}_SH:shields]).\n"
                 "The knight has a melee attack and a charge attack with [{minion_range}_range:minion_range], both of which deal [{minion_damage}_physical:physical] damage.\n"
-                "Whenever the knight loses [SH:shields], it has a 25% chance to summon another knight with [1_SH:shields].").format(**self.fmt_dict())
+                "Whenever the knight is hit by damage it is not immune to, it has a 25% chance to summon another knight with [1_SH:shields].").format(**self.fmt_dict())
 
     def summon_knight(self, target, minor=False):
         unit = Unit()
@@ -7804,10 +7805,7 @@ class ShieldBurstSpell(Spell):
                     targets = [target for target in targets if self.caster.level.can_see(unit.x, unit.y, target.x, target.y)]
                 if not targets:
                     break
-                old = unit.resists[Tags.Arcane]
-                unit.resists[Tags.Arcane] = 0
-                unit.deal_damage(1, Tags.Arcane, self)
-                unit.resists[Tags.Arcane] = old
+                unit.deal_damage(1, Tags.Arcane, self, penetration=unit.resists[Tags.Arcane])
                 self.caster.level.queue_spell(self.bolt(unit, random.choice(targets), damage, recycle))
 
 class EmpyrealFormBuff(Buff):
@@ -8739,5 +8737,66 @@ class DyingStar(Upgrade):
             damage = max(0, max_damage - math.floor(distance(self.owner, unit)))
             unit.deal_damage(damage, Tags.Fire, self, penetration=penetration)
 
+class BackupOption(Upgrade):
+
+    def on_init(self):
+        self.name = "Backup Option"
+        self.asset = ["MissingSynergies", "Icons", "backup_option"]
+        self.tags = [Tags.Sorcery]
+        self.level = 6
+        self.description = "If you only know one level 1 [sorcery] spell and it has no upgrades, it gains bonus [damage] equal to the total level of all of your spells, spell upgrades, and skills.\nThis bonus is permanently lost if you upgrade that spell or learn another level 1 [sorcery] spell."
+        self.spell = None
+        self.bonus = 0
+        self.owner_triggers[EventOnBuffApply] = self.on_buff_apply
+    
+    def make_total_bonus(self):
+        total = 0
+        for spell in self.owner.spells:
+            total += spell.level
+        for buff in self.owner.buffs:
+            if not isinstance(buff, Upgrade):
+                continue
+            total += buff.level
+        self.add_bonus(total)
+
+    def on_applied(self, owner):
+        spells = [spell for spell in self.owner.spells if Tags.Sorcery in spell.tags and spell.level == 1]
+        if not spells:
+            return
+        self.spell = spells[0]
+        if len(spells) > 1:
+            return
+        if self.spell and [buff for buff in self.owner.buffs if isinstance(buff, Upgrade) and not isinstance(buff, ShrineBuff) and buff.prereq is self.spell]:
+            return
+        self.make_total_bonus()
+
+    def remove_bonus(self):
+        self.owner.spell_bonuses[type(self.spell)]["damage"] -= self.bonus
+        self.bonus = 0
+
+    def add_bonus(self, bonus):
+        self.bonus += bonus
+        self.owner.spell_bonuses[type(self.spell)]["damage"] += bonus
+
+    def on_add_spell(self, spell):
+        if Tags.Sorcery in spell.tags and spell.level == 1:
+            if self.spell:
+                self.remove_bonus()
+                return
+            else:
+                self.spell = spell
+                self.make_total_bonus()
+                self.add_bonus(1)
+                return
+        self.add_bonus(spell.level)
+
+    def on_buff_apply(self, evt):
+        if evt.buff is self or not isinstance(evt.buff, Upgrade) or isinstance(evt.buff, ShrineBuff):
+            return
+        if self.spell and evt.buff.prereq is self.spell:
+            self.remove_bonus()
+            return
+        self.add_bonus(evt.buff.level)
+
 all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell])
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, BackupOption])
