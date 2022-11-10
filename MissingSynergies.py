@@ -3833,7 +3833,7 @@ class ChaosConcoctionSpell(Spell):
             self.caster.level.show_effect(x, y, tag)
             return
         should_damage = True
-        if not are_hostile(self.caster, unit):
+        if unit.team == TEAM_PLAYER:
             if Tags.Slime in unit.tags:
                 amount = min(damage, unit.max_hp//5)
                 unit.max_hp += amount
@@ -6822,7 +6822,7 @@ class UnnaturalVitality(Upgrade):
 class CosmicStasisBuff(Buff):
 
     def __init__(self, spell):
-        self.freeze_extension = spell.get_stat("freeze_extension")
+        self.extension_chance = spell.get_stat("extension_chance")
         Buff.__init__(self)
         if spell.get_stat("laser"):
             self.global_triggers[EventOnDamaged] = self.on_damaged
@@ -6830,13 +6830,16 @@ class CosmicStasisBuff(Buff):
     def on_init(self):
         self.name = "Cosmic Stasis"
         self.color = Tags.Ice.color
-        self.global_triggers[EventOnBuffApply] = self.on_buff_apply
         self.global_triggers[EventOnBuffRemove] = self.on_buff_remove
         self.to_refreeze = []
 
-    def on_buff_apply(self, evt):
-        if isinstance(evt.buff, FrozenBuff) and are_hostile(evt.unit, self.owner) and not evt.unit.gets_clarity:
-            evt.buff.turns_left += self.freeze_extension
+    def on_advance(self):
+        for unit in self.owner.level.units:
+            if not are_hostile(unit, self.owner) or unit.gets_clarity or random.random() >= self.extension_chance/100:
+                continue
+            freeze = unit.get_buff(FrozenBuff)
+            if freeze:
+                freeze.turns_left += 1
 
     def on_buff_remove(self, evt):
         if not isinstance(evt.buff, FrozenBuff) or evt.buff.break_dtype != Tags.Physical:
@@ -6866,14 +6869,14 @@ class CosmicStasisSpell(Spell):
         self.max_charges = 3
         self.range = 0
         self.duration = 5
-        self.freeze_extension = 1
+        self.extension_chance = 25
 
         self.upgrades["duration"] = (5, 3)
-        self.upgrades["freeze_extension"] = (1, 3, "Freeze Extension", "When an enemy is [frozen], the duration of freeze is extended by [1:duration] more turn.")
+        self.upgrades["extension_chance"] = (25, 4, "Extension Chance", "Increase the chance to extend [freeze] duration on enemies by 25%.")
         self.upgrades["laser"] = (1, 5, "Laser Cooling", "When an enemy takes [arcane] damage, it has a chance of being [frozen] for [1_turn:duration] equal to the damage taken divided by 100, to a maximum of 100%.")
     
     def get_description(self):
-        return ("When an enemy is [frozen], the duration of freeze is extended by [{freeze_extension}_turns:duration]. Does not work on targets that can gain clarity.\n"
+        return ("Each turn, the [freeze] duration on each enemy has a [{extension_chance}%:freeze] chance to be extended by [1_turn:duration]. Does not work on enemies that can gain clarity.\n"
                 "When an enemy is unfrozen by [physical] damage, that enemy will be [frozen] again before the start of your next turn.\n"
                 "Lasts [{duration}_turns:duration].").format(**self.fmt_dict())
 
