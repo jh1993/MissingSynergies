@@ -1889,13 +1889,16 @@ class RuinBuff(Buff):
         self.color = Tags.Dark.color
         self.buff_type = BUFF_TYPE_CURSE
         self.description = "Cannot gain buffs.\nThis debuff cannot be removed prematurely."
+        self.originally_unbuffable = False
     def on_applied(self, owner):
+        if self.owner.buff_immune:
+            self.originally_unbuffable = True
         self.owner.buff_immune = True
     def on_unapplied(self):
+        if not self.originally_unbuffable:
+            self.owner.buff_immune = False
         if self.turns_left > 0:
             self.owner.apply_buff(RuinBuff(), self.turns_left)
-        else:
-            self.owner.buff_immune = False
 
 class RuinAdept(Upgrade):
     def on_init(self):
