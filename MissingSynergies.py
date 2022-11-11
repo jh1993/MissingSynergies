@@ -8737,19 +8737,18 @@ class DyingStar(Upgrade):
             damage = max(0, max_damage - math.floor(distance(self.owner, unit)))
             unit.deal_damage(damage, Tags.Fire, self, penetration=penetration)
 
-class BackupOption(Upgrade):
+class CantripAdept(Upgrade):
 
     def on_init(self):
-        self.name = "Backup Option"
-        self.asset = ["MissingSynergies", "Icons", "backup_option"]
+        self.name = "Cantrip Adept"
+        self.asset = ["MissingSynergies", "Icons", "cantrip_adept"]
         self.tags = [Tags.Sorcery]
         self.level = 6
-        self.description = "If you only know one level 1 [sorcery] spell and it has no upgrades, it gains bonus [damage] equal to the total level of all of your spells, spell upgrades, and skills.\nThis bonus is permanently lost if you upgrade that spell or learn another level 1 [sorcery] spell."
-        self.spell = None
-        self.bonus = 0
-        self.owner_triggers[EventOnBuffApply] = self.on_buff_apply
+        self.description = "The first time each turn you damage an enemy with a level 1 [sorcery] spell, that enemy takes additional damage of the same type equal to the combined level of all of your spells, spell upgrades, and skills.\nThis refreshes before the beginning of your turn."
+        self.global_triggers[EventOnDamaged] = self.on_damaged
+        self.active = True
     
-    def make_total_bonus(self):
+    def get_damage(self):
         total = 0
         for spell in self.owner.spells:
             total += spell.level
@@ -8757,46 +8756,16 @@ class BackupOption(Upgrade):
             if not isinstance(buff, Upgrade):
                 continue
             total += buff.level
-        self.add_bonus(total)
+        return total
 
-    def on_applied(self, owner):
-        spells = [spell for spell in self.owner.spells if Tags.Sorcery in spell.tags and spell.level == 1]
-        if not spells:
+    def on_pre_advance(self):
+        self.active = True
+    
+    def on_damaged(self, evt):
+        if not self.active or not isinstance(evt.source, Spell) or evt.source.level != 1 or Tags.Sorcery not in evt.source.tags:
             return
-        self.spell = spells[0]
-        if len(spells) > 1:
-            return
-        if self.spell and [buff for buff in self.owner.buffs if isinstance(buff, Upgrade) and not isinstance(buff, ShrineBuff) and buff.prereq is self.spell]:
-            return
-        self.make_total_bonus()
-
-    def remove_bonus(self):
-        self.owner.spell_bonuses[type(self.spell)]["damage"] -= self.bonus
-        self.bonus = 0
-
-    def add_bonus(self, bonus):
-        self.bonus += bonus
-        self.owner.spell_bonuses[type(self.spell)]["damage"] += bonus
-
-    def on_add_spell(self, spell):
-        if Tags.Sorcery in spell.tags and spell.level == 1:
-            if self.spell:
-                self.remove_bonus()
-                return
-            else:
-                self.spell = spell
-                self.make_total_bonus()
-                self.add_bonus(1)
-                return
-        self.add_bonus(spell.level)
-
-    def on_buff_apply(self, evt):
-        if evt.buff is self or not isinstance(evt.buff, Upgrade) or isinstance(evt.buff, ShrineBuff):
-            return
-        if self.spell and evt.buff.prereq is self.spell:
-            self.remove_bonus()
-            return
-        self.add_bonus(evt.buff.level)
+        self.active = False
+        evt.unit.deal_damage(self.get_damage(), evt.damage_type, self)
 
 all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell])
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, BackupOption])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept])

@@ -125,7 +125,7 @@ Level 5:
 
 Level 6:
 + Abyssal Insight (Dark/Eye)
-+ Backup Option (Sorcery)
++ Cantrip Adept (Sorcery)
 + Dragon Archmage (Dragon/Sorcery)
 + Hydromancy (Fire/Lightning/Ice)
 + Locus of Energy (Arcane/Lightning)
