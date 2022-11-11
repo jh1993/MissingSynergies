@@ -8762,7 +8762,7 @@ class CantripAdept(Upgrade):
         self.active = True
     
     def on_damaged(self, evt):
-        if not self.active or not isinstance(evt.source, Spell) or evt.source.level != 1 or Tags.Sorcery not in evt.source.tags:
+        if not self.active or not are_hostile(evt.unit, self.owner) or not isinstance(evt.source, Spell) or evt.source.level != 1 or Tags.Sorcery not in evt.source.tags:
             return
         self.active = False
         evt.unit.deal_damage(self.get_damage(), evt.damage_type, self)
