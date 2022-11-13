@@ -6642,7 +6642,8 @@ class MutantCyclopsSpell(Spell):
         self.upgrades["conjure"] = (1, 3, "Conjure Rocks", "If there are fewer than the maximum number of throwable units in range, the mutant cyclops will make up for the difference by throwing rocks at the target.\nEach rock deals damage and stuns in a [1_tile:radius] radius.")
     
     def get_description(self):
-        return ("Summon a mutant cyclops with [{minion_health}_HP:minion_health].\n It has a mass telekinesis ability with a [3_turn:duration] cooldown, which throws [{num_targets}:num_targets] units in LOS within [{radius}_tiles:radius] of itself toward an enemy [{minion_range}_tiles:minion_range] away. Upon landing, each unit deals [{minion_damage}_physical:physical] damage to all enemies in a burst with radius equal to the unit's max HP divided by 40, rounded up, and [stuns] for [1_turn:duration]. The wizard and enemies with more max HP than the cyclops cannot be thrown.\n"
+        return ("Summon a mutant cyclops with [{minion_health}_HP:minion_health].\n"
+                "It has a mass telekinesis ability with a [3_turn:duration] cooldown, which throws [{num_targets}:num_targets] units in LOS within [{radius}_tiles:radius] of itself toward an enemy [{minion_range}_tiles:minion_range] away. Upon landing, each unit deals [{minion_damage}_physical:physical] damage to all enemies in a burst with radius equal to the unit's max HP divided by 40, rounded up, and [stuns] for [1_turn:duration]. The wizard and enemies with more max HP than the cyclops cannot be thrown.\n"
                 "The cyclops also has a leap attack with the same range and damage.\n"
                 "Casting this spell again when the cyclops is already summoned will teleport it to the target tile and fully heal it.").format(**self.fmt_dict())
 
