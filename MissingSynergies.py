@@ -2890,6 +2890,9 @@ class MorbidSphereSpell(OrbSpell):
         if self.get_stat("ghost"):
             ghost = Bloodghast()
             self.modify_unit(ghost, 4)
+            ghost.spells[0].onhit = lambda caster, target: caster.apply_buff(BloodrageBuff(1), caster.get_stat(self.get_stat("duration", base=10), ghost.spells[0], "duration"))
+            ghost.spells[0].description = ""
+            ghost.spells[0].get_description = lambda: "Gain +1 damage for %i turns with each attack" % ghost.get_stat(self.get_stat("duration", base=10), ghost.spells[0], "duration")
             self.summon(ghost, target=orb, radius=5)
     
     def on_orb_walk(self, existing):
@@ -6471,7 +6474,6 @@ class DeathMetalSpell(Spell):
 
         self.upgrades["num_summons"] = (2, 3, "Num Summons", "Up to [2:num_summons] more metalheads can be summoned.")
         self.upgrades["chorus"] = (1, 4, "Shrieking Chorus", "When you already have the normal maximum number of metalheads summoned, this spell has a chance to summon a metalhead beyond the maximum number each turn when channeled, equal to 100% divided by your current number of metalheads.")
-        self.upgrades["gore"] = (1, 5, "Goregrind", "Each turn when channeling this spell, all of your minions gain a stack of bloodlust for a duration equal to this spell's [minion_duration:minion_duration], increasing all of their damage by 1.\nThe remaining durations of all of their bloodlust stacks are then increased by [1_turn:duration].")
         self.upgrades["discord"] = (1, 6, "Discordian Tune", "Each turn, each enemy has a 25% chance to take [1_dark:dark] or [1_physical:physical] damage.\nEnemies that take [physical] damage are [stunned] for [1_turn:duration].\nEnemies that take [dark] damage go [berserk] for [1_turn:duration].\nThese durations are fixed and unaffected by bonuses.")
 
     def get_description(self):
@@ -6504,10 +6506,8 @@ class DeathMetalSpell(Spell):
             self.summon(unit, radius=5, sort_dist=False)
         
         discord = self.get_stat("discord")
-        gore = self.get_stat("gore")
 
         for unit in list(self.caster.level.units):
-
             if are_hostile(unit, self.caster):
                 if not discord or random.random() >= 0.25:
                     continue
@@ -6519,17 +6519,8 @@ class DeathMetalSpell(Spell):
                     dealt = unit.deal_damage(1, Tags.Physical, self)
                     if dealt:
                         unit.apply_buff(Stun(), 1)
-
-            else:
-                if unit.is_player_controlled:
-                    continue
-                if unit.source is self:
-                    unit.turns_to_death += 1
-                if gore:
-                    unit.apply_buff(BloodrageBuff(1), minion_duration)
-                    for buff in unit.buffs:
-                        if isinstance(buff, BloodrageBuff) and buff.turns_left:
-                            buff.turns_left += 1
+            elif unit.source is self:
+                unit.turns_to_death += 1
 
         yield
 
@@ -8213,7 +8204,7 @@ class FleshSacrificeSpell(Spell):
 
         self.upgrades["max_charges"] = (6, 3)
         self.upgrades["damage"] = (25, 3)
-        self.upgrades["bloodrage"] = (1, 6, "Bloodbath", "Whenever the bloody mass's blood splatter hits an enemy, you gain bloodlust for [10_turns:duration], increasing the damage of all of your spells by 1.\nThis duration benefits from your bonuses to [duration].")
+        self.upgrades["bloodrage"] = (1, 6, "Bloodbath", "Whenever the bloody mass's blood splatter hits an enemy, you gain bloodrage for [10_turns:duration], increasing the damage of all of your spells by 1.\nThis duration benefits from your bonuses to [duration].")
         self.upgrades["penetration"] = (1, 5, "Power of Pain", "The bloody mass's blood splatter penetrates enemies' [dark] resistance by an amount equal to your percentage of missing HP.")
     
     def get_description(self):
@@ -8767,5 +8758,54 @@ class CantripAdept(Upgrade):
         self.active = False
         evt.unit.deal_damage(self.get_damage(), evt.damage_type, self)
 
+class BleedBuff(Buff):
+
+    def __init__(self, upgrade, damage):
+        self.upgrade = upgrade
+        self.damage = damage
+        Buff.__init__(self)
+    
+    def on_init(self):
+        self.name = "Bleed"
+        self.color = Tags.Demon.color
+        self.buff_type = BUFF_TYPE_CURSE
+        self.stack_type = STACK_INTENSITY
+        self.asset = ["MissingSynergies", "Statuses", "bleed"]
+    
+    def on_advance(self):
+        damage = max(0, math.ceil(self.damage*(1 + self.owner.resists[Tags.Heal]/100)))
+        self.owner.deal_damage(damage, Tags.Physical, self.upgrade)
+
+class SecretsOfBlood(Upgrade):
+
+    def on_init(self):
+        self.name = "Secrets of Blood"
+        self.asset = ["MissingSynergies", "Icons", "secrets_of_blood"]
+        self.tags = [Tags.Dark, Tags.Metallic]
+        self.level = 6
+        self.global_triggers[EventOnDamaged] = self.on_damaged
+    
+    def get_description(self):
+        return ("Each turn, each stack of bloodrage on each ally has a 50% chance to have its remaining duration increased by [1_turn:duration]. Bloodrage is typically generated by [demon] minions with \"blood\" in their names.\n"
+                "Whenever an ally deals damage to an enemy, that enemy is inflicted with a stack of bleed for each stack of bloodrage on the attacker.\n"
+                "Each stack of bleed has duration equal to the duration of the bloodrage stack it is derived from, and deals [physical] damage each turn equal to that bloodrage stack's damage bonus. This damage is multiplied by 100% plus the victim's [heal] resistance, which is typically caused by the [poison] debuff.").format(**self.fmt_dict())
+
+    def on_advance(self):
+        for unit in self.owner.level.units:
+            if are_hostile(unit, self.owner):
+                continue
+            for buff in unit.buffs:
+                if not isinstance(buff, BloodrageBuff) or random.random() >= 0.5:
+                    continue
+                buff.turns_left += 1
+
+    def on_damaged(self, evt):
+        if not are_hostile(evt.unit, self.owner) or not evt.source or not evt.source.owner or are_hostile(evt.source.owner, self.owner):
+            return
+        for buff in evt.source.owner.buffs:
+            if not isinstance(buff, BloodrageBuff):
+                continue
+            evt.unit.apply_buff(BleedBuff(self, buff.bonus), buff.turns_left)
+
 all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell])
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood])

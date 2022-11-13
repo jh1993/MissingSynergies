@@ -129,6 +129,7 @@ Level 6:
 + Dragon Archmage (Dragon/Sorcery)
 + Hydromancy (Fire/Lightning/Ice)
 + Locus of Energy (Arcane/Lightning)
++ Secrets of Blood (Dark/Metallic)
 + Shivering Venom (Ice/Nature)
 
 Level 7:
