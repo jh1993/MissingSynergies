@@ -444,6 +444,7 @@ class FrozenSpaceSpell(Spell):
 
     def get_description(self):
         return ("Whenever an enemy teleports to anywhere within [{radius}_tiles:radius] of you, that enemy takes [{damage}_ice:ice] damage and is [frozen] for [3_turns:duration].\n"
+                "Most forms of movement other than a unit's movement action count as teleportation.\n"
                 "Lasts [{duration}_turns:duration].").format(**self.fmt_dict())
     
     def cast_instant(self, x, y):
@@ -585,10 +586,10 @@ class PlanarBindingSpell(Spell):
         self.upgrades["range"] = (7, 2)
         self.upgrades["requires_los"] = (-1, 2, "Blindcasting", "Planar Binding can be cast without line of sight.")
         self.upgrades["redundancy"] = (1, 2, "Redundancy", "The target still counts as having teleported even if it did not move away from its original spot.")
-        self.upgrades["thorough"] = (1, 5, "Thorough Binding", "The target will now be immediately teleported back to its original location whenever it teleports.")
+        self.upgrades["thorough"] = (1, 5, "Thorough Binding", "The target will now be immediately teleported back to its original location whenever it teleports.\nMost forms of movement other than a unit's movement action count as teleportation.")
     
     def get_description(self):
-        return ("For [{duration}_turns:duration], the target will be teleported back each turn to the location it was when this spell was originally cast if it moved away from that tile.").format(**self.fmt_dict())
+        return ("For [{duration}_turns:duration], the target will be teleported back each turn to the location it was at when this spell was originally cast if it moved away from that tile.").format(**self.fmt_dict())
 
     def cast_instant(self, x, y):
         unit = self.caster.level.get_unit_at(x, y)
@@ -804,7 +805,7 @@ class MaskOfTroublesSpell(Spell):
         return ("Put on the Mask of Troubles for [{duration}_turns:duration], gaining the following benefits:\n"
                 "Gain [100_poison:poison] and [100_arcane:arcane] resist.\n"
                 "Each turn, teleport to a random location up to [3_tiles:radius] away.\n"
-                "Whenever you teleport, summon a friendly troubler nearby.\n"
+                "Whenever you teleport, summon a friendly troubler nearby. Most forms of movement other than a unit's movement action count as teleportation.\n"
                 "Troublers have low health and damage, but long range, and randomly teleport enemies with their attacks.").format(**self.fmt_dict())
     
     def cast_instant(self, x, y):
@@ -823,7 +824,7 @@ class BombasticArrival(Upgrade):
         self.owner_triggers[EventOnMoved] = self.on_moved
     
     def get_description(self):
-        return ("Whenever you teleport, deal [{damage}_fire:fire] damage in a [{radius}_tile:radius] burst on arrival. Allies are unaffected.").format(**self.fmt_dict())
+        return ("Whenever you teleport, deal [{damage}_fire:fire] damage in a [{radius}_tile:radius] burst on arrival. Allies are unaffected.\nMost forms of movement other than a unit's movement action count as teleportation.").format(**self.fmt_dict())
     
     def boom(self):
         for stage in Burst(self.owner.level, Point(self.owner.x, self.owner.y), self.get_stat("radius")):
@@ -857,6 +858,7 @@ class ShadowAssassin(Upgrade):
     
     def get_description(self):
         return ("Whenever you teleport, if there is only a single enemy adjacent to you on arrival, deal [{damage}_dark:dark], [{damage}_physical:physical], and [{damage}_poison:poison] damage to it.\n"
+                "Most forms of movement other than a unit's movement action count as teleportation.\n"
                 "If you teleported to that enemy from out of line of sight or at least [8_tiles:range] away, or the enemy is [blind], deal double damage.").format(**self.fmt_dict())
     
     def on_moved(self, evt):
@@ -6080,9 +6082,9 @@ class MadWerewolfSpell(Spell):
         self.upgrades["distortion"] = (1, 4, "Phase Distortion", "Enemies afflicted with Phase Insanity suffer [-2_range:range] and [-1_radius:radius] on all spells.\nMad werewolves and wild men instead gain bonuses to these stats.")
 
     def get_description(self):
-        return ("Summon a demonically possessed werewolf with [{minion_health}_HP:minion_health] and [{shields}_SH:shields]. It has a melee attack and teleport attack with [{minion_range}_range:minion_range] that deal [{minion_damage}_arcane:arcane] damage.\n"
-                "The werewolf has Phase Insanity, and its melee attack inflicts Phase Insanity and teleports enemies away. Units with Phase Insanity have 20% chance on teleport and 50% chance on death to summon an insanity hound allied to the wizard.\n"
-                "On reaching 0 HP, the werewolf transforms into a wild man that inflicts Phase Insanity on nearby enemies and teleports them away while fleeing, until it becomes a werewolf again in [20_turns:duration].").format(**self.fmt_dict())
+        return ("Summon a demonically possessed werewolf with [{minion_health}_HP:minion_health], [{shields}_SH:shields], a melee attack that teleports enemies away, and a teleport attack with [{minion_range}_range:minion_range] and [{minion_damage}_arcane:arcane] damage.\n"
+                "The werewolf and victims of its melee attack have Phase Insanity, giving them 20% chance on teleport and 50% on death to summon an insanity hound allied to the wizard. Most forms of movement other than a unit's movement action count as teleportation.\n"
+                "On reaching 0 HP, the werewolf becomes a wild man that inflicts Phase Insanity on nearby enemies and teleports them away while fleeing, until it becomes a werewolf again in [20_turns:duration].").format(**self.fmt_dict())
 
     def get_werewolf(self):
 
@@ -6254,6 +6256,7 @@ class GrudgeReaperBuff(Soulbound):
 class HatredBuff(Buff):
     def on_init(self):
         self.name = "Hatred"
+        self.asset = ["MissingSynergies", "Statuses", "amplified_dark"]
         self.buff_type = BUFF_TYPE_CURSE
         self.stack_type = STACK_INTENSITY
         self.color = Tags.Demon.color
@@ -8736,7 +8739,7 @@ class SpeedOfLight(Upgrade):
         self.asset = ["MissingSynergies", "Icons", "speed_of_light"]
         self.tags = [Tags.Translocation, Tags.Holy]
         self.level = 5
-        self.description = "Whenever one of your minions teleports, it has a 25% chance to immediately use one of its attacks on a random valid enemy target. If the minion is [holy], the chance is instead 50%.\nThis can only trigger once per minion per turn, refreshed before the beginning of your turn."
+        self.description = "Whenever one of your minions teleports, it has a 25% chance to immediately use one of its attacks on a random valid enemy target. If the minion is [holy], the chance is instead 50%.\nThis can only trigger once per minion per turn, refreshed before the beginning of your turn.\nMost forms of movement other than a unit's movement action count as teleportation."
         self.global_triggers[EventOnMoved] = self.on_moved
         self.already_triggered = []
 
