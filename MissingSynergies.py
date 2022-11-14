@@ -2979,7 +2979,7 @@ class GoldenTricksterSpell(Spell):
         self.upgrades["mage"] = (1, 6, "Trickster Mage", "The Golden Trickster can cast Chaos Shuffle with a 3 turn cooldown.\nThis Chaos Shuffle gains all of your upgrades and bonuses.")
     
     def get_description(self):
-        return ("Summon a Golden Trickster, a flying minion with many resistances, [{minion_health}_HP:minion_health], and [{shields}_SH:shields].\n"
+        return ("Summon a Golden Trickster, a flying, randomly teleporting minion with many resistances, [{minion_health}_HP:minion_health], and [{shields}_SH:shields].\n"
                 "It has a trick shot with [{minion_range}_range:minion_range], which hits 3 times. Each hit inflicts no actual damage but otherwise behaves as if [{minion_damage}_fire:fire], [{minion_damage}_lightning:lightning], or [{minion_damage}_physical:physical] damage have been done to the target. The target is also randomly teleported up to [3_tiles:range] away.\n"
                 "Each turn, for each enemy within [{radius}_tiles:radius], it behaves as if it has taken [1_dark:dark] damage from that enemy. It gains [1_SH:shields] whenever it takes damage, up to a max of [{shields}_SH:shields].").format(**self.fmt_dict())
 
@@ -2996,7 +2996,7 @@ class GoldenTricksterSpell(Spell):
         unit.max_hp = self.get_stat("minion_health")
         unit.shields = self.get_stat("shields")
         unit.spells = [GoldenTricksterShot(self)]
-        unit.buffs = [GoldenTricksterAura(self), TeleportyBuff(chance=.1, radius=8)]
+        unit.buffs = [GoldenTricksterAura(self), TeleportyBuff(chance=1, radius=8)]
 
         if self.get_stat('mage'):
             shuffle = ChaosShuffleSpell()
@@ -4776,106 +4776,6 @@ class LiquidMetalSpell(Spell):
     
     def cast_instant(self, x, y):
         self.summon(self.get_cube(), Point(x, y))
-
-class SoakedBuff(Buff):
-
-    def __init__(self, upgrade):
-        self.upgrade = upgrade
-        Buff.__init__(self)
-    
-    def on_init(self):
-        self.name = "Soaked"
-        self.asset = ["MissingSynergies", "Statuses", "soaked"]
-        self.color = Tags.Ice.color
-        self.buff_type = BUFF_TYPE_CURSE
-        self.resists[Tags.Ice] = -100
-        self.resists[Tags.Lightning] = -50
-        self.cascade_range = self.upgrade.get_stat("cascade_range")
-        self.num_targets = self.upgrade.get_stat("num_targets")
-        self.radius = self.upgrade.get_stat("radius")
-        self.owner_triggers[EventOnDamaged] = self.on_damaged
-        self.owner_triggers[EventOnBuffApply] = self.on_buff_apply
-    
-    def on_applied(self, owner):
-        freeze = self.owner.get_buff(FrozenBuff)
-        if freeze:
-            freeze.turns_left += self.turns_left
-            return ABORT_BUFF_APPLY
-
-    def on_damaged(self, evt):
-        if evt.source is self.upgrade:
-            return
-        if evt.damage_type == Tags.Fire:
-            self.owner.level.queue_spell(self.burst(evt.damage))
-            self.owner.remove_buff(self)
-        elif evt.damage_type == Tags.Lightning:
-            self.owner.level.queue_spell(self.bolts(evt.damage))
-        else:
-            self.owner.apply_buff(FrozenBuff(), self.turns_left)
-            self.owner.remove_buff(self)
-
-    def burst(self, damage):
-        for stage in Burst(self.owner.level, Point(self.owner.x, self.owner.y), self.radius):
-            for point in stage:
-                unit = self.owner.level.get_unit_at(point.x, point.y)
-                if not unit or not are_hostile(unit, self.upgrade.owner) or unit is self.owner:
-                    self.owner.level.show_effect(point.x, point.y, Tags.Fire)
-                else:
-                    unit.deal_damage(damage//2, Tags.Fire, self.upgrade)
-                    duration = self.turns_left//2
-                    if duration and unit.is_alive():
-                        unit.apply_buff(SoakedBuff(self.upgrade), duration)
-            yield
-    
-    def bolts(self, damage):
-        targets = [unit for unit in self.owner.level.get_units_in_ball(self.owner, self.cascade_range) if are_hostile(unit, self.upgrade.owner) and self.owner.level.can_see(self.owner.x, self.owner.y, unit.x, unit.y) and unit.has_buff(SoakedBuff) and unit is not self.owner]
-        if not targets:
-            return
-        random.shuffle(targets)
-        yield from send_bolts(lambda point: self.owner.level.show_effect(point.x, point.y, Tags.Lightning, minor=True), lambda target: self.owner.level.deal_damage(target.x, target.y, damage//2, Tags.Lightning, self.upgrade), self.owner, targets[:self.num_targets])
-
-    def on_buff_apply(self, evt):
-        if not isinstance(evt.buff, FrozenBuff):
-            return
-        evt.buff.turns_left += self.turns_left
-        self.owner.remove_buff(self)
-
-class Hydromancy(Upgrade):
-
-    def on_init(self):
-        self.name = "Hydromancy"
-        self.asset = ["MissingSynergies", "Icons", "hydromancy"]
-        self.tags = [Tags.Fire, Tags.Lightning, Tags.Ice]
-        self.level = 6
-        self.radius = 1
-        self.num_targets = 2
-        self.cascade_range = 4
-        self.global_triggers[EventOnBuffRemove] = self.on_buff_remove
-        self.global_triggers[EventOnDamaged] = self.on_damaged
-    
-    def get_description(self):
-        return ("Whenever a [frozen] enemy takes [fire] or [lightning] damage, remove [freeze] from it and inflict [soaked:ice] with the same duration, giving [-100_ice:ice] and [-50_lightning:lightning] resistance.\n"
-                "Whenever a [soaked:ice] unit takes [ice] damage or is [frozen], remove [soaked:ice] and inflict [freeze] or increase existing [freeze] duration on the unit by the [soaked:ice] duration.\n"
-                "Whenever a [soaked:ice] unit takes [fire] damage, remove [soaked:ice] and create a steam explosion to deal half damage and inflict [soaked:ice] for half duration to other enemies in a [{radius}_tile:radius] radius around the unit.\n"
-                "Whenever a [soaked:ice] unit takes [lightning] damage, deal half damage to [{num_targets}:num_targets] random [soaked:ice] enemies in LOS within [{cascade_range}_tiles:cascade_range] of the unit.\n"
-                "This skill cannot trigger itself.").format(**self.fmt_dict())
-    
-    def on_buff_remove(self, evt):
-        if not are_hostile(evt.unit, self.owner):
-            return
-        if not isinstance(evt.buff, FrozenBuff) or evt.buff.break_dtype != Tags.Fire:
-            return
-        evt.unit.apply_buff(SoakedBuff(self), evt.buff.turns_left)
-    
-    def on_damaged(self, evt):
-        if not are_hostile(evt.unit, self.owner) or evt.damage_type != Tags.Lightning:
-            return
-        existing = evt.unit.get_buff(FrozenBuff)
-        if not existing:
-            return
-        existing.break_dtype = Tags.Lightning
-        evt.unit.remove_buff(existing)
-        evt.unit.apply_buff(SoakedBuff(self), existing.turns_left)
 
 class LivingLabyrinthBuff(Buff):
 
@@ -8829,5 +8729,35 @@ class SecretsOfBlood(Upgrade):
                 if bleed.applied:
                     total_bleed += buff.bonus
 
+class SpeedOfLight(Upgrade):
+
+    def on_init(self):
+        self.name = "Speed of Light"
+        self.asset = ["MissingSynergies", "Icons", "speed_of_light"]
+        self.tags = [Tags.Translocation, Tags.Holy]
+        self.level = 5
+        self.description = "Whenever one of your minions teleports, it has a 25% chance to immediately use one of its attacks on a random valid enemy target. If the minion is [holy], the chance is instead 50%.\nThis can only trigger once per minion per turn, refreshed before the beginning of your turn."
+        self.global_triggers[EventOnMoved] = self.on_moved
+        self.already_triggered = []
+
+    def on_pre_advance(self):
+        self.already_triggered = []
+
+    def on_moved(self, evt):
+        if not evt.teleport or evt.unit.is_player_controlled or are_hostile(evt.unit, self.owner) or evt.unit in self.already_triggered:
+            return
+        chance = 0.5 if Tags.Holy in evt.unit.tags else 0.25
+        if random.random() >= chance:
+            return
+        for spell in evt.unit.spells:
+            if not spell.can_pay_costs():
+                continue
+            target = spell.get_ai_target()
+            if not target:
+                continue
+            self.owner.level.act_cast(evt.unit, spell, target.x, target.y)
+            self.already_triggered.append(evt.unit)
+            return
+
 all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell])
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, Hydromancy, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight])

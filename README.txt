@@ -122,12 +122,12 @@ Level 5:
 + Reflex Arc (Nature/Lightning/Sorcery)
 + Shock Troops (Fire/Lightning)
 + Soul Dregs (Holy/Dark)
++ Speed of Light (Holy/Translocation)
 
 Level 6:
 + Abyssal Insight (Dark/Eye)
 + Cantrip Adept (Sorcery)
 + Dragon Archmage (Dragon/Sorcery)
-+ Hydromancy (Fire/Lightning/Ice)
 + Locus of Energy (Arcane/Lightning)
 + Secrets of Blood (Dark/Metallic)
 + Shivering Venom (Ice/Nature)
