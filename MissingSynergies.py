@@ -35,7 +35,6 @@ def drain_max_hp_kill(unit, hp):
         drain_max_hp(unit, hp)
     else:
         unit.max_hp = 1
-        unit.cur_hp = 0
         unit.kill()
 
 class BitterCurse(Buff):
@@ -1359,7 +1358,6 @@ class RaiseDracolichSpell(Spell):
         if unit and Tags.Dragon in unit.tags:
             self.caster.level.queue_spell(self.try_raise(unit))
             if not are_hostile(unit, self.caster):
-                unit.cur_hp = 0
                 unit.kill()
             elif self.get_stat("forced"):
                 unit.deal_damage(self.get_stat("damage", base=100), Tags.Dark, self)
@@ -2246,7 +2244,6 @@ class OrbOfFleshBuff(Buff):
 
     def check_hp(self):
         if self.owner.cur_hp <= self.hp_threshold:
-            self.owner.cur_hp = 0
             self.owner.kill()
     
     def on_advance(self):
@@ -3020,7 +3017,7 @@ class RainbowEggBuff(Buff):
     def on_init(self):
         self.absorbed = defaultdict(lambda : 0)
         self.global_triggers[EventOnDamaged] = self.on_damaged
-        self.owner_triggers[EventOnDeath] = lambda evt: self.owner.level.queue_spell(self.hatch())
+        self.owner_triggers[EventOnDeath] = self.on_death
         self.weakness = Tags.Physical
         self.on_advance = self.change_element
         self.on_applied = lambda owner: self.change_element()
@@ -3035,6 +3032,11 @@ class RainbowEggBuff(Buff):
             return
         self.absorbed[evt.damage_type] += evt.damage
     
+    def on_death(self, evt):
+        # Don't let Mortal Coil proc this.
+        if not self.owner.is_alive():
+            self.owner.level.queue_spell(self.hatch())
+
     def hatch(self):
         drake = Unit()
         drake.name = "Rainbow Drake"
@@ -3166,7 +3168,7 @@ class RainbowEggSpell(OrbSpell):
         self.upgrades["dragon_mage"] = (1, 3, "Dragon Mage", "The rainbow drake will gain a random [sorcery] cantrip every 3 turns if it does not have any, which can be used once before being removed.\nThese cantrips gain all of your upgrades and bonuses.")
     
     def get_description(self):
-        return ("Summon a rainbow egg with [{minion_health}_HP:minion_health] next to the caster, which hatches into a rainbow drake with the same max HP and [{breath_damage}:minion_damage] breath damage upon death.\n"
+        return ("Summon a rainbow egg with [{minion_health}_HP:minion_health] next to the caster, which hatches into a rainbow drake with the same max HP and [{breath_damage}:minion_damage] breath damage upon death. This does not work if the egg's death is faked.\n"
                 "The rainbow drake gains resistance to each element equal to half of all damage of that type done within [{radius}_tiles:radius] of the egg during its lifetime. Its breath weapon changes element randomly each turn to an element it resists, and penetrates enemy resistances by half of that amount.\n"
                 "The egg has no will of its own, each turn it will float one tile towards the target.\n"
                 "The egg's elemental weakness changes randomly each turn.").format(**self.fmt_dict())
@@ -3193,9 +3195,14 @@ class SpiritBombBuff(Buff):
         self.warcry = spell.get_stat("warcry")
         self.duration = spell.get_stat("duration", base=3)
         self.on_applied = lambda owner: self.update_description()
-        self.owner_triggers[EventOnDeath] = lambda evt: self.owner.level.queue_spell(self.boom())
+        self.owner_triggers[EventOnDeath] = self.on_death
         self.color = Tags.Holy.color
     
+    def on_death(self, evt):
+        # Don't let Mortal Coil proc this.
+        if not self.owner.is_alive():
+            self.owner.level.queue_spell(self.boom())
+
     def get_bonus(self):
         return self.charges//2 + self.timer//2 + (self.owner.max_hp - self.base_hp)//20
     
@@ -3217,6 +3224,7 @@ class SpiritBombBuff(Buff):
         bonus = self.get_bonus()
         damage = self.base_damage + 10*bonus
         radius = self.base_radius + bonus
+        self.timer = 0
         for stage in Burst(self.owner.level, Point(self.owner.x, self.owner.y), radius, ignore_walls=True):
             for point in stage:
                 unit = self.owner.level.get_unit_at(point.x, point.y)
@@ -3248,7 +3256,7 @@ class SpiritBombSpell(OrbSpell):
     
     def get_description(self):
         return ("Summon an orb of extremely concentrated energy next to the caster, consuming all remaining charges of this spell.\n"
-                "When the orb dies, it deals [{minion_damage}_holy:holy] damage to all enemies and destroys all walls in a [{radius}_tile:radius] burst, gaining +1 radius and +10 damage for every 2 turns it had existed, every 2 additional charge consumed, and each 20 bonus to max HP it had.\n"
+                "When the orb dies, it deals [{minion_damage}_holy:holy] damage to all enemies and destroys all walls in a [{radius}_tile:radius] burst, gaining +1 radius and +10 damage for every 2 turns it had existed, every 2 additional charge consumed, and each 20 bonus to max HP it had. This does not work if the orb's death is faked.\n"
                 "The orb has no will of its own, each turn it will float one tile towards the target.\n"
                 "The orb can be destroyed by dark damage.").format(**self.fmt_dict())
     
@@ -3980,7 +3988,6 @@ class MassOfCursesBuff(Buff):
             self.owner.level.queue_spell(spell_copy.cast(target.x, target.y))
             if self.agony and duration:
                 self.owner.level.queue_spell(self.do_damage(target, duration))
-        self.owner.cur_hp = 0
         self.owner.kill()
 
     def do_damage(self, target, duration):
@@ -5450,7 +5457,6 @@ class AfterlifeEchoesBuff(Buff):
         else:
             unit.apply_buff(ReincarnationBuff())
         point = Point(unit.x, unit.y)
-        unit.cur_hp = 0
         unit.kill()
 
         if self.echo_type == self.ECHO_SPIRIT and [tag for tag in [Tags.Holy, Tags.Demon, Tags.Undead] if tag in unit.tags]:
@@ -5753,7 +5759,6 @@ class CultistProphetBuff(Buff):
         if not units:
             return
         unit = random.choice(units)
-        unit.cur_hp = 0
         unit.kill()
         self.owner.cur_hp = 1
         self.owner.deal_damage(-self.owner.max_hp, Tags.Heal, self)
@@ -6236,12 +6241,10 @@ class GrudgeReaperBuff(Soulbound):
             if units:
                 self.guardian = random.choice(units)
                 return
-        self.owner.cur_hp = 0
         self.owner.kill(trigger_death_event=False)
 
     def on_pre_advance(self):
         if not self.guardian.is_alive():
-            self.owner.cur_hp = 0
             self.owner.kill(trigger_death_event=False)
         if not self.relentless:
             return
@@ -7134,7 +7137,7 @@ class PureglassKnightBuff(Buff):
     def on_init(self):
         self.name = "Pureglass"
         self.color = Tags.Glass.color
-        self.description = "Whenever this unit is hit by damage it is not immune to, it has a 25% chance to summon another knight with 1 SH."
+        self.description = "Whenever this unit loses SH, it has a 25% chance to summon another knight with 1 SH."
         self.shards = self.spell.get_stat("shards")
         self.radius = self.spell.get_stat("minion_range")
         self.phase = self.spell.get_stat("phase")
@@ -7142,7 +7145,10 @@ class PureglassKnightBuff(Buff):
         self.owner_triggers[EventOnPreDamaged] = self.on_pre_damaged
     
     def on_pre_damaged(self, evt):
-        if evt.damage <= 0 or self.owner.resists[evt.damage_type] >= 100:
+        if self.owner.shields <= 0:
+            return
+        penetration = evt.penetration if hasattr(evt, "penetration") else 0
+        if evt.damage <= 0 or self.owner.resists[evt.damage_type] - penetration >= 100:
             return
         if self.shards:
             targets = [unit for unit in self.owner.level.get_units_in_ball(self.owner, self.radius) if are_hostile(unit, self.owner)]
@@ -7187,7 +7193,7 @@ class PureglassKnightSpell(Spell):
     def get_description(self):
         return ("Summon a [living] [holy] [arcane] [glass] knight. It has fixed 1 HP, but gains [1_SH:shields] per 10 bonus to [minion_health:minion_health] this spell has, rounded up (currently [{shields}_SH:shields]).\n"
                 "The knight has a melee attack and a charge attack with [{minion_range}_range:minion_range], both of which deal [{minion_damage}_physical:physical] damage.\n"
-                "Whenever the knight is hit by damage it is not immune to, it has a 25% chance to summon another knight with [1_SH:shields].").format(**self.fmt_dict())
+                "Whenever the knight loses [SH:shields], it has a 25% chance to summon another knight with [1_SH:shields].").format(**self.fmt_dict())
 
     def summon_knight(self, target, minor=False):
         unit = Unit()
@@ -7261,7 +7267,6 @@ class TransientBomberExplosion(Spell):
         self.description = "Deals holy damage equal to the user's max HP then half fire and arcane damage, in a %i tile burst. Suicide attack; autocasts on death." % self.buff.radius
 
     def cast_instant(self, x, y):
-        self.owner.cur_hp = 0
         self.owner.kill()
 
 class EternalBomberBuff(Buff):
@@ -7971,7 +7976,6 @@ class FadingBuff(Buff):
         if owner.turns_to_death is not None:
             self.spell.caster.apply_buff(StolenEssenceBuff(), owner.turns_to_death)
             owner.level.show_effect(owner.x, owner.y, Tags.Translocation)
-            owner.cur_hp = 0
             owner.kill()
             return False
         return True
