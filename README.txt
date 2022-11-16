@@ -116,7 +116,7 @@ Level 5:
 + Bombastic Arrival (Fire/Translocation)
 + Draconian Brutality (Dragon/Nature/Translocation)
 + Electrolysis (Lightning/Nature)
-+ Forceful Channeling
++ Forceful Channeling (Sorcery/Conjuration)
 + Fractured Memories (Arcane/Chaos)
 + Inexorable Decay (Dark)
 + Orb Substitution (Orb/Translocation)
