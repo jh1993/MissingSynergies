@@ -116,6 +116,7 @@ Level 5:
 + Bombastic Arrival (Fire/Translocation)
 + Draconian Brutality (Dragon/Nature/Translocation)
 + Electrolysis (Lightning/Nature)
++ Forceful Channeling
 + Fractured Memories (Arcane/Chaos)
 + Inexorable Decay (Dark)
 + Orb Substitution (Orb/Translocation)
@@ -141,4 +142,4 @@ Level 7:
 ---
 
 Credit to Bord Listian for the Golden Trickster sprite.
-The sprite for Ataraxia is an adaptation of the icon of its namesake from Nova Drift, made by its dev Chimeric himself.
+The sprite for Ataraxia is an adaptation of the icon of its namesake from Nova Drift, made by its dev Chimeric himself and edited by me.
