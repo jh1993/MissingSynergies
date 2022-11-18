@@ -8,7 +8,7 @@ from Variants import *
 from Shrines import *
 import random, math, os, sys
 
-from mods.BugsAndScams.BugsAndScams import RemoveBuffOnPreAdvance
+from mods.BugsAndScams.BugsAndScams import RemoveBuffOnPreAdvance, MinionBuffAura
 import mods.BugsAndScams.Bugfixes
 
 if "mods.BugsAndScams.NoMoreScams" in sys.modules:
@@ -1399,62 +1399,48 @@ class RaiseDracolichSpell(Spell):
 
 class DragonFearBuff(Buff):
 
-    def __init__(self, spell, element):
-        self.spell = spell
-        self.element = element
+    def __init__(self, source, resistance_debuff, element):
+        self.source = source
         Buff.__init__(self)
+        if element:
+            self.resists[element] = -resistance_debuff
 
     def on_init(self):
-        self.name = "Fear%s" % ((" (%s)" % self.element.name) if self.element else "")
+        self.name = "Fear of Dragons"
         self.color = Tags.Dragon.color
         self.buff_type = BUFF_TYPE_CURSE
         self.stack_type = STACK_INTENSITY
-        if self.element:
-            self.resists[self.element] = -self.spell.get_stat("resistance_debuff")
-        self.originally_coward = False
-        self.owner_triggers[EventOnBuffRemove] = self.on_buff_remove
         self.asset = ["MissingSynergies", "Statuses", "dragon_fear"]
-    
-    def on_applied(self, owner):
-        other_element = None
-        for buff in self.owner.buffs:
-            if isinstance(buff, DragonFearBuff) and buff is not self:
-                if buff.element == self.element:
-                    buff.turns_left = max(buff.turns_left, self.turns_left)
-                    return ABORT_BUFF_APPLY
-                else:
-                    other_element = buff
-        if other_element:
-            self.originally_coward = other_element.originally_coward
+
+    def on_advance(self):
+        if not self.owner.level.can_see(self.owner.x, self.owner.y, self.source.x, self.source.y):
             return
-        if self.owner.is_coward and not self.owner.has_buff(CowardBuff):
-            self.originally_coward = True
-        self.owner.is_coward = True
-    
-    def on_unapplied(self):
-        if not self.owner.has_buff(DragonFearBuff) and not self.originally_coward and not self.owner.has_buff(CowardBuff):
-            self.owner.is_coward = False
-    
-    def on_buff_remove(self, evt):
-        if isinstance(evt.buff, CowardBuff):
-            self.owner.is_coward = True
+        if random.random() < 1/max(1, distance(self.owner, self.source)):
+            self.owner.apply_buff(Stun(), 1)
 
 class EyeOfTheTyrantBuff(Spells.ElementalEyeBuff):
 
-    def __init__(self, spell, element):
-        Spells.ElementalEyeBuff.__init__(self, element if element else Tags.Physical, 0, spell.get_stat("shot_cooldown"), spell)
+    def __init__(self, spell):
+        Spells.ElementalEyeBuff.__init__(self, Tags.Physical, 0, spell.get_stat("shot_cooldown"), spell)
         # To make sure the graphics display properly for a dragon with no breath weapon but don't debuff physical resist
-        self.breath_element = element
         self.name = "Eye of the Tyrant"
         self.color = Tags.Dragon.color
+        self.breath_element = None
+        self.fear_duration = spell.get_stat("fear_duration")
+        self.resistance_debuff = spell.get_stat("resistance_debuff")
         self.asset = ["MissingSynergies", "Statuses", "dragon_eye"]
+
+    def on_applied(self, owner):
+        for spell in self.owner.spells:
+            if isinstance(spell, BreathWeapon) and hasattr(spell, "damage_type"):
+                self.breath_element = spell.damage_type
+                self.element = self.breath_element
+                return
 
     def on_shoot(self, target):
         unit = self.owner.level.get_unit_at(target.x, target.y)
         if unit:
-            if self.spell.get_stat("paralyzing") and unit.has_buff(DragonFearBuff):
-                unit.apply_buff(Stun(), self.spell.get_stat("fear_duration"))
-            unit.apply_buff(DragonFearBuff(self.spell, self.breath_element), self.spell.get_stat("fear_duration"))
+            unit.apply_buff(DragonFearBuff(self.owner, self.resistance_debuff, self.breath_element), self.fear_duration)
 
 class EyeOfTheTyrantSpell(Spell):
 
@@ -1466,12 +1452,12 @@ class EyeOfTheTyrantSpell(Spell):
         self.shot_cooldown = 3
 
         self.fear_duration = 3
-        self.resistance_debuff = 25
+        self.resistance_debuff = 10
 
         self.upgrades["shot_cooldown"] = (-1, 3)
-        self.upgrades["fear_duration"] = (3, 3)
-        self.upgrades["paralyzing"] = (1, 2, "Paralyzing Fear", "[Feared:dragon] enemies that are gazed again will also be [stunned:stun] for the same duration.")
-        self.upgrades["resistance_debuff"] = (25, 2)
+        self.upgrades["fear_duration"] = (3, 4)
+        self.upgrades["resistance_debuff"] = (10, 4)
+        self.upgrades["retroactive"] = (1, 3, "Retroactive", "You now gain Tyrant Aura when you cast this spell, during which all [dragon] minions you summon will automatically gain Eye of the Tyrant for the remaining duration.")
 
         self.tags = [Tags.Dragon, Tags.Enchantment, Tags.Eye]
         self.level = 3
@@ -1482,19 +1468,16 @@ class EyeOfTheTyrantSpell(Spell):
         return [Point(unit.x, unit.y) for unit in list(self.caster.level.units) if not are_hostile(self.caster, unit) and Tags.Dragon in unit.tags]
 
     def cast_instant(self, x, y):
-        dragons = [unit for unit in list(self.caster.level.units) if not are_hostile(self.caster, unit) and Tags.Dragon in unit.tags]
-        for dragon in dragons:
-            element = None
-            for spell in dragon.spells:
-                if isinstance(spell, BreathWeapon):
-                    element = spell.damage_type
-                    break
-            dragon.apply_buff(EyeOfTheTyrantBuff(self, element), self.get_stat("duration"))
+        duration = self.get_stat("duration")
+        buff_func = lambda: EyeOfTheTyrantBuff(self)
+        for dragon in [unit for unit in list(self.caster.level.units) if not are_hostile(self.caster, unit) and Tags.Dragon in unit.tags]:
+            dragon.apply_buff(buff_func(), duration)
+        if self.get_stat("retroactive"):
+            self.caster.apply_buff(MinionBuffAura(buff_func, lambda unit: Tags.Dragon in unit.tags, "Tyrant Aura", "dragon minions"), duration)
 
     def get_description(self):
-        return ("For [{duration}_turns:duration], your [dragon] minions' gazes terrify enemies, causing them to run away from danger.\n"
-                "Every [{shot_cooldown}_turns:shot_cooldown], inflict [fear:dragon] on a random enemy unit in line of sight for [{fear_duration}_turns:dragon].\n"
-                "[Feared:dragon] enemies lose [{resistance_debuff}:damage] resistance of the dragon's breath weapon element for the duration.").format(**self.fmt_dict())
+        return ("For [{duration}_turns:duration], your [dragon] minions' gazes terrify enemies, inflicting a stack of the fear of dragons every [{shot_cooldown}_turns:shot_cooldown] on a random enemy unit in line of sight for [{fear_duration}_turns:duration].\n"
+                "Each stack of fear reduces its victim's resistance to the breath weapon element of its source by [{resistance_debuff}%:damage], and has a chance to [stun] its victim for [1_turn:duration], equal to 100% divided by the distance between the victim and the source of its fear, if the source is visible to the victim.").format(**self.fmt_dict())
 
 class DragonSwipe(Spell):
 
@@ -4066,7 +4049,7 @@ class CausticBurnBuff(Buff):
     def __init__(self, spell):
         self.spell = spell
         self.power = spell.get_stat("power")
-        self.damage = spell.get_stat("damage", base=0) if spell.get_stat("bale") else 0
+        self.damage = spell.get_stat("damage", base=4) if spell.get_stat("bale") else 0
         Buff.__init__(self)
     
     def on_init(self):
@@ -4112,7 +4095,7 @@ class BrimstoneClusterSpell(Spell):
         self.upgrades["radius"] = (1, 2)
         self.upgrades["num_targets"] = (2, 3, "More Clusters", "[2:num_targets] more explosions are created.")
         self.upgrades["power"] = (1, 4, "Power", "Brimstone Cluster inflicts [1:fire] more turn of Caustic Burn and reduces [dark] resistance by [1:dark] more per hit.\nEach turn of Caustic Burn increases the target's [poison] duration by [1:poison] more.")
-        self.upgrades["bale"] = (1, 3, "Bale Burn", "The damage per turn of Caustic Burn is increased by this spell's bonuses to the [damage] stat from skills and buffs.")
+        self.upgrades["bale"] = (1, 4, "Bale Burn", "Caustic Burn deals an additional [4_fire:fire] damage per turn, which benefits from bonuses to [damage].")
     
     def get_description(self):
         return ("Create [{num_targets}:num_targets] explosions, each centered around a random point in a [{radius}_tile:radius] burst.\n"
@@ -8783,5 +8766,21 @@ class ForcefulChanneling(Upgrade):
                 continue
             self.owner.level.queue_spell(buff.spell(buff.spell_target.x, buff.spell_target.y, channel_cast=True), prepend=True)
 
+class WhispersOfOblivion(Upgrade):
+
+    def on_init(self):
+        self.name = "Whispers of Oblivion"
+        self.asset = ["MissingSynergies", "Icons", "whispers_of_oblivion"]
+        self.tags = [Tags.Dark, Tags.Chaos]
+        self.level = 7
+        self.description = "Each turn, each enemy that is [stunned], [frozen], [petrified], [glassified], or similarly incapacitated has a 5% chance to be instantly killed."
+    
+    def on_advance(self):
+        for unit in list(self.owner.level.units):
+            if not are_hostile(unit, self.owner) or not unit.has_buff(Stun) or random.random() >= 0.05:
+                continue
+            self.owner.level.show_effect(unit.x, unit.y, Tags.Translocation)
+            unit.kill()
+
 all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell])
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion])

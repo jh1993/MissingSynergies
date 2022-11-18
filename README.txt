@@ -138,6 +138,7 @@ Level 7:
 + Breath of Annihilation (Dragon/Chaos)
 + Dying Star (Fire)
 + Redheart Spider (Holy/Nature/Dark/Conjuration)
++ Whispers of Oblivion (Dark/Chaos)
 
 ---
 
