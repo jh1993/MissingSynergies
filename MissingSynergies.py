@@ -1965,6 +1965,7 @@ class CopperFurnaceSpell(Spell):
         self.asset = ["MissingSynergies", "Icons", "copper_furnace"]
         self.tags = [Tags.Metallic, Tags.Chaos, Tags.Conjuration]
         self.level = 7
+        self.radius = 8
         self.range = 5
         self.max_charges = 1
         self.must_target_walkable = True
@@ -1983,8 +1984,11 @@ class CopperFurnaceSpell(Spell):
         stats["furnace_hp"] = self.get_stat("minion_health")*10
         return stats
     
+    def get_impacted_tiles(self, x, y):
+        return [Point(x, y)]
+
     def get_description(self):
-        return ("Summon the Copper Furnace, which has [{furnace_hp}_HP:minion_health], an aura that deals [1_fire:fire] damage to enemies in a [8_tile:radius] radius, and a beam attack with [{minion_range}_range:minion_range] that deals [{minion_damage}_lightning:lightning] damage.\n"
+        return ("Summon the Copper Furnace, which has [{furnace_hp}_HP:minion_health], an aura that deals [1_fire:fire] damage to enemies in a [{radius}_tile:radius] radius, and a beam attack with [{minion_range}_range:minion_range] that deals [{minion_damage}_lightning:lightning] damage.\n"
                 "Each turn, the Copper Furnace has a [{summon_chance}%_chance:conjuration] to summon a copper spider or copper mantis, and a [{summon_chance}%_chance:conjuration] to summon a furnace spider or furnace mantis.\n"
                 "This spell is treated as if it has a base minion health stat of [12:minion_health]. The Copper Furnace benefits 10 times from bonuses to it.\n"
                 "Casting this spell again while the Copper Furnace is already summoned will instead cause it to immediately trigger its passive summoning abilities.").format(**self.fmt_dict())
@@ -2007,6 +2011,9 @@ class CopperFurnaceSpell(Spell):
         ally = ally_type()
         ally.source = self
         apply_minion_bonuses(self, ally)
+        if not is_copper:
+            buff = ally.buffs[1] if ally_type == SpiderFurnace else ally.buffs[0]
+            buff.radius = self.get_stat("radius", base=buff.radius)
         if is_fiend == 1:
             ally.spells[0] = SimpleSummon(lambda: self.get_ally(is_copper, is_fiend=2), num_summons=3, cool_down=7)
         return ally
@@ -2052,7 +2059,7 @@ class CopperFurnaceSpell(Spell):
         unit.resists[Tags.Ice] = -100
 
         unit.spells.append(SimpleRangedAttack(damage=self.get_stat("minion_damage"), range=self.get_stat("minion_range"), beam=True, damage_type=Tags.Lightning))
-        unit.buffs.append(DamageAuraBuff(damage=1, damage_type=Tags.Fire, radius=8))
+        unit.buffs.append(DamageAuraBuff(damage=1, damage_type=Tags.Fire, radius=self.get_stat("radius")))
 
         # Janky description change
         buff = GeneratorBuff(lambda: self.get_ally(False), self.get_stat("summon_chance")/100)
