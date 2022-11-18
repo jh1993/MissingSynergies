@@ -1413,6 +1413,8 @@ class DragonFearBuff(Buff):
         self.asset = ["MissingSynergies", "Statuses", "dragon_fear"]
 
     def on_advance(self):
+        if not self.source.is_alive():
+            self.owner.remove_buff(self)
         if not self.owner.level.can_see(self.owner.x, self.owner.y, self.source.x, self.source.y):
             return
         if random.random() < 1/max(1, distance(self.owner, self.source)):
@@ -1477,7 +1479,7 @@ class EyeOfTheTyrantSpell(Spell):
 
     def get_description(self):
         return ("For [{duration}_turns:duration], your [dragon] minions' gazes terrify enemies, inflicting a stack of the fear of dragons every [{shot_cooldown}_turns:shot_cooldown] on a random enemy unit in line of sight for [{fear_duration}_turns:duration].\n"
-                "Each stack of fear reduces its victim's resistance to the breath weapon element of its source by [{resistance_debuff}%:damage], and has a chance to [stun] its victim for [1_turn:duration], equal to 100% divided by the distance between the victim and the source of its fear, if the source is visible to the victim.").format(**self.fmt_dict())
+                "Each stack of fear reduces its victim's resistance to the breath weapon element of its source by [{resistance_debuff}%:damage], and has a chance to [stun] its victim for [1_turn:duration], equal to 100% divided by the distance between the victim and the source of its fear, if the source is visible to the victim. A stack of fear is automatically removed if its source is no longer alive.").format(**self.fmt_dict())
 
 class DragonSwipe(Spell):
 
