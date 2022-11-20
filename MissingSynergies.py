@@ -1628,11 +1628,26 @@ class TwistedRemainsBuff(Buff):
         self.color = Tags.Slime.color
     def on_death(self, evt):
         total = self.owner.max_hp
+        radius = self.spell.get_stat("radius", base=3)
+        worm_hp = self.spell.get_stat("minion_health", base=10)
         while total > 0:
-            unit_type = random.choice([GiantSpider, GreenSlime, WormBallToxic])
-            unit = unit_type()
-            total -= unit.max_hp
-            apply_minion_bonuses(self.spell, unit)
+            def WormBallToxicBuffed(HP):
+                unit = WormBallToxic(HP)
+                unit.spells[0].damage = self.spell.get_stat("minion_damage", base=unit.spells[0].damage)
+                buff = unit.get_buff(SplittingBuff)
+                if buff:
+                    buff.spawner = lambda: WormBallToxicBuffed(unit.max_hp//2)
+                buff = unit.get_buff(DamageAuraBuff)
+                if buff:
+                    buff.radius = radius
+                return unit
+            unit_type = random.choice([GiantSpider, GreenSlime, WormBallToxicBuffed])
+            total -= 10
+            if unit_type != WormBallToxicBuffed:
+                unit = unit_type()
+                apply_minion_bonuses(self.spell, unit)
+            else:
+                unit = WormBallToxicBuffed(worm_hp)
             self.spell.summon(unit, target=self.owner, radius=5)
 
 class ChaosAdaptationBuff(Buff):
@@ -1661,15 +1676,19 @@ class TwistedMutationSpell(Spell):
         self.range = 8
         self.max_charges = 2
         self.minion_damage = 3
+        self.radius = 4
 
         self.upgrades["hp_bonus"] = (30, 2, "Twisted Vitality", "The target gains [30_HP:minion_health].")
-        self.upgrades["on_death"] = (1, 4, "Twisted Remains", "On death, the target spawns giant spiders, green slimes, and large toxic worm balls based on its max HP.")
+        self.upgrades["on_death"] = (1, 4, "Twisted Remains", "On death, the target spawns a giant spider, green slime, or large toxic worm ball for every 10 max HP it had.")
         self.upgrades["adapt"] = (1, 3, "Chaos Adaptation", "The target gains [50_physical:physical], [50_fire:fire], and [50_lightning:lightning] resistance.\nWhen it takes damage, its resistance to that damage type is increased by a random amount and resistance to another random damage type is decreased by the same amount, without increasing any resistance above 100 or decreasing below 0.")
     
+    def get_impacted_tiles(self, x, y):
+        return [Point(x, y)]
+
     def get_description(self):
         return ("Can only target [living], [nature], or [demon] allies.\n"
                 "The target becomes a [spider], [slime], and [poison] unit.\n"
-                "It gains a passive web-weaving ability, [100_poison:poison] resistance, an aura that deals [2_poison:poison] damage to enemies in a [4_tile:radius] radius each turn, and a slime-like ability to randomly gain max HP and spawn mutant slime offshoots.\n"
+                "It gains a passive web-weaving ability, [100_poison:poison] resistance, an aura that deals [2_poison:poison] damage to enemies in a [{radius}_tile:radius] radius each turn, and a slime-like ability to randomly gain max HP and spawn mutant slime offshoots.\n"
                 "The mutant slimes have the same max HP as the unit that spawned them, melee attacks that deal [{minion_damage}_poison:poison] damage, and all abilities granted by this spell.").format(**self.fmt_dict())
     
     def can_cast(self, x, y):
@@ -1705,7 +1724,7 @@ class TwistedMutationSpell(Spell):
         buff.buff_type = BUFF_TYPE_PASSIVE
         slime.buffs.append(buff)
 
-        buff = DamageAuraBuff(damage=2, damage_type=Tags.Poison, radius=4)
+        buff = DamageAuraBuff(damage=2, damage_type=Tags.Poison, radius=self.get_stat("radius"))
         buff.buff_type = BUFF_TYPE_PASSIVE
         slime.buffs.append(buff)
 
@@ -1741,7 +1760,7 @@ class TwistedMutationSpell(Spell):
         if Tags.Poison not in unit.tags:
             unit.tags.append(Tags.Poison)
             unit.resists[Tags.Poison] += 100
-            buff = DamageAuraBuff(damage=2, damage_type=Tags.Poison, radius=4)
+            buff = DamageAuraBuff(damage=2, damage_type=Tags.Poison, radius=self.get_stat("radius"))
             buff.buff_type = BUFF_TYPE_PASSIVE
             unit.apply_buff(buff)
         
