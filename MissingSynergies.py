@@ -3247,7 +3247,7 @@ class SpiritBombSpell(OrbSpell):
         self.upgrades["warcry"] = (1, 2, "War Cry", "Each turn, the spirit bomb has a 50% chance of inflicting [stun] or [berserk] on a random enemy in your line of sight.")
     
     def get_description(self):
-        return ("Summon an orb of extremely concentrated energy next to the caster, consuming all remaining charges of this spell.\n"
+        return ("Summon an orb of extremely concentrated energy next to the caster, consuming every remaining charge of this spell, each time counting as casting the spell once.\n"
                 "When the orb dies, it deals [{minion_damage}_holy:holy] damage to all enemies and destroys all walls in a [{radius}_tile:radius] burst, gaining +1 radius and +10 damage for every 2 turns it had existed, every 2 additional charge consumed, and each 20 bonus to max HP it had. This does not work if the orb's death is faked.\n"
                 "The orb has no will of its own, each turn it will float one tile towards the target.\n"
                 "The orb can be destroyed by dark damage.").format(**self.fmt_dict())
@@ -3256,7 +3256,13 @@ class SpiritBombSpell(OrbSpell):
         orb.asset = ["MissingSynergies", "Units", "spirit_bomb"]
         orb.resists[Tags.Dark] = 0
         orb.buffs.append(SpiritBombBuff(self, self.cur_charges))
+
+    def cast(self, x, y):
+        yield from OrbSpell.cast(self, x, y)
+        charges = self.cur_charges
         self.cur_charges = 0
+        for _ in range(charges):
+            self.caster.level.event_manager.raise_event(EventOnSpellCast(self, self.caster, x, y), self.caster)
 
     def on_orb_collide(self, orb, next_point):
         orb.level.show_effect(next_point.x, next_point.y, Tags.Holy)
@@ -3386,16 +3392,15 @@ class VolatileOrbSpell(OrbSpell):
         yield
 
 class OrbSubstitutionStack(Buff):
-
+    
     def __init__(self, tag, amount):
         self.tag = tag
         Buff.__init__(self)
         self.resists[self.tag] = amount
+        self.buff_type = BUFF_TYPE_PASSIVE
 
-    def on_init(self):
-        self.name = "%s Protection" % self.tag.name
-        self.stack_type = STACK_NONE
-        self.color = self.tag.color
+    def on_pre_advance(self):
+        self.owner.remove_buff(self)
 
 class OrbSubstitution(Upgrade):
 
@@ -3408,14 +3413,16 @@ class OrbSubstitution(Upgrade):
     
     def get_description(self):
         return ("Whenever you're about to take damage, if you have an active [orb] that can be harmed by that damage type and is on a walkable tile, swap places with that orb.\n"
-                "You gain resistance to that damage type for [1_turn:duration] equal to [100:damage] minus the orb's resistance to that damage type, up to 100.\n"
-                "You and the orb then both take that amount of damage.\n"
-                "The duration of this damage resistance is fixed and does not benefit from bonuses.").format(**self.fmt_dict())
+                "You gain resistance to that damage type equal to 100 minus the orb's resistance to that damage type, up to 100. This lasts until the beginning of your next turn.\n"
+                "You and the orb then both take that amount of damage.").format(**self.fmt_dict())
 
     def on_pre_damaged(self, evt):
         if evt.damage <= 0:
             return
-        orbs = [unit for unit in self.owner.level.units if not are_hostile(self.owner, unit) and unit.has_buff(OrbBuff) and unit.resists[evt.damage_type] < 100]
+        penetration = evt.penetration if hasattr(evt, "penetration") else 0
+        if self.owner.resists[evt.damage_type] - penetration >= 100:
+            return
+        orbs = [unit for unit in self.owner.level.units if not are_hostile(self.owner, unit) and unit.has_buff(OrbBuff) and unit.resists[evt.damage_type] - penetration < 100]
         if not orbs:
             return
         orb = random.choice(orbs)
@@ -3426,7 +3433,7 @@ class OrbSubstitution(Upgrade):
                 self.owner.level.show_effect(p.x, p.y, Tags.Translocation)
             self.owner.level.act_move(self.owner, orb.x, orb.y, teleport=True, force_swap=True)
             amount = min(100, 100 - orb.resists[evt.damage_type])
-            self.owner.apply_buff(OrbSubstitutionStack(evt.damage_type, amount), 1)
+            self.owner.apply_buff(OrbSubstitutionStack(evt.damage_type, amount))
             orb.deal_damage(evt.damage, evt.damage_type, evt.source)
 
 class LocusOfEnergy(Upgrade):
@@ -5551,7 +5558,7 @@ class TimeDilationSpell(Spell):
         self.upgrades["max_charges"] = (6, 3)
         self.upgrades["turns"] = (2, 3, "More Turns", "The affected buffs, debuffs, and passive effects advance by [2:duration] more turns without losing duration.")
         self.upgrades["selective"] = (1, 3, "Selective Dilation", "Time Dilation no longer affects the debuffs of allies, or the buffs and passive effects of enemies.")
-        self.upgrades["self"] = (1, 4, "Self Dilation", "You can now target yourself with Time Dilation to affect yourself.\nThis consumes 2 extra charges of the spell and cannot be done if you have less than 3 charges remaining.")
+        self.upgrades["self"] = (1, 4, "Self Dilation", "You can now target yourself with Time Dilation to affect yourself.\nThis consumes 2 extra charges of the spell, counts as casting the spell 2 additional times, and cannot be done if you have less than 3 charges remaining.")
 
     def get_description(self):
         return ("Trigger the per-turn effects of the buffs, debuffs, and passive effects of all units in a [{radius}_tile:radius] radius [{turns}_times:duration], without losing any of their actual remaining durations.\nThe caster is unaffected.").format(**self.fmt_dict())
@@ -5574,6 +5581,8 @@ class TimeDilationSpell(Spell):
         if x == self.caster.x and y == self.caster.y:
             self.caster.level.show_effect(x, y, Tags.Arcane)
             self.cur_charges -= 2
+            for _ in range(2):
+                self.caster.level.event_manager.raise_event(EventOnSpellCast(self, self.caster, x, y), self.caster)
             for _ in range(turns):
                 for buff in list(self.caster.buffs):
                     if selective and buff.buff_type == BUFF_TYPE_CURSE:
@@ -7754,7 +7763,7 @@ class EmpyrealAscensionSpell(Spell):
         self.upgrades["champion"] = (1, 5, "Divine Champion", "Empyreal Form also grants [15_minion_duration:minion_duration], [10_minion_health:minion_health], and [5_minion_damage:minion_damage].")
 
     def get_description(self):
-        return ("Assume Empyreal Form for [{duration}_turns:duration], consuming all remaining charges of this spell to gain 50 max and current HP per charge spent, and [100_fire:fire] and [100_holy:holy] resistance. The max HP is lost when the buff expires.\n"
+        return ("Assume Empyreal Form for [{duration}_turns:duration], consuming every remaining charge of this spell to count as casting the spell once and gain 50 max HP per charge spent, and gain [100_fire:fire] and [100_holy:holy] resistance.\n"
                 "While in Empyreal Form, you release an explosion in a [{radius}_tile:radius] burst around yourself each turn, dealing [{damage}_fire:fire] or [{damage}_holy:holy] damage to enemies near you, gradually decreasing to 0 at the edges of the radius.\n"
                 "You can cast this spell at 0 charge remaining during Empyreal Form, teleporting to the target tile, healing yourself for [{damage}:heal] HP and immediately releasing an explosion.").format(**self.fmt_dict())
 
@@ -7824,7 +7833,10 @@ class EmpyrealAscensionSpell(Spell):
             yield from self.boom()
         else:
             self.caster.apply_buff(EmpyrealFormBuff(self, self.cur_charges + 1), self.get_stat("duration"))
+            charges = self.cur_charges
             self.cur_charges = 0
+            for _ in range(charges):
+                self.caster.level.event_manager.raise_event(EventOnSpellCast(self, self.caster, x, y), self.caster)
 
 class IronTurtleAura(DamageAuraBuff):
 
