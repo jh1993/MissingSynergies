@@ -3434,7 +3434,7 @@ class OrbSubstitution(Upgrade):
             self.owner.level.act_move(self.owner, orb.x, orb.y, teleport=True, force_swap=True)
             amount = min(100, 100 - orb.resists[evt.damage_type])
             self.owner.apply_buff(OrbSubstitutionStack(evt.damage_type, amount))
-            orb.deal_damage(evt.damage, evt.damage_type, evt.source)
+            orb.deal_damage(evt.damage, evt.damage_type, evt.source, penetration=penetration)
 
 class LocusOfEnergy(Upgrade):
 
