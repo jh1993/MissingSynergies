@@ -8,8 +8,8 @@ from Variants import *
 from Shrines import *
 import random, math, os, sys
 
-from mods.BugsAndScams.BugsAndScams import RemoveBuffOnPreAdvance, MinionBuffAura
-import mods.BugsAndScams.Bugfixes
+from mods.Bugfixes.Bugfixes import RemoveBuffOnPreAdvance, MinionBuffAura
+import mods.Bugfixes.Bugfixes
 
 if "mods.BugsAndScams.NoMoreScams" in sys.modules:
     is_immune = sys.modules["mods.BugsAndScams.NoMoreScams"].is_immune
@@ -1710,25 +1710,10 @@ class TwistedMutationSpell(Spell):
         slime.spells[0].damage = self.get_stat("minion_damage")
         slime.max_hp = max_hp
         slime.tags = [Tags.Slime, Tags.Spider, Tags.Poison]
-        slime.source = self
 
-        buff = None
-        for b in slime.buffs:
-            if isinstance(b, SlimeBuff):
-                buff = b
-        if buff:
-            slime.buffs.remove(buff)
-        buff = SlimeBuff(lambda: self.get_mutant_slime(max_hp))
-        buff.buff_type = BUFF_TYPE_PASSIVE
-        slime.buffs.append(buff)
-
-        buff = SpiderBuff()
-        buff.buff_type = BUFF_TYPE_PASSIVE
-        slime.buffs.append(buff)
-
-        buff = DamageAuraBuff(damage=2, damage_type=Tags.Poison, radius=self.get_stat("radius"))
-        buff.buff_type = BUFF_TYPE_PASSIVE
-        slime.buffs.append(buff)
+        slime.buffs[0] = SlimeBuff(lambda: self.get_mutant_slime(max_hp))
+        slime.buffs.append(SpiderBuff())
+        slime.buffs.append(DamageAuraBuff(damage=2, damage_type=Tags.Poison, radius=self.get_stat("radius")))
 
         if self.get_stat("on_death"):
             slime.buffs.append(TwistedRemainsBuff(self))
@@ -2490,38 +2475,6 @@ class DivineGazeSpell(Spell):
             for _ in range(1 + (self.get_stat("order") if eye and eye.stack_type != STACK_INTENSITY else 0)):
                 self.caster.level.queue_spell(self.eye_beam(Point(x, y), eye))
 
-def scam_summon_floating_eye_cast_instant(self, x, y):
-    eye = FloatingEye()
-    eye.spells = []
-    eye.team = TEAM_PLAYER
-    eye.max_hp += self.get_stat('minion_health')
-    eye.turns_to_death = self.get_stat('minion_duration')
-
-    p = self.caster.level.get_summon_point(x, y, flying=True)
-    if p:
-        # Ensure point exists before having the eye cast eye spells
-        self.summon(eye, p)
-
-        for spell in self.caster.spells:
-            if Tags.Eye in spell.tags and spell.range == 0:
-                # Temporarily change caster of spell
-                spell = type(spell)()
-                spell.caster = eye
-                spell.owner = eye
-                spell.statholder = self.caster
-                self.caster.level.act_cast(eye, spell, eye.x, eye.y, pay_costs=False)
-
-def new_summon_floating_eye_get_description(self):
-    return ("Summon a floating eye.\n"
-            "Floating eyes have [{minion_health}_HP:minion_health], [{shields}_SH:shields], float in place, and passively blink.\n"
-            "Floating eyes have no attacks of their own, but will cast any self-targeted [eye] spells you know upon being summoned.\n"
-            "Floating eyes vanish after [{minion_duration}_turns:minion_duration].").format(**self.fmt_dict())
-
-SummonFloatingEye.get_description = new_summon_floating_eye_get_description
-
-if "mods.BugsAndScams.NoMoreScams" not in sys.modules:
-    SummonFloatingEye.cast_instant = scam_summon_floating_eye_cast_instant
-
 class WarpLensStrike(LeapAttack):
 
     def __init__(self, spell):
@@ -2765,8 +2718,6 @@ class MortalCoilSpell(Spell):
     def cast(self, x, y):
         yield from self.chain(self.caster, Point(x, y), [])
 
-BestowImmortality.get_description = lambda self: "Target unit gains the ability to reincarnate on death for [{duration}_turns:duration].".format(**self.fmt_dict())
-
 class StandBackBuff(Buff):
 
     def __init__(self, spell):
@@ -2792,9 +2743,11 @@ class StandBackBuff(Buff):
             yield
 
 class MorbidSphereHauntedBuff(Haunted):
+
     def __init__(self, spell):
         self.spell = spell
         Haunted.__init__(self)
+
     def on_advance(self):
         for _ in range(2):
             ghost = Ghost()
@@ -2889,6 +2842,7 @@ class MorbidSphereSpell(OrbSpell):
                 unit.buffs[morph_index] = MatureInto(lambda: self.get_unit(vamp_type, is_bat=False), self.get_stat("timer"))
             else:
                 unit.buffs[morph_index] = RespawnAs(lambda: self.get_unit(vamp_type, is_bat=True))
+        unit.buffs[morph_index].apply_bonuses = False
         if is_bat and self.get_stat("push"):
             unit.buffs.append(StandBackBuff(self))
 
@@ -6120,14 +6074,11 @@ class MadWerewolfSpell(Spell):
 
     def get_werewolf(self):
 
-        unit = Unit()
+        unit = Werewolf()
         unit.name = "Mad Werewolf"
         unit.asset = ["MissingSynergies", "Units", "mad_werewolf"]
-        unit.tags = [Tags.Living, Tags.Arcane, Tags.Nature, Tags.Dark]
+        unit.tags.append(Tags.Arcane)
         unit.resists[Tags.Arcane] = 100
-        unit.resists[Tags.Dark] = 75
-        unit.resists[Tags.Holy] = -50
-        unit.max_hp = self.get_stat("minion_health")
         unit.shields = self.get_stat("shields")
         if self.get_stat("holy"):
             unit.tags.append(Tags.Holy)
@@ -6138,25 +6089,26 @@ class MadWerewolfSpell(Spell):
             unit.apply_buff(PhaseInsanityBuff(self))
             randomly_teleport(unit, radius=5)
         
-        damage = self.get_stat("minion_damage")
-        melee = SimpleMeleeAttack(damage=damage, damage_type=Tags.Arcane, onhit=onhit)
+        melee = unit.spells[0]
+        melee.damage_type = Tags.Arcane
+        melee.onhit = onhit
         melee.description = "Inflicts Phase Insanity on the target and teleports it up to 5 tiles away."
-        leap = LeapAttack(damage=damage, range=self.get_stat("minion_range"), damage_type=Tags.Arcane, is_leap=False, is_ghost=True)
+        leap = unit.spells[1]
+        leap.damage_type = Tags.Arcane
+        leap.is_leap = False
+        leap.is_ghost = True
         leap.name = "Phase Pounce"
-        unit.spells = [melee, leap]
         unit.buffs = [PhaseInsanityBuff(self), RespawnAs(self.get_wild_man)]
 
         return unit
     
     def get_wild_man(self):
-        unit = Unit()
+        unit = WildMan()
         unit.name = "Mad Wild Man"
         unit.asset = ["MissingSynergies", "Units", "mad_wild_man"]
-        unit.tags = [Tags.Living, Tags.Arcane]
+        unit.tags.append(Tags.Arcane)
         unit.resists[Tags.Arcane] = 100
-        unit.max_hp = self.get_stat("minion_health", base=8)
         unit.shields = self.get_stat("shields")
-        unit.is_coward = True
         unit.spells = [InvokeMadnessSpell(self)]
         unit.buffs = [PhaseInsanityBuff(self), MatureInto(self.get_werewolf, 20)]
         return unit
@@ -6180,7 +6132,9 @@ class MadWerewolfSpell(Spell):
         return unit
 
     def cast_instant(self, x, y):
-        self.summon(self.get_werewolf(), target=Point(x, y))
+        unit = self.get_werewolf()
+        apply_minion_bonuses(self, unit)
+        self.summon(unit, target=Point(x, y))
 
 class ParlorTrickDummySpell(Spell):
     def __init__(self, tag):
