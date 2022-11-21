@@ -1138,11 +1138,19 @@ class ReturningArrowSpell(Spell):
         yield from self.arrow(self.caster, Point(x, y))
 
 class PermaBerserkBuff(BerserkBuff):
+
     def __init__(self):
         BerserkBuff.__init__(self)
         self.name = "Irremovable Berserk"
+    
     def on_unapplied(self):
-        self.owner.apply_buff(PermaBerserkBuff())
+        if self.owner.is_alive():
+            self.owner.apply_buff(PermaBerserkBuff())
+
+    def on_advance(self):
+        if all([unit.team == TEAM_PLAYER for unit in self.owner.level.units if not unit.has_buff(PermaBerserkBuff)]):
+            self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
+            self.owner.kill(trigger_death_event=False)
 
 class WordOfDetonationSpell(Spell):
 
@@ -1160,7 +1168,7 @@ class WordOfDetonationSpell(Spell):
     
     def get_description(self):
         return ("Summon a fire bomber or void bomber next to every unit except the caster.\n"
-                "The bombers are hostile and permanently [berserked:berserk].").format(**self.fmt_dict())
+                "The bombers are hostile and permanently [berserked:berserk]. They disappear if there are no other enemies in the realm.").format(**self.fmt_dict())
     
     def get_impacted_tiles(self, x, y):
         return [u for u in self.owner.level.units if u is not self.caster]
@@ -1169,13 +1177,14 @@ class WordOfDetonationSpell(Spell):
 
         units = list(self.caster.level.units)
         random.shuffle(units)
+        greater = self.get_stat("greater")
 
         for unit in units:
 
             if unit is self.caster:
                 continue
             
-            if self.get_stat("greater") and random.random() < min(unit.max_hp/100, 1):
+            if greater and random.random() < min(unit.max_hp/100, 1):
                 bomber_type = random.choice([FireBomberGiant, VoidBomberGiant])
             else:
                 bomber_type = random.choice([FireBomber, VoidBomber])
@@ -1207,7 +1216,7 @@ class WordOfUpheavalSpell(Spell):
     
     def get_description(self):
         return ("Each unit that isn't [living] or [nature] has a 50% chance to take [{damage}_physical:physical] damage.\n"
-                "Each empty floor tile has a 25% chance to have an earth elemental summoned onto it. The elemental is hostile and permanently [berserked:berserk].\n"
+                "Each empty floor tile has a 25% chance to have an earth elemental summoned onto it. The elemental is hostile and permanently [berserked:berserk]. It disappears if there are no other enemies in the realm.\n"
                 "Turn all chasms into floors.\n"
                 "Turn all walls into chasms.").format(**self.fmt_dict())
     
@@ -1221,6 +1230,7 @@ class WordOfUpheavalSpell(Spell):
         dummy_caster = Unit()
         dummy_caster.level = self.caster.level
         earth_summon.caster = dummy_caster
+        hallow = self.get_stat("hallow")
 
         for tile in self.caster.level.iter_tiles():
                 
@@ -1232,7 +1242,7 @@ class WordOfUpheavalSpell(Spell):
                 continue
             
             if self.caster.level.can_walk(tile.x, tile.y) and random.random() < 0.25:
-                if self.get_stat("hallow") and random.random() < 0.5:
+                if hallow and random.random() < 0.5:
                     elemental = HolyEarthElemental()
                     apply_minion_bonuses(self, elemental)
                     self.summon(elemental, target=tile)
@@ -4164,13 +4174,17 @@ class BrimstoneClusterSpell(Spell):
             existing.update_name()
 
 class ScapegoatBuff(Buff):
+
     def on_init(self):
-        self.description = "Cannot move or act.\n\nAutomatically dies if there are no enemies in this level that are not scapegoats."
+        self.description = "Cannot move or act.\n\nAutomatically disappears if there are no enemies in this level that are not scapegoats."
+    
     def on_attempt_advance(self):
         return False
+    
     def on_advance(self):
         if all(u.team == TEAM_PLAYER for u in self.owner.level.units if u.name != "Scapegoat"):
-            self.owner.kill()
+            self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
+            self.owner.kill(trigger_death_event=False)
 
 class CallScapegoatSpell(Spell):
 
@@ -4193,7 +4207,7 @@ class CallScapegoatSpell(Spell):
     def get_description(self):
         return ("Summon [{num_summons}:num_summons] scapegoats.\n"
                 "Scapegoats are [living], flying enemies with [{minion_health}_HP:minion_health], no resistances, and immunity to buffs (but not debuffs). They cannot move or act.\n"
-                "Scapegoats die automatically if there are no other enemies in the level.").format(**self.fmt_dict())
+                "Scapegoats disappear automatically if there are no other enemies in the level.").format(**self.fmt_dict())
 
     def cast_instant(self, x, y):
 
