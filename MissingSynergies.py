@@ -1631,23 +1631,16 @@ class TwistedRemainsBuff(Buff):
         radius = self.spell.get_stat("radius", base=3)
         worm_hp = self.spell.get_stat("minion_health", base=10)
         while total > 0:
-            def WormBallToxicBuffed(HP):
-                unit = WormBallToxic(HP)
-                unit.spells[0].damage = self.spell.get_stat("minion_damage", base=unit.spells[0].damage)
-                buff = unit.get_buff(SplittingBuff)
-                if buff:
-                    buff.spawner = lambda: WormBallToxicBuffed(unit.max_hp//2)
-                buff = unit.get_buff(DamageAuraBuff)
-                if buff:
-                    buff.radius = radius
-                return unit
-            unit_type = random.choice([GiantSpider, GreenSlime, WormBallToxicBuffed])
+            unit_type = random.choice([GiantSpider, GreenSlime, WormBallToxic])
             total -= 10
-            if unit_type != WormBallToxicBuffed:
+            if unit_type != WormBallToxic:
                 unit = unit_type()
                 apply_minion_bonuses(self.spell, unit)
             else:
-                unit = WormBallToxicBuffed(worm_hp)
+                unit = WormBallToxic(worm_hp)
+                buff = unit.get_buff(DamageAuraBuff)
+                if buff:
+                    buff.radius = radius
             self.spell.summon(unit, target=self.owner, radius=5)
 
 class ChaosAdaptationBuff(Buff):
