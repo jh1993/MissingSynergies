@@ -750,21 +750,20 @@ class MaskOfTroublesBuff(Buff):
     
     def on_moved(self, evt):
         if evt.teleport:
-            self.spell.summon(self.get_troubler(), radius=5, sort_dist=False)
+            unit = self.get_troubler()
+            apply_minion_bonuses(self.spell, unit)
+            self.spell.summon(unit, radius=5, sort_dist=False)
     
     def get_troubler(self, baby=False):
         if not baby:
             unit = Troubler()
         else:
             unit = TroublerTiny()
-        apply_minion_bonuses(self.spell, unit)
         unit.shields += self.spell.get_stat("shields")
         if self.spell.get_stat("endless") and not baby:
             unit.buffs.append(RespawnAs(lambda: self.get_troubler(baby=True)))
         elif baby:
-            buff = unit.get_buff(MatureInto)
-            if buff:
-                buff.spawner = lambda: self.get_troubler()
+            unit.buffs[1].spawner = lambda: self.get_troubler()
         unit.source = self.spell
         return unit
     
