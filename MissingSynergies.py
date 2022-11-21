@@ -3533,7 +3533,7 @@ class AshenAvatarBuff(BlindBuff):
         phantom.resists[Tags.Dark] = 100
         phantom.resists[Tags.Poison] = 100
         phantom.max_hp = evt.unit.max_hp
-        phantom.spells[0] = SimpleRangedAttack(name="Ash Bolt", damage=self.spell.get_stat("minion_damage", base=math.ceil(phantom.max_hp*self.small_mult)), damage_type=[Tags.Fire, Tags.Dark, Tags.Poison], range=self.minion_range, buff=BlindBuff, buff_duration=1)
+        phantom.spells[0] = SimpleRangedAttack(name="Ash Bolt", damage=self.spell.get_stat("minion_damage") + math.ceil(phantom.max_hp*self.small_mult), damage_type=[Tags.Fire, Tags.Dark, Tags.Poison], range=self.minion_range, buff=BlindBuff, buff_duration=1)
         phantom.turns_to_death = self.minion_duration
         self.spell.summon(phantom, target=evt.unit, radius=5)
 
@@ -3550,6 +3550,7 @@ class AshenAvatarSpell(Spell):
         self.duration = 8
         self.minion_duration = 10
         self.minion_range = 5
+        self.minion_damage = 1
         self.mult = 1
         self.resists = 75
 
@@ -3567,7 +3568,7 @@ class AshenAvatarSpell(Spell):
     def get_description(self):
         return ("[Blind] yourself for [{duration}_turns:duration], during which you gain [{resists}_fire:fire], [{resists}_dark:dark], and [{resists}_poison:poison] resistance, and the following benefits.\n"
                 "All [fire] damage will [blind] enemies for a duration equal to [{small_mult}%:duration] of the damage. If the enemy is already [blind], instead inflict [poison] with a duration equal to [{big_mult}%:duration] of the damage.\n"
-                "Whenever a [fire] unit other than an ashen phantom dies, summon an ashen phantom near it with the same max HP for [{minion_duration}_turns:minion_duration]; the phantom is a [fire] [dark] [nature] [undead]. Each phantom has an ash bolt with [{minion_range}_range:minion_range] that randomly deals [fire], [dark], or [poison] damage equal to [{small_mult}%:minion_damage] of its initial max HP plus [minion_damage:minion_damage] bonuses, and [blinds:blind] for [1_turn:duration].").format(**self.fmt_dict())
+                "Whenever a [fire] unit other than an ashen phantom dies, summon an ashen phantom near it with the same max HP for [{minion_duration}_turns:minion_duration]; the phantom is a [fire] [dark] [nature] [undead]. Each phantom has an ash bolt with [{minion_range}_range:minion_range] that randomly deals [fire], [dark], or [poison] damage equal to [{minion_damage}:minion_damage] plus [{small_mult}%:minion_damage] of its initial max HP, and [blinds:blind] for [1_turn:duration].").format(**self.fmt_dict())
     
     def cast_instant(self, x, y):
         self.caster.apply_buff(AshenAvatarBuff(self), self.get_stat("duration"))
