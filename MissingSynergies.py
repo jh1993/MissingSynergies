@@ -8791,14 +8791,14 @@ class ConfusedStruggleSpell(Spell):
     
     def on_init(self):
         self.name = "Confused Struggle"
-        self.damage_type = Tags.Physical
-        self.damage = self.spell.get_stat("damage")
         self.melee = True
         self.range = 1.5
         self.can_target_self = True
         self.can_target_empty = False
         self.cool_down = self.spell.get_stat("confusion_cooldown")
-        self.description = "Damages the caster or an adjacent ally. Must be used whenever possible."
+
+    def get_description(self):
+        return "Deals %i physical damage to the caster or an adjacent ally. Must be used whenever possible." % self.spell.get_stat("damage")
 
     def can_cast(self, x, y):
         if self.caster.has_buff(StunImmune):
@@ -8814,7 +8814,7 @@ class ConfusedStruggleSpell(Spell):
             return Point(target.x, target.y)
 
     def cast_instant(self, x, y):
-        self.caster.level.deal_damage(x, y, self.get_stat("damage"), Tags.Physical, self.spell)
+        self.caster.level.deal_damage(x, y, self.spell.get_stat("damage"), Tags.Physical, self.spell)
         if self.caster.gets_clarity:
             # Apply clarity for 2 turns so that 1 turn of it remains after the turn that was spent struggling.
             self.caster.apply_buff(StunImmune(), 2)
