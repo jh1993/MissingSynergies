@@ -73,6 +73,7 @@ Level 5:
 + Warp-Lens Golem (Arcane/Translocation/Eye/Conjuration)
 + Wastefire (Fire/Dark/Sorcery)
 + Well of Oblivion (Dark/Translocation/Sorcery)
++ Xenodruid Form (Arcane/Conjuration/Enchantment)
 
 Level 6:
 + Astral Meltdown (Arcane/Chaos/Sorcery)

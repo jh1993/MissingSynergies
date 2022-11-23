@@ -8783,5 +8783,178 @@ class WhispersOfOblivion(Upgrade):
             self.owner.level.show_effect(unit.x, unit.y, Tags.Translocation)
             unit.kill()
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell])
+class ConfusedStruggleSpell(Spell):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Spell.__init__(self)
+    
+    def on_init(self):
+        self.name = "Confused Struggle"
+        self.damage_type = Tags.Physical
+        self.damage = self.spell.get_stat("damage")
+        self.melee = True
+        self.range = 1.5
+        self.can_target_self = True
+        self.can_target_empty = False
+        self.cool_down = self.spell.get_stat("confusion_cooldown")
+        self.description = "Damages the caster or an adjacent ally. Must be used whenever possible."
+
+    def can_cast(self, x, y):
+        if self.caster.has_buff(StunImmune):
+            return False
+        return Spell.can_cast(self, x, y)
+
+    def get_ai_target(self):
+        targets = [u for u in self.caster.level.units if not are_hostile(u, self.caster) and self.can_cast(u.x, u.y)]
+        if not targets:
+            return None
+        else:
+            target = random.choice(targets)
+            return Point(target.x, target.y)
+
+    def cast_instant(self, x, y):
+        self.caster.level.deal_damage(x, y, self.get_stat("damage"), Tags.Physical, self.spell)
+        if self.caster.gets_clarity:
+            # Apply clarity for 2 turns so that 1 turn of it remains after the turn that was spent struggling.
+            self.caster.apply_buff(StunImmune(), 2)
+
+class ConfusionBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+    
+    def on_init(self):
+        self.name = "Confusion"
+        self.asset = ["MissingSynergies", "Statuses", "confusion"]
+        self.buff_type = BUFF_TYPE_CURSE
+        self.color = Tags.Arcane.color
+        self.spells = [ConfusedStruggleSpell(self.spell)]
+        self.lethargy = self.spell.get_stat("lethargy")
+        if self.spell.get_stat("parasite"):
+            self.owner_triggers[EventOnDeath] = self.on_death
+
+    def put_struggle_first(self):
+        if self.spells[0] in self.owner.spells:
+            index = self.owner.spells.index(self.spells[0])
+            if index != 0:
+                self.owner.spells.remove(self.spells[0])
+                self.owner.spells.insert(0, self.spells[0])
+        else:
+            self.owner.spells.insert(0, self.spells[0])
+
+    def on_applied(self, owner):
+        self.spells[0].added_by_buff = True
+        self.spells[0].caster = owner
+        self.spells[0].owner = owner
+        self.put_struggle_first()
+
+    def on_pre_advance(self):
+        self.put_struggle_first()
+        if self.lethargy and not self.owner.gets_clarity:
+            for (spell, cooldown) in self.owner.cool_downs.items():
+                if isinstance(spell, ConfusedStruggleSpell):
+                    continue
+                if cooldown < spell.cool_down and random.random() < 0.5:
+                    self.owner.cool_downs[spell] += 1
+
+    def on_attempt_apply(self, owner):
+        existing = owner.get_buff(ConfusionBuff)
+        if not existing:
+            return True
+        if existing.spells[0] in owner.cool_downs and owner.cool_downs[existing.spells[0]] > 0:
+            owner.cool_downs[existing.spells[0]] -= 1
+        return False
+
+    def on_death(self, evt):
+        self.spell.summon_bush(self.owner, sort_dist=True)
+
+class XenodruidFormBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+
+    def on_init(self):
+        self.name = "Xenodruid Form"
+        self.transform_asset_name = "brain_tree"
+        self.stack_type = STACK_TYPE_TRANSFORM
+        self.color = Tags.Arcane.color
+        self.num_summons = self.spell.get_stat("num_summons")
+        if self.spell.get_stat("germination"):
+            self.owner_triggers[EventOnSpellCast] = self.on_spell_cast
+
+    def on_advance(self):
+        for _ in range(self.num_summons):
+            self.spell.summon_bush(self.owner)
+
+    def on_spell_cast(self, evt):
+        for _ in range(evt.spell.level):
+            self.spell.summon_bush(Point(evt.x, evt.y))
+
+class ConfusionSpell(SimpleCurse):
+
+    def __init__(self, spell):
+        SimpleCurse.__init__(self, lambda: ConfusionBuff(spell), 0, Tags.Arcane)
+        self.range = spell.get_stat("minion_range")
+        self.requires_los = False
+        self.name = "Confusion"
+        self.description = "Ignores line of sight. Inflicts confusion or decreases confusion cooldown by 1 turn."
+
+    def can_cast(self, x, y):
+        if not Spell.can_cast(self, x, y):
+            return False
+        unit = self.caster.level.get_unit_at(x, y)
+        if not unit:
+            return False
+        if unit:
+            existing = unit.get_buff(ConfusionBuff)
+            if not existing:
+                return True
+            return existing.spells[0] in unit.cool_downs and unit.cool_downs[existing.spells[0]] > 0
+
+class XenodruidFormSpell(Spell):
+
+    def on_init(self):
+        self.name = "Xenodruid Form"
+        self.asset = ["MissingSynergies", "Icons", "xenodruid_form"]
+        self.tags = [Tags.Arcane, Tags.Enchantment, Tags.Conjuration]
+        self.level = 5
+        self.max_charges = 3
+        self.range = 0
+
+        self.minion_health = 20
+        self.minion_range = 12
+        self.confusion_cooldown = 8
+        self.num_summons = 2
+        self.duration = 15
+        self.damage = 20
+
+        self.upgrades["minion_health"] = (20, 3)
+        self.upgrades["num_summons"] = (1, 3)
+        self.upgrades["confusion_cooldown"] = (-2, 2)
+        self.upgrades["germination"] = (1, 5, "Spell Germination", "Whenever you cast a spell, you summon a number of braintangler bushes at random locations around the target tile equal to the spell's level.")
+        self.upgrades["parasite"] = (1, 4, "Brain Parasite", "Whenever a confused enemy dies, summon a braintangler bush at its location.")
+        self.upgrades["lethargy"] = (1, 3, "Lethargy", "Each turn, a confused enemy has a 50% chance per ability (except for the ability forced upon it by confusion) to increase the ability's remaining cooldown by [1_turn:duration], before it acts.\nThis does not affect abilities with no cooldown, and cannot increase an ability's cooldown beyond its maximum cooldown.\nEnemies that can gain clarity are unaffected by this upgrade.")
+    
+    def get_description(self):
+        return ("Transform into an alien treant for [{duration}_turns:duration], summoning [{num_summons}:num_summons] braintangler bushes each turn at random locations within [{minion_range}_tiles:minion_range] of yourself. They are immobile [arcane] minions with [{minion_health}_HP:minion_health], and can inflict confusion on an enemy within [{minion_range}_tiles:minion_range] or decrease an enemy's confusion cooldown by [1_turn:duration].\n"
+                "A confused enemy gains a special attack that deals [{damage}_physical:physical] damage to itself or another enemy adjacent to it, with a [{confusion_cooldown}_turns:cooldown] cooldown, which must be used whenever possible, counting as damage done by this spell. If the enemy can gain clarity, it gains clarity after using the confusion attack, which cannot be used during clarity.").format(**self.fmt_dict())
+
+    def summon_bush(self, target, sort_dist=False):
+        unit = Unit()
+        unit.asset_name = "brain_tree_saplings"
+        unit.name = "Braintangler Bush"
+        unit.max_hp = self.get_stat("minion_health")
+        unit.tags = [Tags.Arcane]
+        unit.resists[Tags.Arcane] = 100
+        unit.stationary = True
+        unit.spells = [ConfusionSpell(self)]
+        self.summon(unit, target, radius=self.get_stat("minion_range"), sort_dist=sort_dist)
+
+    def cast_instant(self, x, y):
+        self.caster.apply_buff(XenodruidFormBuff(self), self.get_stat("duration"))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion])
