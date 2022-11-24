@@ -8152,6 +8152,9 @@ class QuantumOverlayBuff(Buff):
         self.group = self.spell.get_stat("group")
         self.antimatter = self.spell.get_stat("antimatter")
         self.damage = self.spell.get_stat("damage", base=20)
+        if self.spell.get_stat("warp"):
+            self.global_bonuses["requires_los"] = -1
+            self.owner_triggers[EventOnSpellCast] = self.on_spell_cast
 
     def on_damaged(self, evt):
 
@@ -8179,6 +8182,18 @@ class QuantumOverlayBuff(Buff):
             if self.owner.cur_hp <= 0:
                 self.owner.kill()
 
+    def on_spell_cast(self, evt):
+        if self.owner.level.can_see(evt.x, evt.y, self.owner.x, self.owner.y) or evt.spell.get_stat("requires_los") < 0:
+            return
+        total_level = evt.spell.level
+        for buff in self.owner.buffs:
+            if not isinstance(buff, Upgrade) or buff.prereq is not evt.spell or isinstance(buff, ShrineBuff):
+                continue
+            total_level += buff.level
+        self.owner.cur_hp -= total_level
+        if self.owner.cur_hp <= 0:
+            self.owner.kill()
+
 class QuantumOverlaySpell(Spell):
 
     def on_init(self):
@@ -8196,6 +8211,7 @@ class QuantumOverlaySpell(Spell):
         self.upgrades["overlays"] = (1, 5, "Double Overlay", "Quantum Overlay will now redeal damage an additional time, to both you and enemies.")
         self.upgrades["group"] = (1, 5, "Group Overlay", "Quantum Overlay now also affects damage dealt to and by your minions.")
         self.upgrades["antimatter"] = (1, 7, "Antimatter Infusion", "Whenever you deal damage with anything other than Quantum Overlay or a shrine attached to it, Quantum Overlay now also deals [20_damage:damage] of the same type to the target, and reduces your current HP by 1.\nThe extra damage benefits from bonuses to [damage].")
+        self.upgrades["warp"] = (1, 4, "Warp Strike", "While Quantum Overlay is active, all of your spells no longer require line of sight.\nWhenever you cast a spell targeting a tile not in line of sight, if that spell does not have blindcasting from any other source, you lose current HP equal to the spell's level plus the total levels of all of its upgrades.\nThe Group Overlay upgrade will not apply this effect to your minions.")
     
     def get_description(self):
         return ("The existence of another you from a parallel world is partially overlaid onto yours.\n"
