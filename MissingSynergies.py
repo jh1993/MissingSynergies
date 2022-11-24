@@ -2180,8 +2180,8 @@ class GenesisSpell(Spell):
                 return list(self.caster.level.get_points_in_ball(x, y, self.get_stat("radius"))) + list(self.caster.level.get_points_in_ball(existing.x, existing.y, self.get_stat("radius")))
 
     def get_description(self):
-        return ("Create a Microcosm, which has [{minion_health}_HP:minion_health], and [200%:damage] resistance to all damage and healing.\n"
-                "Whenever spell damage is done within [{radius}_tiles:radius] of the Microcosm, an explosion occurs on that tile, randomly dealing [fire], [lightning], [physical], or [holy] damage to all enemies in a [{blast_radius}_tile:radius] burst. The damage is equal to [{redeal_percentage}%:damage] of the triggering damage but cannot exceed the Microcosm's original max HP. This is considered spell damage but cannot trigger itself. The Microcosm then loses [1_HP:damage].\n"
+        return ("Create a Microcosm, which has [{minion_health}_HP:minion_health], and 1000% resistance to all damage and healing.\n"
+                "Whenever spell damage is done within [{radius}_tiles:radius] of the Microcosm, an explosion occurs on that tile, dealing [fire], [lightning], [physical], or [holy] damage to all enemies in a [{blast_radius}_tile:radius] burst. The damage is equal to [{redeal_percentage}%:damage] of the triggering damage but cannot exceed the Microcosm's original max HP. This is considered spell damage but cannot trigger itself. The Microcosm then loses [1_HP:damage].\n"
                 "Casting this spell again while you already have a Microcosm will instead restore it to full HP.").format(**self.fmt_dict())
     
     def cast_instant(self, x, y):
@@ -2204,7 +2204,7 @@ class GenesisSpell(Spell):
             unit.tags = [Tags.Holy, Tags.Chaos]
             unit.asset = ["MissingSynergies", "Units", "microcosm"]
             for tag in [Tags.Fire, Tags.Ice, Tags.Lightning, Tags.Poison, Tags.Holy, Tags.Dark, Tags.Arcane, Tags.Physical, Tags.Heal]:
-                unit.resists[tag] = 200
+                unit.resists[tag] = 1000
             unit.buffs.append(MicrocosmBuff(self))
             unit.stationary = True
             unit.flying = True
@@ -3994,7 +3994,7 @@ class MassOfCursesSpell(Spell):
         self.add_upgrade(PhaseCurses())
 
     def get_description(self):
-        return ("Summon a mass of curses, a stationary flying unit with fixed 1 HP, 200% resistance to all damage, and immunity to buffs and debuffs.\n"
+        return ("Summon a mass of curses, a stationary flying unit with fixed 1 HP, 1000% resistance to all damage, and immunity to buffs and debuffs.\n"
                 "When you cast a single-target [enchantment] spell targeting the mass of curses, the mass of curses is sacrificed to copy that spell onto every valid enemy target in line of sight within [{radius}_tiles:radius] of itself.").format(**self.fmt_dict())
 
     def cast_instant(self, x, y):
@@ -4004,7 +4004,7 @@ class MassOfCursesSpell(Spell):
         unit.tags = [Tags.Undead, Tags.Enchantment]
         unit.max_hp = 1
         for tag in [Tags.Fire, Tags.Ice, Tags.Lightning, Tags.Poison, Tags.Holy, Tags.Dark, Tags.Arcane, Tags.Physical]:
-            unit.resists[tag] = 200
+            unit.resists[tag] = 1000
         unit.buff_immune = True
         unit.debuff_immune = True
         unit.stationary = True
@@ -6685,6 +6685,16 @@ class PrimordialRotSpell(Spell):
     def cast_instant(self, x, y):
         self.summon(self.get_unit(self.get_stat("minion_health")), target=Point(x, y))
 
+class UnnaturalVitalityBuff(Buff):
+
+    def on_init(self):
+        self.buff_type = BUFF_TYPE_PASSIVE
+        self.resists[Tags.Heal] = -100
+
+    def on_pre_advance(self):
+        if not [tag for tag in [Tags.Living, Tags.Nature, Tags.Demon] if tag in self.owner.tags]:
+            self.owner.remove_buff(self)
+
 class UnnaturalVitality(Upgrade):
 
     def on_init(self):
@@ -6700,7 +6710,15 @@ class UnnaturalVitality(Upgrade):
             return
         if not [tag for tag in [Tags.Living, Tags.Nature, Tags.Demon] if tag in evt.unit.tags]:
             return
-        evt.unit.resists[Tags.Heal] -= 100
+        evt.unit.apply_buff(UnnaturalVitalityBuff())
+
+    def on_advance(self):
+        for unit in list(self.owner.level.units):
+            if are_hostile(unit, self.owner) or unit.is_player_controlled:
+                continue
+            if not [tag for tag in [Tags.Living, Tags.Nature, Tags.Demon] if tag in unit.tags]:
+                continue
+            unit.apply_buff(UnnaturalVitalityBuff())
 
 class CosmicStasisBuff(Buff):
 
