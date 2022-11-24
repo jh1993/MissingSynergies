@@ -8954,7 +8954,7 @@ class XenodruidFormSpell(Spell):
         self.name = "Xenodruid Form"
         self.asset = ["MissingSynergies", "Icons", "xenodruid_form"]
         self.tags = [Tags.Arcane, Tags.Enchantment, Tags.Conjuration]
-        self.level = 5
+        self.level = 6
         self.max_charges = 3
         self.range = 0
 
@@ -8969,7 +8969,7 @@ class XenodruidFormSpell(Spell):
         self.upgrades["num_summons"] = (1, 3)
         self.upgrades["confusion_cooldown"] = (-2, 2)
         self.upgrades["germination"] = (1, 5, "Spell Germination", "Whenever you cast a spell, you summon a number of braintangler bushes at random locations around the target tile equal to the spell's level.")
-        self.upgrades["parasite"] = (1, 4, "Brain Parasite", "Whenever a confused enemy dies, summon a braintangler bush at its location.")
+        self.upgrades["parasite"] = (1, 5, "Brain Parasite", "Whenever a confused enemy dies, summon a braintangler bush at its location.")
         self.upgrades["lethargy"] = (1, 3, "Lethargy", "Each turn, a confused enemy has a 50% chance per ability (except for the ability forced upon it by confusion) to increase the ability's remaining cooldown by [1_turn:duration], before it acts.\nThis does not affect abilities with no cooldown, and cannot increase an ability's cooldown beyond its maximum cooldown.\nEnemies that can gain clarity are unaffected by this upgrade.")
     
     def get_description(self):
