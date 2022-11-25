@@ -2086,6 +2086,7 @@ class MicrocosmBuff(Buff):
         Buff.__init__(self)
     
     def on_init(self):
+        self.name = "Microcosm"
         self.global_triggers[EventOnDamaged] = self.on_damaged
         self.color = Tags.Chaos.color
         if self.spell.get_stat("volatile"):
@@ -2119,7 +2120,7 @@ class MicrocosmBuff(Buff):
         if unit and not are_hostile(unit, self.owner):
             self.owner.level.show_effect(x, y, dtype)
         else:
-            self.owner.level.deal_damage(x, y, damage, dtype, self.spell)
+            self.owner.level.deal_damage(x, y, damage, dtype, self)
     
     def death_boom(self):
         for point in self.owner.level.get_points_in_ball(self.owner.x, self.owner.y, self.spell.get_stat("radius")):
@@ -2131,7 +2132,7 @@ class GenesisSpell(Spell):
         self.name = "Genesis"
         self.asset = ["MissingSynergies", "Icons", "genesis"]
         self.level = 7
-        self.tags = [Tags.Holy, Tags.Chaos, Tags.Conjuration, Tags.Sorcery]
+        self.tags = [Tags.Holy, Tags.Chaos, Tags.Conjuration]
         self.max_charges = 1
 
         self.requires_los = 0
@@ -2180,8 +2181,8 @@ class GenesisSpell(Spell):
                 return list(self.caster.level.get_points_in_ball(x, y, self.get_stat("radius"))) + list(self.caster.level.get_points_in_ball(existing.x, existing.y, self.get_stat("radius")))
 
     def get_description(self):
-        return ("Create a Microcosm, which has [{minion_health}_HP:minion_health], and 1000% resistance to all damage and healing.\n"
-                "Whenever spell damage is done within [{radius}_tiles:radius] of the Microcosm, an explosion occurs on that tile, dealing [fire], [lightning], [physical], or [holy] damage to all enemies in a [{blast_radius}_tile:radius] burst. The damage is equal to [{redeal_percentage}%:damage] of the triggering damage but cannot exceed the Microcosm's original max HP. This is considered spell damage but cannot trigger itself. The Microcosm then loses [1_HP:damage].\n"
+        return ("Create a Microcosm, which has [{minion_health}_HP:minion_health], and 200% resistance to all damage and healing.\n"
+                "Whenever spell or minion attack damage is done within [{radius}_tiles:radius] of the Microcosm, an explosion occurs on that tile, dealing [fire], [lightning], [physical], or [holy] damage to all enemies in a [{blast_radius}_tile:radius] burst. The damage is equal to [{redeal_percentage}%:damage] of the triggering damage but cannot exceed the Microcosm's original max HP. The Microcosm then loses 1 HP.\n"
                 "Casting this spell again while you already have a Microcosm will instead restore it to full HP.").format(**self.fmt_dict())
     
     def cast_instant(self, x, y):
@@ -2204,7 +2205,7 @@ class GenesisSpell(Spell):
             unit.tags = [Tags.Holy, Tags.Chaos]
             unit.asset = ["MissingSynergies", "Units", "microcosm"]
             for tag in [Tags.Fire, Tags.Ice, Tags.Lightning, Tags.Poison, Tags.Holy, Tags.Dark, Tags.Arcane, Tags.Physical, Tags.Heal]:
-                unit.resists[tag] = 1000
+                unit.resists[tag] = 200
             unit.buffs.append(MicrocosmBuff(self))
             unit.stationary = True
             unit.flying = True
@@ -3994,7 +3995,7 @@ class MassOfCursesSpell(Spell):
         self.add_upgrade(PhaseCurses())
 
     def get_description(self):
-        return ("Summon a mass of curses, a stationary flying unit with fixed 1 HP, 1000% resistance to all damage, and immunity to buffs and debuffs.\n"
+        return ("Summon a mass of curses, a stationary flying unit with fixed 1 HP, 200% resistance to all damage, and immunity to buffs and debuffs.\n"
                 "When you cast a single-target [enchantment] spell targeting the mass of curses, the mass of curses is sacrificed to copy that spell onto every valid enemy target in line of sight within [{radius}_tiles:radius] of itself.").format(**self.fmt_dict())
 
     def cast_instant(self, x, y):
@@ -4004,7 +4005,7 @@ class MassOfCursesSpell(Spell):
         unit.tags = [Tags.Undead, Tags.Enchantment]
         unit.max_hp = 1
         for tag in [Tags.Fire, Tags.Ice, Tags.Lightning, Tags.Poison, Tags.Holy, Tags.Dark, Tags.Arcane, Tags.Physical]:
-            unit.resists[tag] = 1000
+            unit.resists[tag] = 200
         unit.buff_immune = True
         unit.debuff_immune = True
         unit.stationary = True
@@ -8176,15 +8177,9 @@ class QuantumOverlayBuff(Buff):
 
     def on_damaged(self, evt):
 
-        if isinstance(evt.source, QuantumOverlaySpell):
-            return
-        
-        if hasattr(evt.source, "prereq") and isinstance(evt.source.prereq, QuantumOverlaySpell):
-            return
-
         if evt.unit is self.owner or (self.group and not are_hostile(evt.unit, self.owner)):
             for _ in range(self.overlays):
-                evt.unit.deal_damage(evt.damage//4, evt.damage_type, self.spell)
+                self.deduct_hp(evt.unit, evt.damage//4)
         
         if not evt.source or not evt.source.owner:
             return
@@ -8193,12 +8188,10 @@ class QuantumOverlayBuff(Buff):
             return
 
         for _ in range(self.overlays):
-            evt.unit.deal_damage(evt.damage//2, evt.damage_type, self.spell)
+            self.deduct_hp(evt.unit, evt.damage//2)
         if self.antimatter:
-            evt.unit.deal_damage(self.damage, evt.damage_type, self.spell)
-            self.owner.cur_hp -= 1
-            if self.owner.cur_hp <= 0:
-                self.owner.kill()
+            self.deduct_hp(evt.unit, self.damage)
+            self.deduct_hp(evt.source.owner, 1)
 
     def on_spell_cast(self, evt):
         if self.owner.level.can_see(evt.x, evt.y, self.owner.x, self.owner.y) or evt.spell.get_stat("requires_los") < 0:
@@ -8208,9 +8201,12 @@ class QuantumOverlayBuff(Buff):
             if not isinstance(buff, Upgrade) or buff.prereq is not evt.spell or isinstance(buff, ShrineBuff):
                 continue
             total_level += buff.level
-        self.owner.cur_hp -= total_level
-        if self.owner.cur_hp <= 0:
-            self.owner.kill()
+        self.deduct_hp(self.owner, total_level)
+
+    def deduct_hp(self, unit, hp):
+        unit.cur_hp -= hp
+        if unit.cur_hp <= 0:
+            unit.kill()
 
 class QuantumOverlaySpell(Spell):
 
@@ -8226,15 +8222,14 @@ class QuantumOverlaySpell(Spell):
         self.overlays = 1
 
         self.upgrades["duration"] = (5, 3)
-        self.upgrades["overlays"] = (1, 5, "Double Overlay", "Quantum Overlay will now redeal damage an additional time, to both you and enemies.")
+        self.upgrades["overlays"] = (1, 5, "Double Overlay", "Quantum Overlay will now deduct HP an additional time, to both you and enemies.")
         self.upgrades["group"] = (1, 5, "Group Overlay", "Quantum Overlay now also affects damage dealt to and by your minions.")
-        self.upgrades["antimatter"] = (1, 7, "Antimatter Infusion", "Whenever you deal damage with anything other than Quantum Overlay or a shrine attached to it, Quantum Overlay now also deals [20_damage:damage] of the same type to the target, and reduces your current HP by 1.\nThe extra damage benefits from bonuses to [damage].")
+        self.upgrades["antimatter"] = (1, 7, "Antimatter Infusion", "Whenever you deal damage, Quantum Overlay now also deducts [20:damage] HP from the target, and 1 HP from you.\nThe HP deducted from the target benefits from bonuses to [damage].")
         self.upgrades["warp"] = (1, 4, "Warp Strike", "While Quantum Overlay is active, all of your spells no longer require line of sight.\nWhenever you cast a spell targeting a tile not in line of sight, if that spell does not have blindcasting from any other source, you lose current HP equal to the spell's level plus the total levels of all of its upgrades.\nThe Group Overlay upgrade will not apply this effect to your minions.")
     
     def get_description(self):
         return ("The existence of another you from a parallel world is partially overlaid onto yours.\n"
-                "Whenever you deal damage, this spell redeals 50% of that damage to the same target. Whenever you take damage, this spell redeals 25% of that damage to you.\n"
-                "This spell and shrines attached to it cannot trigger itself.\n"
+                "Whenever you deal damage, this spell deducts current HP from the target equal to 50% of that damage. Whenever you take damage, this spell deducts current HP from you equal to 25% of that damage.\n"
                 "Lasts [{duration}_turns:duration].\n"
                 "Casting this spell while the effect is active will cancel the effect and not consume a charge. This can be done even if the spell has no charges left.").format(**self.fmt_dict())
 

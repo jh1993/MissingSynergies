@@ -91,7 +91,7 @@ Level 6:
 Level 7:
 + Copper Furnace (Chaos/Metallic/Conjuration)
 + Empyreal Ascension (Fire/Holy/Sorcery/Enchantment)
-+ Genesis (Holy/Chaos/Conjuration/Sorcery)
++ Genesis (Holy/Chaos/Conjuration)
 + Primordial Rot (Dark/Nature/Conjuration)
 + Ruinous Impact (Dark/Chaos/Sorcery)
 + Spirit Bomb (Holy/Orb/Conjuration)
