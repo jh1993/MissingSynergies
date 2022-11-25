@@ -130,6 +130,7 @@ Level 6:
 + Abyssal Insight (Dark/Eye)
 + Cantrip Adept (Sorcery)
 + Dragon Archmage (Dragon/Sorcery)
++ Heavy Elements (Fire/Lightning/Ice/Arcane)
 + Locus of Energy (Arcane/Lightning)
 + Secrets of Blood (Dark/Metallic)
 + Shivering Venom (Ice/Nature)
