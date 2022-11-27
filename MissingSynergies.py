@@ -473,7 +473,7 @@ class WildHuntBuff(Buff):
             return True
         if self.spell.get_stat("undead_units") and Tags.Undead in unit.tags:
             return True
-        return False
+        return distance(unit, self.owner >= 2)
     
     def do_teleport(self, units):
         units_teleported = 0
@@ -484,7 +484,8 @@ class WildHuntBuff(Buff):
                 point = self.owner.level.get_summon_point(self.owner.x, self.owner.y, flying=unit.flying)
                 if point:
                     units_teleported += 1
-                    yield self.owner.level.act_move(unit, point.x, point.y, teleport=True)
+                    self.owner.level.show_effect(unit.x, unit.y, Tags.Translocation)
+                    self.owner.level.act_move(unit, point.x, point.y, teleport=True)
                     self.owner.level.show_effect(unit.x, unit.y, Tags.Translocation)
     
     def on_advance(self):
@@ -515,7 +516,7 @@ class WildHuntSpell(Spell):
         self.upgrades["undead_units"] = (1, 1, "Undead Horde", "Can also teleport [undead] minions.")
     
     def get_description(self):
-        return ("For [{duration}_turns:duration], the target has [{num_targets}:num_targets] of your [living] or [nature] minions randomly teleported next to it each turn.").format(**self.fmt_dict())
+        return ("For [{duration}_turns:duration], the target has [{num_targets}:num_targets] of your [living] or [nature] minions randomly teleported next to it each turn\nMinions already adjacent to the target are unaffected.").format(**self.fmt_dict())
     
     def cast_instant(self, x, y):
         unit = self.caster.level.get_unit_at(x, y)
@@ -612,10 +613,15 @@ class ChaosShuffleSpell(Spell):
         self.upgrades["requires_los"] = (-1, 2, "Blindcasting", "Chaos Shuffle can be cast without line of sight.")
         self.upgrades["max_charges"] = (4, 2)
         self.upgrades["num_targets"] = (2, 2, "Num Targets", "Shuffle the target [2:num_targets] more times.")
-        self.upgrades["mass"] = (1, 5, "Mass Shuffle", "Each time the main target is shuffled, all enemies within [3_tiles:radius] of it are shuffled once.")
+        self.upgrades["mass"] = (1, 5, "Mass Shuffle", "Each time the main target is shuffled, all enemies within [{radius}_tiles:radius] of it are shuffled once.")
         
     def get_description(self):
         return ("The target is teleported [{num_targets}:num_targets] times consecutively up to [3_tiles:radius] away each time, taking [{damage}_fire:fire], [{damage}_lightning:lightning], or [{damage}_physical:physical] damage after each teleport.").format(**self.fmt_dict())
+
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["radius"] = self.get_stat("radius", base=3)
+        return stats
 
     def shuffle_once(self, unit):
         randomly_teleport(unit, 3)
@@ -656,11 +662,18 @@ class BladeRushSpell(Spell):
         
         self.upgrades["range"] = (5, 2)
         self.upgrades["max_charges"] = (4, 3)
-        self.upgrades["dark"] = (1, 4, "Death Blade", "Blade Rush also deals [dark] damage. Automatically cast your Touch of Death at the target after teleporting.", "blade")
-        self.upgrades["lightning"] = (1, 4, "Thunder Blade", "Blade Rush also deals [lightning] damage.Automatically cast your Thunder Strike at the target after teleporting.", "blade")
-        self.upgrades["arcane"] = (1, 4, "Warp Blade", "Blade Rush also deals [arcane] damage. Automatically cast your Disperse at the target after teleporting.", "blade")
-        self.upgrades["motivation"] = (1, 4, "Motivation", "If you target a tile adjacent to yourself, you will create [6:num_targets] to [12:num_targets] slashes around the target tile in a radius equal to half of this spell's range, each dealing the same damage and damage types; they will not damage you.\nThe number of slashes benefits from bonuses to [num_targets:num_targets].")
+        self.upgrades["dark"] = (1, 4, "Death Blade", "Blade Rush also deals [dark] damage.\nAutomatically cast your Touch of Death at the target after teleporting.", "blade")
+        self.upgrades["lightning"] = (1, 4, "Thunder Blade", "Blade Rush also deals [lightning] damage.\nAutomatically cast your Thunder Strike at the target after teleporting.", "blade")
+        self.upgrades["arcane"] = (1, 4, "Warp Blade", "Blade Rush also deals [arcane] damage.\nAutomatically cast your Disperse at the target after teleporting.", "blade")
+        self.upgrades["motivation"] = (1, 4, "Motivation", "If you target a tile adjacent to yourself, you will create [{num_targets}:num_targets] to [{double_num_targets}:num_targets] slashes around the target tile in a radius equal to half of this spell's range, each dealing the same damage and damage types; they will not damage you.")
     
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        num_targets = self.get_stat("num_targets", base=6)
+        stats["num_targets"] = num_targets
+        stats["double_num_targets"] = num_targets*2
+        return stats
+
     def get_description(self):
         return ("Dash in a line, dealing [{damage}:physical] damage to all tiles you pass through and the target tile.\n"
                 "You stop at the tile in the line immediately before the target; cannot cast if you cannot walk on that tile.").format(**self.fmt_dict())
@@ -979,11 +992,16 @@ class CrystalHammerSpell(Spell):
         
         self.upgrades["damage"] = (50, 2)
         self.upgrades["extra_damage"] = (5, 3, "Extra Damage", "+5 extra damage per turn of [freeze] and [glassify].")
-        self.upgrades["shatter"] = (1, 6, "Shatter", "If the target is killed, release a number of shards equal to the number of turns of frozen and glassify on the target plus 1 per 20 max HP the target had, rounded up.\nEach shard targets a random enemy in a [6_tile:radius] burst and deals [physical] damage equal to this spell's extra damage.\nThe same enemy can be hit more than once.")
+        self.upgrades["shatter"] = (1, 6, "Shatter", "If the target is killed, release a number of shards equal to the number of turns of frozen and glassify on the target plus 1 per 20 max HP the target had, rounded up.\nEach shard targets a random enemy in a [{radius}_tile:radius] burst and deals [physical] damage equal to this spell's extra damage.\nThe same enemy can be hit more than once.")
     
     def get_description(self):
         return ("Deal [{damage}_physical:physical] damage to the target. For every turn of [freeze] and [glassify] on the target, deal [{extra_damage}:physical] extra damage. Remove all [freeze] and [glassify] on the target afterwards.").format(**self.fmt_dict())
     
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["radius"] = self.get_stat("radius", base=6)
+        return stats
+
     def cast_instant(self, x, y):
     
         unit = self.caster.level.get_unit_at(x, y)
@@ -1344,13 +1362,18 @@ class RaiseDracolichSpell(Spell):
 
         self.upgrades["legacy"] = (1, 7, "Elemental Legacy", "The dracolich gains [100:damage] resistance of the same element as the breath weapon of dragon it was created from, and its breath weapon redeals half of its damage as that element.\nSkeletons raised by this breath, and the dracolich's soul jar, gain [100:damage] resistance to that element and a ranged attack of that element.")
         self.upgrades["dragon_mage"] = (1, 5, "Dragon Mage", "The dracolich can cast Touch of Death with a 3 turn cooldown.\nThis Touch of Death gains all of your upgrades and bonuses.")
-        self.upgrades["forced"] = (1, 4, "Forced Conversion", "Can now target enemy dragons, dealing [100_dark:dark] damage instead of instantly killing. If this kills the target, raise it as a dracolich.")
+        self.upgrades["forced"] = (1, 4, "Forced Conversion", "Can now target enemy dragons, dealing [{damage}_dark:dark] damage instead of instantly killing.\nIf this kills the target, raise it as a dracolich.")
     
     def get_description(self):
         return ("Kill target dragon minion and resurrect it as a dracolich with the same max HP, melee damage, breath damage, and breath range.\n"
                 "The dracolich can create a soul jar that makes itself immortal as long as the jar exists, and its [dark] breath raises slain [living] enemies as friendly skeletons.\n"
                 "Bonuses to [minion_health:minion_health] benefit the soul jar, and [minion_damage:minion_damage] benefit the skeletons.").format(**self.fmt_dict())
     
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["damage"] = self.get_stat("damage", base=100)
+        return stats
+
     def can_cast(self, x, y):
         if not Spell.can_cast(self, x, y):
             return False
@@ -1833,12 +1856,17 @@ class ElementalChaosSpell(Spell):
         self.hp_gain = 5
         self.thorns = 4
 
-        self.upgrades["fire_focus"] = (1, 2, "Fire Focus", "The storm spirit is replaced by two fire spirits.\nAdditional fire spirits are summoned based on bonuses to [num_summons:num_summons].", "focus")
-        self.upgrades["lightning_focus"] = (1, 2, "Lightning Focus", "The starfire spirit is replaced by two spark spirits.\nAdditional spark spirits are summoned based on bonuses to [num_summons:num_summons].", "focus")
+        self.upgrades["fire_focus"] = (1, 2, "Fire Focus", "The storm spirit is replaced by [{num_summons}:num_summons] fire spirits.", "focus")
+        self.upgrades["lightning_focus"] = (1, 2, "Lightning Focus", "The starfire spirit is replaced by [{num_summons}:num_summons] spark spirits.", "focus")
         self.upgrades["hp_gain"] = (2, 3, "Max HP Gain", "Spirits gain [2:minion_health] more max HP when witnessing spells of their elements.")
         self.upgrades["thorns"] = (2, 2, "Melee Retaliation", "Spirits gain [2:minion_damage] more melee retaliation damage.")
         self.upgrades["power"] = (1, 6, "Elemental Power", "The attacks of hybrid spirits deal damage of both of their elements instead of randomly one of them.\nThe attacks of pure spirits hit twice.")
     
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["num_summons"] = self.get_stat("num_summons", base=2)
+        return stats
+
     def get_description(self):
         return ("Summon a starfire spirit, chaos spirit, and storm spirit near yourself.\n"
                 "Each spirit has [{minion_health}_HP:minion_health], [{thorns}_damage:minion_damage] melee retaliation of their elements, and an attack with [{minion_range}_range:minion_range] and [1_radius:radius] that deals [{minion_damage}_damage:minion_damage] of a random one of their elements.\n"
@@ -2392,7 +2420,7 @@ class AbyssalInsight(Upgrade):
     
     def get_description(self):
         return ("Your own [eye] spells redeal a quarter of their damage as [dark] damage.\n"
-                "If you're [blind], your [eye] spells instead redeal half of their damage as [dark] damage. And whenever one of your [eye] spells hits an enemy, deal the same damage to enemies in a [{radius}_tile:radius] burst around that enemy along with half redealt as [dark] damage.").format(**self.fmt_dict())
+                "If you are [blind], your [eye] spells instead redeal half of their damage as [dark] damage. And whenever one of your [eye] spells hits an enemy, deal the same damage to enemies in a [{radius}_tile:radius] burst around that enemy along with half redealt as [dark] damage.").format(**self.fmt_dict())
 
     def qualifies(self, source):
         return isinstance(source, Spell) and source.caster is self.owner and Tags.Eye in source.tags
@@ -2722,35 +2750,37 @@ class MortalCoilSpell(Spell):
 class StandBackBuff(Buff):
 
     def __init__(self, spell):
-        Buff.__init__(self)
         self.max_time = spell.get_stat("timer")
         self.cur_time = 0
-        self.description = "Each turn, enemies within 4 tiles have a %i%% chance to be pushed 1 tile away." % math.floor(self.cur_time/self.max_time*100)
+        self.radius = spell.get_stat("radius", base=4)
+        Buff.__init__(self)
     
     def on_advance(self):
         self.cur_time += 1
-        chance = self.cur_time/self.max_time
-        self.description = "Each turn, enemies within 4 tiles have a %i%% chance to be pushed 1 tile away." % math.floor(chance*100)
-        if random.random() < chance:
+        if random.random() < self.cur_time/self.max_time:
             self.owner.level.queue_spell(self.push())
     
+    def get_tooltip(self):
+        return "Each turn, enemies within %i tiles have a %i%% chance to be pushed 1 tile away." % (self.radius, math.floor(self.cur_time/self.max_time*100))
+
     def push(self):
-        targets = [target for target in self.owner.level.get_units_in_ball(self.owner, 4) if are_hostile(self.owner, target)]
+        targets = [target for target in self.owner.level.get_units_in_ball(self.owner, self.radius) if are_hostile(self.owner, target)]
         if not targets:
             return
         random.shuffle(targets)
         for target in targets:
             push(target, self.owner, 1)
-            yield
+        yield
 
 class MorbidSphereHauntedBuff(Haunted):
 
     def __init__(self, spell):
         self.spell = spell
         Haunted.__init__(self)
+        self.num_summons = 2
 
     def on_advance(self):
-        for _ in range(2):
+        for _ in range(self.num_summons):
             ghost = Ghost()
             self.spell.modify_unit(ghost, 4)
             ghost.turns_to_death = self.spell.get_stat("minion_duration", base=4)
@@ -2763,7 +2793,8 @@ class MorbidSphereHauntSpell(Spell):
         self.duration = spell.get_stat("duration", base=7)
         Spell.__init__(self)
         self.name = "Haunt"
-        self.description = "Haunts the target, spawning 2 ghosts nearby each turn for %d turns" % self.get_stat("duration")
+        self.num_summons = 2
+        self.description = "Haunts the target, spawning %i ghosts nearby each turn for %d turns" % (self.get_stat("num_summons"), self.get_stat("duration"))
 
     def can_cast(self, x, y):
         unit = self.caster.level.get_unit_at(x, y)
@@ -2794,11 +2825,16 @@ class MorbidSphereSpell(OrbSpell):
         self.timer = 20
 
         self.upgrades["timer"] = (-10, 4, "Morph Timer", "Summoned vampire bats take 10 fewer turns to transform.")
-        self.upgrades["push"] = (1, 4, "Stand Back", "Each turn, a summoned vampire bat has a chance to push all enemy units within [4_tiles:radius] of itself [1_tile:radius] away.\nThe chance is equal to the number of turns it has been alive divided by the number of turns it takes to transform.")
+        self.upgrades["push"] = (1, 4, "Stand Back", "Each turn, a summoned vampire bat has a chance to push all enemy units within [{radius}_tiles:radius] of itself [1_tile:range] away.\nThe chance is equal to the number of turns it has been alive divided by the number of turns it takes to transform.")
         self.upgrades["higher"] = (1, 4, "Higher Vampires", "When a vampire bat is summoned, it has a 50% chance to instead be an armored vampire bat, vampiric mist, or vampire eye.")
         self.upgrades["ghost"] = (1, 2, "Bloody Mist", "Each turn, also summon a bloodghast, which inherits a quarter of the orb's bonus to max HP.")
         self.upgrades["orb_walk"] = (1, 4, "Night Lord", "Targeting an existing blood orb with another transforms it into a vampire necromancer or vampire count, chosen at random, which inherits the orb's full max HP bonus.")
     
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["radius"] = self.get_stat("radius", base=4)
+        return stats
+
     def get_description(self):
         return ("Summon an orb of vampiric blood next to the caster.\n"
                 "Each turn the orb summons a vampire bat, which flees from enemies until it transforms into a vampire in [{timer}_turns:duration]. Vampire bats and vampires inherit half of the orb's bonus to max HP.\n"
@@ -3220,8 +3256,13 @@ class SpiritBombSpell(OrbSpell):
 
         self.upgrades["minion_damage"] = (30, 3)
         self.upgrades["radius"] = (3, 3)
-        self.upgrades["warcry"] = (1, 2, "War Cry", "Each turn, the spirit bomb has a 50% chance of inflicting [stun] or [berserk] on a random enemy in your line of sight.")
+        self.upgrades["warcry"] = (1, 2, "War Cry", "Each turn, the spirit bomb has a 50% chance of inflicting [stun] or [berserk] for [{duration}_turns:duration] on a random enemy in your line of sight.")
     
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["duration"] = self.get_stat("duration", base=3)
+        return stats
+
     def get_description(self):
         return ("Summon an orb of extremely concentrated energy next to the caster, consuming every remaining charge of this spell, each time counting as casting the spell once.\n"
                 "When the orb dies, it deals [{minion_damage}_holy:holy] damage to all enemies and destroys all walls in a [{radius}_tile:radius] burst, gaining +1 radius and +10 damage for every 2 turns it had existed, every 2 additional charge consumed, and each 20 bonus to max HP it had. This does not work if the orb's death is faked.\n"
@@ -3713,10 +3754,15 @@ class UrticatingRainSpell(Spell):
         self.range = 0
 
         self.upgrades["max_charges"] = (8, 2)
-        self.upgrades["poison"] = (1, 2, "Venomous Nettle", "Urticating Rain also inflicts [10_turns:duration] of [poison], which benefits from bonuses to [duration].")
+        self.upgrades["poison"] = (1, 2, "Venomous Nettle", "Urticating Rain also inflicts [{duration}_turns:duration] of [poison].")
         self.upgrades["blind"] = (1, 3, "Eye Irritant", "Urticating Rain also inflicts [1_turn:duration] of [blind].\nThis duration is fixed and unaffected by bonuses.")
         self.upgrades["fire"] = (1, 4, "Searing Pain", "Urticating Rain also deals [fire] damage.")
     
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["duration"] = self.get_stat("duration", base=10)
+        return stats
+
     def get_description(self):
         return ("Each of your [spider] allies, [thorn:nature] allies, and allies with [melee_retaliation:damage] deals [3_physical:physical] damage to all enemies in a radius equal to its max HP divided by 10, rounded up.\n"
                 "Allies fulfilling multiple criteria, including multiple instances of melee retaliation, will deal damage multiple times.\n"
@@ -3991,7 +4037,7 @@ class MassOfCursesSpell(Spell):
 
         self.upgrades["range"] = (5, 2)
         self.upgrades["radius"] = (1, 4)
-        self.upgrades["agony"] = (1, 3, "Agonizing Curses", "The mass of curses now also deals [dark] damage to each affected enemy equal to twice the duration of the copied spell.")
+        self.upgrades["agony"] = (1, 3, "Agonizing Curses", "The mass of curses now also deals [dark] damage to each affected enemy equal to twice the [duration] stat of the copied spell.")
         self.add_upgrade(PhaseCurses())
 
     def get_description(self):
@@ -4088,8 +4134,13 @@ class BrimstoneClusterSpell(Spell):
         self.upgrades["radius"] = (1, 2)
         self.upgrades["num_targets"] = (2, 3, "More Clusters", "[2:num_targets] more explosions are created.")
         self.upgrades["power"] = (1, 4, "Power", "Brimstone Cluster inflicts [1:fire] more turn of Caustic Burn and reduces [dark] resistance by [1:dark] more per hit.\nEach turn of Caustic Burn increases the target's [poison] duration by [1:poison] more.")
-        self.upgrades["bale"] = (1, 4, "Bale Burn", "Caustic Burn deals an additional [4_fire:fire] damage per turn, which benefits from bonuses to [damage].")
+        self.upgrades["bale"] = (1, 4, "Bale Burn", "Caustic Burn deals an additional [{damage}_fire:fire] damage per turn, which benefits from bonuses to [damage].")
     
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["damage"] = self.get_stat("damage", base=4)
+        return stats
+
     def get_description(self):
         return ("Create [{num_targets}:num_targets] explosions, each centered around a random point in a [{radius}_tile:radius] burst.\n"
                 "Each explosion inflicts [{power}_turns:duration] of Caustic Burn on enemies in a [{radius}_tile:radius] burst, and permanently reduces their [dark] resistance by [{power}:dark].\n"
@@ -4452,7 +4503,7 @@ class GatheringStormSpell(Spell):
         self.upgrades["radius"] = (2, 4)
         self.upgrades["minion_range"] = (4, 2)
         self.upgrades["protection"] = (1, 3, "Storm Protection", "Each turn, [elemental] allies within the storm elemental's arcing distance gain [lightning] and [ice] resistances enough to put these resistances at 100.\nThis effect is removed at the start of the storm elemental's next turn.")
-        self.upgrades["aggregate"] = (1, 5, "Elemental Aggregate", "When an [elemental] unit dies within the storm elemental's arcing distance, the storm elemental's max and current HP are increased by 20% of the dead elemental's HP.")
+        self.upgrades["aggregate"] = (1, 5, "Elemental Aggregate", "When an [elemental] unit other than the storm elemental dies within the storm elemental's arcing distance, the storm elemental's max and current HP are increased by 20% of the dead elemental's HP.")
         self.upgrades["disperse"] = (1, 3, "Storm Dispersal", "When the storm elemental dies, it creates thunderstorm and blizzard clouds in an area around itself with radius equal to this spell's radius.")
 
     def can_cast(self, x, y):
@@ -5448,7 +5499,7 @@ class AfterlifeEchoesBuff(Buff):
             shade.resists[Tags.Holy] = 100
             shade.resists[Tags.Poison] = 100
             shade.flying = True
-            shade.spells = [AfterlifeShadeBolt(unit.max_hp//10, self.spell.get_stat("minion_range", base=5))]
+            shade.spells = [AfterlifeShadeBolt(unit.max_hp//10 + self.spell.get_stat("minion_damage", base=1), self.spell.get_stat("minion_range", base=5))]
             self.spell.summon(shade, target=point, radius=5)
             return
         
@@ -5507,9 +5558,15 @@ class AfterlifeEchoesSpell(Spell):
         self.upgrades["radius"] = (1, 4)
         self.upgrades["myriad"] = (1, 5, "Myriad Souls", "For the duration, spells and skills that summon multiple minions will summon [1:num_summons] more minion.")
         self.upgrades["life"] = (1, 5, "Life Echoes", "When you summon a [living] or [nature] minion, that minion's death explosion will [poison] enemies for a number of turns equal to 50% of its max HP, stacking in duration with any existing [poison] they have.", "echo")
-        self.upgrades["spirit"] = (1, 5, "Spirit Echoes", "When you summon a [holy], [demon], or [undead] minion, that minion's death explosion will summon an Afterlife Shade with the same max HP.\nThe Afterlife Shade has an attack with [5_range:minion_range] that deals [holy] and [dark] damage equal to 10% of its max HP.", "echo")
+        self.upgrades["spirit"] = (1, 5, "Spirit Echoes", "When you summon a [holy], [demon], or [undead] minion, that minion's death explosion will summon an Afterlife Shade with the same max HP.\nThe Afterlife Shade has an attack with [{minion_range}_range:minion_range] that deals [holy] and [dark] damage equal to [{minion_damage}:minion_damage] plus 10% of its max HP.", "echo")
         self.upgrades["elemental"] = (1, 5, "Elemental Echoes", "When you summon a [fire], [lightning], or [ice] minion, that minion's death explosion has a chance to cast Fireball, Lightning Bolt, or Icicle respectively at valid enemy targets. A minion with multiple tags will cast one of the spells at random.\nThe chance to cast is the minion's max HP divided by 20, with an extra guaranteed cast per 20 HP the minion has.\nThese spells gain all of your upgrades and bonuses.", "echo")
         self.upgrades["shattering"] = (1, 5, "Shattering Echoes", "When you summon an [arcane], [metallic], or [glass] minion, that minion's death explosion will summon a Soul Shard for every 20 HP and [2_SH:shields] the minion has, rounded up.\nSoul Shards have fixed 1 HP and [1_SH:shields]. They deal [2_physical:physical] or [2_arcane:arcane] damage to enemies that hit them.", "echo")
+
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["minion_range"] = self.get_stat("minion_range", base=5)
+        stats["minion_damage"] = self.get_stat("minion_damage", base=1)
+        return stats
 
     def get_impacted_tiles(self, x, y):
         return [Point(self.caster.x, self.caster.y)]
@@ -6922,7 +6979,7 @@ class AegisOverloadSpell(Spell):
         self.upgrades["max_charges"] = (3, 2)
         self.upgrades["radius"] = (4, 2, "Radius", "Aegis Overload searches for enemy targets in a greater radius around each minion.")
         self.upgrades["phase"] = (1, 3, "Phase Overload", "The bolts sent out by Aegis Overload can now pass through walls.")
-        self.upgrades["disrupt"] = (1, 5, "Disruptive Overload", "An enemy hit by a bolt from this spell will be inflicted with an overloaded debuff of the same element and magnitude as the one inflicted onto the minion who shot out that bolt.\nThis lasts [3_turns:duration] by default but benefits from this spell's bonuses to [duration].\nDamage dealt by this spell cannot benefit from the resistance reduction of overloaded debuffs on the target.")
+        self.upgrades["disrupt"] = (1, 5, "Disruptive Overload", "An enemy hit by a bolt from this spell will be inflicted with an overloaded debuff of the same element and magnitude as the one inflicted onto the minion who shot out that bolt, for [{duration}_turns:duration].\nDamage dealt by this spell cannot benefit from the resistance reduction of overloaded debuffs on the target.")
 
     def get_description(self):
         return ("Each of your minions shoots out a bolt of energy for each of its resistances that is over 100.\n"
@@ -7181,9 +7238,14 @@ class PureglassKnightSpell(Spell):
         self.minion_range = 6
 
         self.upgrades["minion_health"] = (40, 3)
-        self.upgrades["glassify"] = (1, 5, "Glassifying Blade", "The knight's melee attack will inflict [glassify] for [3_turns:duration], which benefits from this spell's bonuses to [duration].")
+        self.upgrades["glassify"] = (1, 5, "Glassifying Blade", "The knight's melee attack will inflict [glassify] for [{duration}_turns:duration].")
         self.upgrades["phase"] = (1, 5, "Phase Glass", "The knight's charge attack becomes a teleport attack.")
         self.upgrades["shards"] = (1, 4, "Broken Shards", "Whenever the knight loses [SH:shields], it shoots out a glass shard at a random enemy in line of sight with range equal to this spell's [minion_range:minion_range], dealing damage equal to this spell's [minion_damage:minion_damage].\nIf you have the Phase Glass upgrade, the shard can pass through walls.")
+
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["duration"] = self.get_stat("duration", base=3)
+        return stats
 
     def fmt_dict(self):
         stats = Spell.fmt_dict(self)
@@ -8115,9 +8177,14 @@ class FleshSacrificeSpell(Spell):
 
         self.upgrades["max_charges"] = (6, 3)
         self.upgrades["damage"] = (25, 3)
-        self.upgrades["bloodrage"] = (1, 6, "Bloodbath", "Whenever the bloody mass's blood splatter hits an enemy, you gain bloodrage for [10_turns:duration], increasing the damage of all of your spells by 1.\nThis duration benefits from your bonuses to [duration].")
+        self.upgrades["bloodrage"] = (1, 6, "Bloodbath", "Whenever the bloody mass's blood splatter hits an enemy, you gain bloodrage for [{duration}_turns:duration], increasing the damage of all of your spells by 1.")
         self.upgrades["penetration"] = (1, 5, "Power of Pain", "The bloody mass's blood splatter penetrates enemies' [dark] resistance by an amount equal to your percentage of missing HP.")
     
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["duration"] = self.get_stat("duration", base=10)
+        return stats
+
     def get_description(self):
         return ("Sacrifice some of your flesh and blood, dealing [{damage}_dark:dark] damage to yourself and summoning a bloody mass with max HP equal to twice the damage dealt, or teleport an existing bloody mass to the target tile and add to its max HP.\n"
                 "The bloody mass is a [living] [demon] minion that regenerates 5% of its max HP per turn. Whenever it takes damage, you recover the lost flesh, healing yourself for half of the damage taken. It has a blood splatter attack with [{minion_range}_range:minion_range], [1_radius:radius], and [{minion_damage}_dark:dark] damage, which gains bonus range equal to 10% of its max HP and bonus radius equal to the square root of that amount, rounded down. It otherwise benefits from your stat bonuses rather than its own.").format(**self.fmt_dict())
@@ -8224,9 +8291,14 @@ class QuantumOverlaySpell(Spell):
         self.upgrades["duration"] = (5, 3)
         self.upgrades["overlays"] = (1, 5, "Double Overlay", "Quantum Overlay will now deduct HP an additional time, to both you and enemies.")
         self.upgrades["group"] = (1, 5, "Group Overlay", "Quantum Overlay now also affects damage dealt to and by your minions.")
-        self.upgrades["antimatter"] = (1, 7, "Antimatter Infusion", "Whenever you deal damage, Quantum Overlay now also deducts [20:damage] HP from the target, and 1 HP from you.\nThe HP deducted from the target benefits from bonuses to [damage].")
+        self.upgrades["antimatter"] = (1, 7, "Antimatter Infusion", "Whenever you deal damage, Quantum Overlay now also deducts [{damage}:damage] HP from the target, and 1 HP from you.\nThe HP deducted from the target benefits from bonuses to [damage].")
         self.upgrades["warp"] = (1, 4, "Warp Strike", "While Quantum Overlay is active, all of your spells no longer require line of sight.\nWhenever you cast a spell targeting a tile not in line of sight, if that spell does not have blindcasting from any other source, you lose current HP equal to the spell's level plus the total levels of all of its upgrades.\nThe Group Overlay upgrade will not apply this effect to your minions.")
     
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["damage"] = self.get_stat("damage", base=20)
+        return stats
+
     def get_description(self):
         return ("The existence of another you from a parallel world is partially overlaid onto yours.\n"
                 "Whenever you deal damage, this spell deducts current HP from the target equal to 50% of that damage. Whenever you take damage, this spell deducts current HP from you equal to 25% of that damage.\n"
@@ -8444,8 +8516,13 @@ class WebOfFireSpell(Spell):
         self.upgrades["max_charges"] = (9, 2)
         self.upgrades["damage"] = (8, 3)
         self.upgrades["requires_los"] = (-1, 2, "Blindcasting", "Web of Fire can be cast without line of sight.")
-        self.upgrades["coating"] = (1, 4, "Fire Coating", "Your minions in affected tiles will now gain a fire coating for [5_turns:duration] (which benefits from bonuses to [duration]), giving them [100_fire:fire] resistance and a melee retaliation effect that deals [fire] damage equal to half of this spell's [damage].\nThe melee retaliation damage counts as damage dealt by this spell.")
+        self.upgrades["coating"] = (1, 4, "Fire Coating", "Your minions in affected tiles will now gain a fire coating for [{duration}_turns:duration], giving them [100_fire:fire] resistance and a melee retaliation effect that deals [fire] damage equal to half of this spell's [damage].\nThe melee retaliation damage counts as damage dealt by this spell.")
         self.add_upgrade(VenomousFlame())
+
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["duration"] = self.get_stat("duration", base=5)
+        return stats
 
     def get_description(self):
         return ("Must target a tile occupied by a unit or spider web.\n"
