@@ -117,6 +117,7 @@ Level 5:
 + Bombastic Arrival (Fire/Translocation)
 + Draconian Brutality (Dragon/Nature/Translocation)
 + Electrolysis (Lightning/Nature)
++ Flesh Loan (Dark/Nature)
 + Forceful Channeling (Sorcery/Conjuration)
 + Fractured Memories (Arcane/Chaos)
 + Inexorable Decay (Dark)

@@ -9081,5 +9081,37 @@ class HeavyElements(Upgrade):
             return
         evt.unit.deal_damage(evt.source.owner.max_hp//10, evt.damage_type, self)
 
+class FleshLoan(Upgrade):
+
+    def on_init(self):
+        self.name = "Flesh Loan"
+        self.asset = ["MissingSynergies", "Icons", "flesh_loan"]
+        self.tags = [Tags.Dark, Tags.Nature]
+        self.level = 5
+        self.description = "Whenever you summon a minion, you take [dark] damage equal to 10% of the minion's max HP, rounded up. If the damage taken is not 0, that minion becomes [living] and gains max HP equal to 10 times the damage dealt. This effect triggers before most other effects that trigger when minions are summoned.\nAt the beginning of each of your turns, if a minion is no longer alive, or if there are no enemies in the realm, you heal for the same damage that you took when summoning it, once per minion."
+        self.hp_loaned = {}
+        self.global_triggers[EventOnUnitPreAdded] = self.on_unit_pre_added
+    
+    def on_unit_pre_added(self, evt):
+        if are_hostile(evt.unit, self.owner) or evt.unit.is_player_controlled:
+            return
+        dealt = self.owner.deal_damage(math.ceil(evt.unit.max_hp/10), Tags.Dark, self)
+        if not dealt:
+            return
+        evt.unit.max_hp += dealt*10
+        self.hp_loaned[evt.unit] = dealt
+        if Tags.Living not in evt.unit.tags:
+            evt.unit.tags.append(Tags.Living)
+            # Don't lose default poison immunity from not being living.
+            if Tags.Poison not in evt.unit.resists.keys():
+                evt.unit.resists[Tags.Poison] = 100
+
+    def on_pre_advance(self):
+        realm_done = all([unit.team == TEAM_PLAYER for unit in self.owner.level.units])
+        for unit in list(self.hp_loaned.keys()):
+            if realm_done or not unit.is_alive():
+                self.owner.deal_damage(-self.hp_loaned[unit], Tags.Heal, self)
+                self.hp_loaned.pop(unit)
+
 all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell])
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan])
