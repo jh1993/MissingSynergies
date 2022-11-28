@@ -4207,7 +4207,23 @@ class CallScapegoatSpell(Spell):
         self.upgrades["minion_health"] = (20, 3)
         self.upgrades["num_summons"] = (2, 3)
         self.upgrades["regen"] = (1, 2, "Unending Penance", "Scapegoats regenerate [10_HP:heal] per turn.")
-        self.upgrades["death"] = (1, 3, "Grim Sacrifice", "If targeting yourself, this spell will now instead regain a charge and deal [dark] damage to each scapegoat equal to its current HP.")
+        self.upgrades["death"] = (1, 3, "Grim Sacrifice", "If targeting yourself, this spell will now instead cost no charge and deal [dark] damage to each scapegoat equal to its current HP.\nThis can be done even if the spell has no charges left, but only if there are scapegoats in the realm.")
+
+    def can_pay_costs(self):
+        if self.get_stat("death") and self.cur_charges <= 0:
+            return any([unit.name == "Scapegoat" for unit in self.caster.level.units])
+        return Spell.can_pay_costs(self)
+    
+    def pay_costs(self):
+        if self.cur_charges > 0:
+            Spell.pay_costs(self)
+
+    def can_cast(self, x, y):
+        if not Spell.can_cast(self, x, y):
+            return False
+        if self.get_stat("death") and self.cur_charges <= 0:
+            return x == self.caster.x and y == self.caster.y
+        return True
 
     def get_description(self):
         return ("Summon [{num_summons}:num_summons] scapegoats.\n"
@@ -4217,7 +4233,6 @@ class CallScapegoatSpell(Spell):
     def cast_instant(self, x, y):
 
         if self.get_stat("death") and x == self.caster.x and y == self.caster.y:
-            self.cur_charges = min(self.cur_charges + 1, self.get_stat("max_charges"))
             for unit in list(self.caster.level.units):
                 if unit.name != "Scapegoat":
                     continue
