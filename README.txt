@@ -43,6 +43,7 @@ Level 4:
 + Electric Net (Nature/Lightning/Sorcery)
 + Essence Leech (Arcane/Dark/Enchantment)
 + Iron Turtle (Metallic/Nature/Conjuration)
++ Karmic Loan (Holy/Enchantment)
 + Orb of Flesh (Nature/Orb/Conjuration)
 + Prism Shell (Holy/Ice/Enchantment)
 + Psychedelic Spores (Arcane/Nature/Sorcery)

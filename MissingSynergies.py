@@ -9128,5 +9128,59 @@ class FleshLoan(Upgrade):
                 self.owner.deal_damage(-self.hp_loaned[unit], Tags.Heal, self)
                 self.hp_loaned.pop(unit)
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell])
+class KarmicLoanBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+    
+    def on_init(self):
+        self.name = "Karmic Loan"
+        self.color = Tags.Holy.color
+        self.heal = self.spell.get_stat("damage")
+        if self.spell.get_stat("pity"):
+            self.stack_type = STACK_REPLACE
+    
+    def on_applied(self, owner):
+        self.hp = self.owner.cur_hp
+        self.description = "Applied when the caster had %i HP." % self.hp
+    
+    def on_unapplied(self):
+        if self.owner.cur_hp > self.hp:
+            self.owner.deal_damage(self.owner.cur_hp - self.hp, Tags.Holy, self.spell)
+        elif self.stack_type == STACK_REPLACE and self.owner.cur_hp < self.hp:
+            self.owner.deal_damage(-(self.hp - self.owner.cur_hp)//2, Tags.Heal, self.spell)
+    
+    def on_advance(self):
+        self.owner.deal_damage(-self.heal, Tags.Heal, self.spell)
+
+class KarmicLoanSpell(Spell):
+
+    def on_init(self):
+        self.name = "Karmic Loan"
+        self.asset = ["MissingSynergies", "Icons", "karmic_loan"]
+        self.tags = [Tags.Holy, Tags.Enchantment]
+        self.level = 4
+        self.max_charges = 4
+        self.range = 0
+
+        self.damage = 10
+        self.duration = 5
+
+        self.upgrades["damage"] = (10, 3)
+        self.upgrades["duration"] = (5, 3)
+        self.upgrades["max_charges"] = (3, 2)
+        self.upgrades["instant"] = (1, 2, "Instant Heal", "You are now healed to full HP when you cast this spell, after the buff is applied.")
+        self.upgrades["pity"] = (1, 2, "Pity Heal", "When the effect expires, if your HP is lower than the HP you had when you cast the spell, you are instead healed for 50% of the difference.\nCasting this spell again will now immediately cause the previous instance of the effect to expire.")
+
+    def get_description(self):
+        return ("For [{duration}_turns:duration], you heal for [{damage}_HP:heal] each turn. The amount healed benefits from bonuses to [damage].\n"
+                "When the effect expires, if your current HP is higher than the HP you had when you cast this spell, you take [holy] damage equal to the difference.").format(**self.fmt_dict())
+    
+    def cast_instant(self, x, y):
+        self.caster.apply_buff(KarmicLoanBuff(self), self.get_stat("duration"))
+        if self.get_stat("instant"):
+            self.caster.deal_damage(-self.caster.max_hp, Tags.Heal, self)
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan])
