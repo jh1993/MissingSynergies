@@ -9137,7 +9137,7 @@ class KarmicLoanBuff(Buff):
     def on_init(self):
         self.name = "Karmic Loan"
         self.color = Tags.Holy.color
-        self.heal = self.spell.get_stat("damage")
+        self.heal = self.spell.get_stat("heal")
         if self.spell.get_stat("pity"):
             self.stack_type = STACK_REPLACE
     
@@ -9147,7 +9147,12 @@ class KarmicLoanBuff(Buff):
     
     def on_unapplied(self):
         if self.owner.cur_hp > self.hp:
-            self.owner.deal_damage(self.owner.cur_hp - self.hp, Tags.Holy, self.spell)
+            damage = self.owner.cur_hp - self.hp
+            if self.owner.shields:
+                damage = math.ceil(damage*(1 - self.owner.shields/20))
+                self.owner.shields = 0
+                self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Shield_Expire)
+            self.owner.deal_damage(damage, Tags.Holy, self.spell)
         elif self.stack_type == STACK_REPLACE and self.owner.cur_hp < self.hp:
             self.owner.deal_damage(-(self.hp - self.owner.cur_hp)//2, Tags.Heal, self.spell)
     
@@ -9164,18 +9169,19 @@ class KarmicLoanSpell(Spell):
         self.max_charges = 4
         self.range = 0
 
-        self.damage = 10
+        self.heal = 10
         self.duration = 5
 
-        self.upgrades["damage"] = (10, 3)
+        self.upgrades["heal"] = (10, 3)
         self.upgrades["duration"] = (5, 3)
         self.upgrades["max_charges"] = (3, 2)
         self.upgrades["instant"] = (1, 2, "Instant Heal", "You are now healed to full HP when you cast this spell, after the buff is applied.")
         self.upgrades["pity"] = (1, 2, "Pity Heal", "When the effect expires, if your HP is lower than the HP you had when you cast the spell, you are instead healed for 50% of the difference.\nCasting this spell again will now immediately cause the previous instance of the effect to expire.")
 
     def get_description(self):
-        return ("For [{duration}_turns:duration], you heal for [{damage}_HP:heal] each turn. The amount healed benefits from bonuses to [damage].\n"
-                "When the effect expires, if your current HP is higher than the HP you had when you cast this spell, you take [holy] damage equal to the difference.").format(**self.fmt_dict())
+        return ("For [{duration}_turns:duration], you heal for [{heal}_HP:heal] each turn.\n"
+                "When the effect expires, if your current HP is higher than the HP you had when you cast this spell, you take [holy] damage equal to the difference.\n"
+                "You lose all [SH:shields] before taking this damage, but the damage is reduced by 5% per SH lost.").format(**self.fmt_dict())
     
     def cast_instant(self, x, y):
         self.caster.apply_buff(KarmicLoanBuff(self), self.get_stat("duration"))
