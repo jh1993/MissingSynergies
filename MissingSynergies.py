@@ -9137,27 +9137,40 @@ class KarmicLoanBuff(Buff):
     def on_init(self):
         self.name = "Karmic Loan"
         self.color = Tags.Holy.color
-        self.heal = self.spell.get_stat("heal")
-        if self.spell.get_stat("pity"):
-            self.stack_type = STACK_REPLACE
+        self.damage = self.spell.get_stat("damage")
+        self.total_healed = 0
+        self.total_self_damage = 0
+        self.owner_triggers[EventOnDamaged] = self.on_damaged
     
+    def get_description(self):
+        return "This spell has healed %i HP.\nYou have taken %i damage from allies.\nUpon expiring, you will take %i holy damage." % (self.total_healed, self.total_self_damage, self.get_damage())
+
     def on_applied(self, owner):
-        self.hp = self.owner.cur_hp
-        self.description = "Applied when the caster had %i HP." % self.hp
+        if self.spell.get_stat("instant"):
+            self.heal(self.owner.max_hp)
     
+    def get_damage(self):
+        return math.ceil(max(0, self.total_healed - self.total_self_damage)*(1 - self.owner.shields/20))
+
     def on_unapplied(self):
-        if self.owner.cur_hp > self.hp:
-            damage = self.owner.cur_hp - self.hp
-            if self.owner.shields:
-                damage = math.ceil(damage*(1 - self.owner.shields/20))
-                self.owner.shields = 0
-                self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Shield_Expire)
-            self.owner.deal_damage(damage, Tags.Holy, self.spell)
-        elif self.stack_type == STACK_REPLACE and self.owner.cur_hp < self.hp:
-            self.owner.deal_damage(-(self.hp - self.owner.cur_hp)//2, Tags.Heal, self.spell)
+        damage = self.get_damage()
+        if self.owner.shields:
+            self.owner.shields = 0
+            self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Shield_Expire)
+        self.owner.deal_damage(damage, Tags.Holy, self.spell)
     
     def on_advance(self):
-        self.owner.deal_damage(-self.heal, Tags.Heal, self.spell)
+        self.heal(self.damage)
+
+    def heal(self, amount):
+        old = self.owner.cur_hp
+        self.owner.deal_damage(-amount, Tags.Heal, self.spell)
+        self.total_healed += max(0, self.owner.cur_hp - old)
+
+    def on_damaged(self, evt):
+        if not evt.source or not evt.source.owner or are_hostile(self.owner, evt.source.owner):
+            return
+        self.total_self_damage += evt.damage
 
 class KarmicLoanSpell(Spell):
 
@@ -9169,24 +9182,21 @@ class KarmicLoanSpell(Spell):
         self.max_charges = 4
         self.range = 0
 
-        self.heal = 10
+        self.damage = 10
         self.duration = 5
 
-        self.upgrades["heal"] = (10, 3)
+        self.upgrades["damage"] = (10, 3)
         self.upgrades["duration"] = (5, 3)
         self.upgrades["max_charges"] = (3, 2)
         self.upgrades["instant"] = (1, 2, "Instant Heal", "You are now healed to full HP when you cast this spell, after the buff is applied.")
-        self.upgrades["pity"] = (1, 2, "Pity Heal", "When the effect expires, if your HP is lower than the HP you had when you cast the spell, you are instead healed for 50% of the difference.\nCasting this spell again will now immediately cause the previous instance of the effect to expire.")
 
     def get_description(self):
-        return ("For [{duration}_turns:duration], you heal for [{heal}_HP:heal] each turn.\n"
-                "When the effect expires, if your current HP is higher than the HP you had when you cast this spell, you take [holy] damage equal to the difference.\n"
+        return ("For [{duration}_turns:duration], you heal for [{damage}_HP:heal] each turn. The amount healed benefits from bonuses to [damage].\n"
+                "When the effect expires, you take [holy] damage equal to the total amount healed by this spell, minus all damage inflicted on you by allies for the duration, if the amount is positive.\n"
                 "You lose all [SH:shields] before taking this damage, but the damage is reduced by 5% per SH lost.").format(**self.fmt_dict())
     
     def cast_instant(self, x, y):
         self.caster.apply_buff(KarmicLoanBuff(self), self.get_stat("duration"))
-        if self.get_stat("instant"):
-            self.caster.deal_damage(-self.caster.max_hp, Tags.Heal, self)
 
 all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan])
