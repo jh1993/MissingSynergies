@@ -8609,7 +8609,7 @@ class ElectricNetSpell(Spell):
 
         self.upgrades["radius"] = (2, 3)
         self.upgrades["duration"] = (12, 4)
-        self.upgrades["energize"] = (1, 6, "Energize", "Your [spider] minions affected by this spell have a 50% chance to immediately use one of their attacks.\nA unit can only be energized once per turn, refreshing before the beginning of the turn of this spell's caster.")
+        self.upgrades["energize"] = (1, 6, "Energize", "Your [spider] minions affected by this spell have a 50% chance to immediately use one of their attacks.")
 
     def get_impacted_tiles(self, x, y):
         return [p for stage in Burst(self.caster.level, Point(x, y), self.get_stat('radius')) for p in stage]
@@ -8624,10 +8624,7 @@ class ElectricNetSpell(Spell):
 
         damage = self.get_stat("damage")
         duration = self.get_stat("duration")
-        energize = self.get_stat("energize") and self.caster.is_alive()
-        
-        if energize:
-            self.caster.apply_buff(RemoveBuffOnPreAdvance(AntiEnergizeBuff))
+        energize = self.get_stat("energize")
         
         for stage in Burst(self.caster.level, Point(x, y), self.get_stat("radius")):
             for p in stage:
@@ -8644,8 +8641,7 @@ class ElectricNetSpell(Spell):
                 elif unit and are_hostile(unit, self.caster):
                     unit.apply_buff(Stun(), 1)
                     unit.deal_damage(duration//2, Tags.Lightning, self)
-                if energize and unit and not are_hostile(unit, self.caster) and Tags.Spider in unit.tags and not unit.has_buff(AntiEnergizeBuff) and random.random() < 0.5:
-                    unit.apply_buff(AntiEnergizeBuff(self.caster))
+                if energize and unit and not are_hostile(unit, self.caster) and Tags.Spider in unit.tags and random.random() < 0.5:
                     for spell in unit.spells:
                         if not spell.can_pay_costs():
                             continue
