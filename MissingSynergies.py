@@ -9137,9 +9137,10 @@ class KarmicLoanBuff(Buff):
         self.total_healed = 0
         self.total_self_damage = 0
         self.owner_triggers[EventOnDamaged] = self.on_damaged
+        self.resists[Tags.Holy] = self.spell.get_stat("holy_resistance")
     
     def get_description(self):
-        return "This spell has healed %i HP.\nYou have taken %i damage from allies.\nUpon expiring, you will take %i holy damage." % (self.total_healed, self.total_self_damage, self.get_damage())
+        return "This spell has healed %i HP.\nYou have taken %i damage from allies.\nUpon expiring, you will take %i holy damage." % (self.total_healed, self.total_self_damage, math.ceil(self.get_damage()*(100 - self.owner.resists[Tags.Holy])/100))
 
     def on_applied(self, owner):
         if self.spell.get_stat("instant"):
@@ -9180,15 +9181,17 @@ class KarmicLoanSpell(Spell):
 
         self.damage = 10
         self.duration = 5
+        self.holy_resistance = 25
 
         self.upgrades["damage"] = (10, 3)
         self.upgrades["duration"] = (5, 3)
         self.upgrades["max_charges"] = (3, 2)
+        self.upgrades["holy_resistance"] = (25, 5)
         self.upgrades["instant"] = (1, 2, "Instant Heal", "You are now healed to full HP when you cast this spell, after the buff is applied.")
 
     def get_description(self):
-        return ("For [{duration}_turns:duration], you heal for [{damage}_HP:heal] each turn. The amount healed benefits from bonuses to [damage].\n"
-                "When the effect expires, you take [holy] damage equal to the total amount healed by this spell, minus all damage inflicted on you by allies for the duration, if the amount is positive.\n"
+        return ("For [{duration}_turns:duration], you gain [{holy_resistance}_holy:holy] resistance and heal for [{damage}_HP:heal] each turn. The amount healed benefits from bonuses to [damage].\n"
+                "When the effect is removed, you take [holy] damage equal to the total amount healed by this spell, minus all damage inflicted on you by allies for the duration, if the amount is positive. This damage is dealt before you lose the [holy] resistance granted by this spell.\n"
                 "You lose all [SH:shields] before taking this damage, but the damage is reduced by 5% per SH lost.").format(**self.fmt_dict())
     
     def cast_instant(self, x, y):
