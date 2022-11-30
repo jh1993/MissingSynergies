@@ -9133,7 +9133,7 @@ class KarmicLoanBuff(Buff):
     def on_init(self):
         self.name = "Karmic Loan"
         self.color = Tags.Holy.color
-        self.damage = self.spell.get_stat("damage")
+        self.heal = self.spell.get_stat("heal")
         self.total_healed = 0
         self.total_self_damage = 0
         self.owner_triggers[EventOnDamaged] = self.on_damaged
@@ -9144,7 +9144,7 @@ class KarmicLoanBuff(Buff):
 
     def on_applied(self, owner):
         if self.spell.get_stat("instant"):
-            self.heal(self.owner.max_hp)
+            self.do_heal(self.owner.max_hp)
     
     def get_damage(self):
         return math.ceil(max(0, self.total_healed - self.total_self_damage)*(1 - self.owner.shields/20))
@@ -9157,9 +9157,9 @@ class KarmicLoanBuff(Buff):
         self.owner.deal_damage(damage, Tags.Holy, self.spell)
     
     def on_advance(self):
-        self.heal(self.damage)
+        self.do_heal(self.heal)
 
-    def heal(self, amount):
+    def do_heal(self, amount):
         old = self.owner.cur_hp
         self.owner.deal_damage(-amount, Tags.Heal, self.spell)
         self.total_healed += max(0, self.owner.cur_hp - old)
@@ -9179,18 +9179,18 @@ class KarmicLoanSpell(Spell):
         self.max_charges = 4
         self.range = 0
 
-        self.damage = 10
+        self.heal = 10
         self.duration = 5
         self.holy_resistance = 25
 
-        self.upgrades["damage"] = (10, 3)
+        self.upgrades["heal"] = (10, 3)
         self.upgrades["duration"] = (5, 3)
         self.upgrades["max_charges"] = (3, 2)
         self.upgrades["holy_resistance"] = (25, 5)
         self.upgrades["instant"] = (1, 2, "Instant Heal", "You are now healed to full HP when you cast this spell, after the buff is applied.")
 
     def get_description(self):
-        return ("For [{duration}_turns:duration], you gain [{holy_resistance}_holy:holy] resistance and heal for [{damage}_HP:heal] each turn. The amount healed benefits from bonuses to [damage].\n"
+        return ("For [{duration}_turns:duration], you gain [{holy_resistance}_holy:holy] resistance and heal for [{heal}_HP:heal] each turn.\n"
                 "When the effect is removed, you take [holy] damage equal to the total amount healed by this spell, minus all damage inflicted on you by allies for the duration, if the amount is positive. This damage is dealt before you lose the [holy] resistance granted by this spell.\n"
                 "You lose all [SH:shields] before taking this damage, but the damage is reduced by 5% per SH lost.").format(**self.fmt_dict())
     
