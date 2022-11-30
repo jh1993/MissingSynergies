@@ -11,9 +11,9 @@ import random, math, os, sys
 from mods.Bugfixes.Bugfixes import RemoveBuffOnPreAdvance, MinionBuffAura
 import mods.Bugfixes.Bugfixes
 
-if "mods.BugsAndScams.NoMoreScams" in sys.modules:
-    is_immune = sys.modules["mods.BugsAndScams.NoMoreScams"].is_immune
-else:
+try:
+    from mods.NoMoreScams.NoMoreScams import is_immune
+except ImportError:
     is_immune = lambda target, source, damage_type: target.resists[damage_type] >= 100
 
 def send_bolts(effect_path, effect_target, origin, targets):
@@ -347,7 +347,6 @@ class FrozenSpaceLeavingArea(Buff):
     def on_init(self):
         self.buff_type = BUFF_TYPE_PASSIVE
         self.global_triggers[EventOnMoved] = self.on_moved
-        self.prereq = None
     
     def on_moved(self, evt):
         if evt.unit is not self.owner and evt.unit is not self.source.owner:
@@ -1312,7 +1311,7 @@ class RaiseDracolichBreath(BreathWeapon):
             self.caster.level.deal_damage(x, y, self.get_stat("damage")//2, self.legacy, self)
 
         if unit and not unit.is_alive():
-            skeleton = mods.BugsAndScams.Bugfixes.raise_skeleton(self.caster, unit, source=self.caster.source, summon=False)
+            skeleton = mods.Bugfixes.Bugfixes.raise_skeleton(self.caster, unit, source=self.caster.source, summon=False)
             if not skeleton:
                 return
             skeleton.spells[0].damage = self.caster.source.get_stat("minion_damage", base=skeleton.spells[0].damage)
@@ -5670,18 +5669,51 @@ class CultOfDarknessPassive(Buff):
         self.counter = 0
         self.global_triggers[EventOnDeath] = self.on_death
 
-    def get_tormentor(self, unit):
-        unit.spells[0].radius = self.spell.get_stat("radius", base=4)
-        return unit
+class CultOfDarknessBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+
+    def on_init(self):
+        self.name = "Cult of Darkness"
+        self.asset = ["MissingSynergies", "Statuses", "cult_of_darkness"]
+        self.color = Tags.Dark.color
+        self.num_summons = self.spell.get_stat("num_summons")
+        self.death = self.spell.get_stat("death")
+        self.salvation = self.spell.get_stat("salvation")
+        self.torment = self.spell.get_stat("torment")
+        self.counter = 0
+        self.global_triggers[EventOnDeath] = self.on_death
+
+    def get_description(self):
+        return ("%i more cultist deaths needed to summon a dark tormenting mass." % (66 - self.counter)) if self.torment else None
+
+    def on_advance(self):
+        for _ in range(self.num_summons):
+            unit = Cultist()
+            apply_minion_bonuses(self.spell, unit)
+            self.spell.summon(unit, radius=RANGE_GLOBAL, sort_dist=False)
+
+
     
     def raise_skeleton(self, unit):
-        skeleton = mods.BugsAndScams.Bugfixes.raise_skeleton(self.owner, unit, self.spell, summon=False)
+        skeleton = mods.Bugfixes.Bugfixes.raise_skeleton(self.owner, unit, self.spell, summon=False)
         if not skeleton:
             return
         skeleton.max_hp *= 2
         skeleton.spells[0].damage = self.spell.get_stat("minion_damage", base=5)
         self.spell.summon(skeleton, target=unit, radius=0)
         yield
+
+    def summon_tormentor(self):
+        mass = DarkTormentorMass()
+        def get_tormentor(unit):
+            unit.spells[0].radius = self.spell.get_stat("radius", base=4)
+            return unit
+        mass.buffs[0].spawner = lambda: get_tormentor(DarkTormentor())
+        apply_minion_bonuses(self.spell, mass)
+        self.spell.summon(mass, radius=RANGE_GLOBAL, sort_dist=False)
 
     def on_death(self, evt):
 
@@ -5692,10 +5724,7 @@ class CultOfDarknessPassive(Buff):
             self.counter += 1
             if self.counter >= 66:
                 self.counter = 0
-                mass = DarkTormentorMass()
-                mass.buffs[0].spawner = lambda: self.get_tormentor(DarkTormentor())
-                apply_minion_bonuses(self.spell, mass)
-                self.spell.summon(mass, radius=RANGE_GLOBAL, sort_dist=False)
+                self.summon_tormentor()
         
         if self.death and Tags.Living in evt.unit.tags:
             self.owner.level.queue_spell(self.raise_skeleton(evt.unit))
@@ -5712,29 +5741,10 @@ class CultOfDarknessPassive(Buff):
             prophet.buffs = [CultistProphetBuff(self.spell.get_stat("radius", base=4))]
             self.spell.summon(prophet, radius=RANGE_GLOBAL, sort_dist=False)
 
-class CultOfDarknessBuff(Buff):
-
-    def __init__(self, spell):
-        self.spell = spell
-        Buff.__init__(self)
-
-    def on_init(self):
-        self.name = "Cult of Darkness"
-        self.asset = ["MissingSynergies", "Statuses", "cult_of_darkness"]
-        self.color = Tags.Dark.color
-        self.num_summons = self.spell.get_stat("num_summons")
-
-    def get_description(self):
-        passive = self.owner.get_buff(CultOfDarknessPassive)
-        if not passive:
-            return None
-        return ("%i more cultist deaths needed to summon a dark tormenting mass." % (66 - passive.counter)) if passive.torment else None
-
-    def on_advance(self):
-        for _ in range(self.num_summons):
-            unit = Cultist()
-            apply_minion_bonuses(self.spell, unit)
-            self.spell.summon(unit, radius=RANGE_GLOBAL, sort_dist=False)
+    def on_unapplied(self):
+        if not self.torment or random.random() >= self.counter/66:
+            return
+        self.summon_tormentor()
 
 class CultistProphetHeavenlyBlast(FalseProphetHolyBlast):
 
@@ -5853,9 +5863,9 @@ class CultOfDarknessSpell(Spell):
         self.num_summons = 2
     
         self.upgrades["num_summons"] = (1, 3)
-        self.upgrades["death"] = (1, 4, "Cult of Death", "Whenever an allied [living] cultist dies, raise it as a skeleton with double the HP.\nThese skeletons count as cultists for some of this spell's upgrades.")
-        self.upgrades["salvation"] = (1, 4, "Cult of Salvation", "Whenever an allied [living] cultist dies, there is a 1/6 chance to summon a cultist prophet on a random tile.\nThe cultist prophet is a [holy] non-living unit with double the HP of a normal cultist, and its attack is much more powerful without self-damage.\nEach turn, enemies near the cultist prophet permanently lose [10_dark:dark] resistance.\nWhen the cultist prophet is about to die, a nearby allied [living] or [undead] cultist will be sacrificed to heal it to full HP.")
-        self.upgrades["torment"] = (1, 3, "Cult of Torment", "For every 66 [living] or [undead] cultists that die, summon a dark tormenting mass on a random tile.")
+        self.upgrades["death"] = (1, 4, "Cult of Death", "Whenever an allied [living] cultist dies while the buff is active, raise it as a skeleton with double the HP.\nThese skeletons count as cultists for some of this spell's upgrades.")
+        self.upgrades["salvation"] = (1, 4, "Cult of Salvation", "Whenever an allied [living] cultist dies while the buff is active, there is a 1/6 chance to summon a cultist prophet on a random tile.\nThe cultist prophet is a [holy] non-living unit with double the HP of a normal cultist, and its attack is much more powerful without self-damage.\nEach turn, enemies near the cultist prophet permanently lose [10_dark:dark] resistance.\nWhen the cultist prophet is about to die, a nearby allied [living] or [undead] cultist will be sacrificed to heal it to full HP.")
+        self.upgrades["torment"] = (1, 3, "Cult of Torment", "For every 66 [living] or [undead] cultists that die while the buff is active, summon a dark tormenting mass on a random tile.\nWhen the buff is removed, you have a chance to summon a dark tormenting mass equal to the number of cultists that have died during its lifetime divided by 66.")
 
     def get_description(self):
         return ("Each turn, summon [{num_summons}:num_summons] cultists on random tiles.\n"
@@ -5863,11 +5873,6 @@ class CultOfDarknessSpell(Spell):
                 "Lasts [{duration}_turns:duration].").format(**self.fmt_dict())
 
     def cast_instant(self, x, y):
-        passive = CultOfDarknessPassive(self)
-        existing = self.caster.get_buff(CultOfDarknessPassive)
-        if existing:
-            passive.counter = existing.counter
-        self.caster.apply_buff(passive)
         self.caster.apply_buff(CultOfDarknessBuff(self), self.get_stat("duration"))
 
 class WoeBuff(Buff):
@@ -6221,19 +6226,21 @@ class ParlorTrickDummySpell(Spell):
     def cast_instant(self, x, y):
         return
 
-class ParlorTrickEndless(Upgrade):
+class ParlorTrickEndlessCounter(Buff):
 
     def on_init(self):
-        self.name = "Endless Trick"
-        self.level = 4
-        self.description = "Each cast of Parlor Trick has a 75% chance to cast itself again, as long as it has enough charges.\nThis upgrade cannot copy Parlor Trick more times in a turn than the spell has max charges."
-        self.spell_bonuses[ParlorTrickSpell]["endless"] = 1
+        self.buff_type = BUFF_TYPE_PASSIVE
+        self.counter = 1
     
-    def on_applied(self, owner):
-        self.prereq.times_copied = 0
-
+    def on_attempt_apply(self, owner):
+        existing = owner.get_buff(ParlorTrickEndlessCounter)
+        if not existing:
+            return True
+        existing.counter += 1
+        return False
+    
     def on_pre_advance(self):
-        self.prereq.times_copied = 0
+        self.owner.remove_buff(self)
 
 class ParlorTrickSpell(Spell):
 
@@ -6244,12 +6251,13 @@ class ParlorTrickSpell(Spell):
         self.level = 1
         self.max_charges = 20
         self.range = 12
-        self.times_copied = 0
+        self.can_target_self = True
 
         self.upgrades["requires_los"] = (-1, 2, "Blindcasting", "Parlor Trick can be cast without line of sight.")
         self.upgrades["max_charges"] = (15, 2)
         self.upgrades["range"] = (5, 2)
-        self.add_upgrade(ParlorTrickEndless())
+        self.upgrades["endless"] = (1, 4, "Endless Trick", "Each cast of Parlor Trick has a 75% chance to cast itself again, as long as it has enough charges.\nThis upgrade cannot copy Parlor Trick more times in a turn than the spell has max charges. This resets before the beginning of your turn.")
+        self.upgrades["destroy"] = (1, 7, "Utterly Destroy", "Parlor Trick now has a chance to completely delete the target enemy from existence, which will not trigger any on-death effects.\nThe chance to fail is equal to the enemy's max HP divided by your max HP, up to 100%.\nOther than the chance of failure, no enemy is immune to this effect.")
 
     def get_description(self):
         return ("Pretend to cast a [fire] spell, an [ice] spell, a [lightning] spell, a [nature] spell, an [arcane] spell, a [holy] spell, and a [dark] spell at the target tile in random order, triggering all effects that are normally triggered when casting spells with those tags.\n"
@@ -6269,8 +6277,16 @@ class ParlorTrickSpell(Spell):
             spell.owner = self.caster
             self.caster.level.event_manager.raise_event(EventOnSpellCast(spell, self.caster, x, y), self.caster)
         
-        if self.get_stat("endless") and self.can_cast(x, y) and self.cur_charges > 0 and self.times_copied < self.get_stat("max_charges") and random.random() < 0.75:
-            self.times_copied += 1
+        if self.get_stat("destroy"):
+            unit = self.caster.level.get_unit_at(x, y)
+            if unit and are_hostile(unit, self.caster) and random.random() >= unit.max_hp/self.caster.max_hp:
+                unit.kill(trigger_death_event=False)
+
+        if self.get_stat("endless") and self.can_cast(x, y) and self.cur_charges > 0 and random.random() < 0.75:
+            counter = self.caster.get_buff(ParlorTrickEndlessCounter)
+            if counter and counter.counter > self.get_stat("max_charges"):
+                return
+            self.caster.apply_buff(ParlorTrickEndlessCounter())
             self.caster.level.act_cast(self.caster, self, x, y)
 
 class GrudgeReaperBuff(Soulbound):
