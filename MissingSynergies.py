@@ -6257,7 +6257,6 @@ class ParlorTrickSpell(Spell):
         self.upgrades["max_charges"] = (15, 2)
         self.upgrades["range"] = (5, 2)
         self.upgrades["endless"] = (1, 4, "Endless Trick", "Each cast of Parlor Trick has a 75% chance to cast itself again, as long as it has enough charges.\nThis upgrade cannot copy Parlor Trick more times in a turn than the spell has max charges. This resets before the beginning of your turn.")
-        self.upgrades["destroy"] = (1, 7, "Utterly Destroy", "Parlor Trick now has a chance to completely delete the target enemy from existence, which will not trigger any on-death effects.\nThe chance to fail is equal to the enemy's max HP divided by your max HP, up to 100%.\nOther than the chance of failure, no enemy is immune to this effect.")
 
     def get_description(self):
         return ("Pretend to cast a [fire] spell, an [ice] spell, a [lightning] spell, a [nature] spell, an [arcane] spell, a [holy] spell, and a [dark] spell at the target tile in random order, triggering all effects that are normally triggered when casting spells with those tags.\n"
@@ -6276,11 +6275,6 @@ class ParlorTrickSpell(Spell):
             spell.caster = self.caster
             spell.owner = self.caster
             self.caster.level.event_manager.raise_event(EventOnSpellCast(spell, self.caster, x, y), self.caster)
-        
-        if self.get_stat("destroy"):
-            unit = self.caster.level.get_unit_at(x, y)
-            if unit and are_hostile(unit, self.caster) and random.random() >= unit.max_hp/self.caster.max_hp:
-                unit.kill(trigger_death_event=False)
 
         if self.get_stat("endless") and self.can_cast(x, y) and self.cur_charges > 0 and random.random() < 0.75:
             counter = self.caster.get_buff(ParlorTrickEndlessCounter)
