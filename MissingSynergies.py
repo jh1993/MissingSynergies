@@ -61,7 +61,7 @@ class BitterCurse(Buff):
     
     # For my No More Scams mod
     def can_redeal(self, target, source, damage_type):
-        return damage_type == Tags.Poison and target.resists[Tags.Holy] < 100
+        return damage_type == Tags.Poison and not is_immune(target, self.spell, Tags.Holy)
 
 class WormwoodSpell(Spell):
 
@@ -2456,7 +2456,7 @@ class AbyssalInsight(Upgrade):
     def can_redeal(self, target, source, damage_type):
         if not self.qualifies(source):
             return False
-        return target.resists[Tags.Dark] < 100
+        return not is_immune(target, self, Tags.Dark)
 
 class DivineGazeSpell(Spell):
 
@@ -9053,14 +9053,14 @@ class XenodruidFormSpell(Spell):
 
         self.minion_health = 20
         self.minion_range = 12
-        self.confusion_cooldown = 8
+        self.confusion_cooldown = 12
         self.num_summons = 2
         self.duration = 15
         self.damage = 20
 
         self.upgrades["minion_health"] = (20, 3)
         self.upgrades["num_summons"] = (1, 3)
-        self.upgrades["confusion_cooldown"] = (-2, 2)
+        self.upgrades["confusion_cooldown"] = (-3, 2)
         self.upgrades["germination"] = (1, 5, "Spell Germination", "Whenever you cast a spell, you summon a number of braintangler bushes at random locations around the target tile equal to the spell's level.")
         self.upgrades["parasite"] = (1, 5, "Brain Parasite", "Whenever a confused enemy dies, summon a braintangler bush at its location.")
         self.upgrades["lethargy"] = (1, 3, "Lethargy", "Each turn, a confused enemy has a 50% chance per ability (except for the ability forced upon it by confusion) to increase the ability's remaining cooldown by [1_turn:duration], before it acts.\nThis does not affect abilities with no cooldown, and cannot increase an ability's cooldown beyond its maximum cooldown.\nEnemies that can gain clarity are unaffected by this upgrade.")
