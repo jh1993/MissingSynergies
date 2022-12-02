@@ -60,8 +60,8 @@ class BitterCurse(Buff):
             evt.unit.apply_buff(Poison(), evt.damage)
     
     # For my No More Scams mod
-    def can_redeal(self, target, source, damage_type):
-        return damage_type == Tags.Poison and not is_immune(target, self.spell, Tags.Holy)
+    def can_redeal(self, target, source, damage_type, already_checked=[]):
+        return damage_type == Tags.Poison and not is_immune(target, self.spell, Tags.Holy, already_checked)
 
 class WormwoodSpell(Spell):
 
@@ -1288,8 +1288,8 @@ class RaiseDracolichBreath(BreathWeapon):
         self.name = "Dark Breath"
         self.description = "Deals Dark damage%s in a cone. Reanimates slain living units as skeletons." % ((" and half %s damage" % self.legacy.name) if self.legacy else "")
 
-    def can_redeal(self, target):
-        return self.legacy and not is_immune(target, self, self.legacy)
+    def can_redeal(self, target, already_checked=[]):
+        return self.legacy and not is_immune(target, self, self.legacy, already_checked)
 
     def cast(self, x, y):
         if self.legacy:
@@ -1640,11 +1640,11 @@ class BreathOfAnnihilation(Upgrade):
             spell.angle = max(spell.angle, math.pi/4)
 
     # For my No More Scams mod
-    def can_redeal(self, target, source, damage_type):
+    def can_redeal(self, target, source, damage_type, already_checked=[]):
         if not isinstance(source, BreathWeapon):
             return False
         for dtype in self.dtypes:
-            if not is_immune(target, self, dtype):
+            if not is_immune(target, self, dtype, already_checked):
                 return True
         return False
 
@@ -2453,10 +2453,10 @@ class AbyssalInsight(Upgrade):
             yield
     
     # For my No More Scams mod
-    def can_redeal(self, target, source, damage_type):
+    def can_redeal(self, target, source, damage_type, already_checked=[]):
         if not self.qualifies(source):
             return False
-        return not is_immune(target, self, Tags.Dark)
+        return not is_immune(target, self, Tags.Dark, already_checked)
 
 class DivineGazeSpell(Spell):
 
@@ -2516,9 +2516,9 @@ class WarpLensStrike(LeapAttack):
             desc += " Cascades to a random target in LOS after killing the previous."
         return desc
 
-    def can_redeal(self, target):
+    def can_redeal(self, target, already_checked=[]):
         for eye in [buff for buff in self.spell.caster.buffs if isinstance(buff, Spells.ElementalEyeBuff)]:
-            if eye.turns_left >= eye.freq and not is_immune(target, eye.spell, eye.element):
+            if eye.turns_left >= eye.freq and not is_immune(target, eye.spell, eye.element, already_checked):
                 return True
 
     def hit(self, x, y, eyes, cascade=False):
@@ -3103,7 +3103,7 @@ class RainbowBreath(BreathWeapon):
         else:
             self.caster.level.deal_damage(x, y, self.get_stat("damage"), self.damage_type, self)
     
-    def can_redeal(self, unit):
+    def can_redeal(self, unit, already_checked=[]):
         return unit.resists[self.damage_type] - (self.caster.resists[self.damage_type]//2 if self.caster.resists[self.damage_type] >= 0 else 0) - self.penetration < 100
 
 class RainbowDragonMage(Buff):
@@ -5271,8 +5271,8 @@ class ChaosTheoryPerturbation(Spell):
     def get_impacted_tiles(self, x, y):
         return [p for stage in Burst(self.caster.level, Point(x, y), self.get_stat('radius'), ignore_walls=True) for p in stage]
     
-    def can_redeal(self, unit):
-        return not is_immune(unit, self, Tags.Lightning) or not is_immune(unit, self, Tags.Ice)
+    def can_redeal(self, unit, already_checked=[]):
+        return not is_immune(unit, self, Tags.Lightning, already_checked) or not is_immune(unit, self, Tags.Ice, already_checked)
 
     def cast(self, x, y):
         for point in Bolt(self.caster.level, self.caster, Point(x, y), find_clear=False):
@@ -5832,10 +5832,10 @@ class CultistProphetBuff(Buff):
             unit.apply_buff(RevelationBuff())
 
     # For my No More Scams mod
-    def can_redeal(self, target, source, dtype):
+    def can_redeal(self, target, source, dtype, already_checked=[]):
         if dtype != Tags.Dark or source.owner is not self.owner:
             return False
-        return not is_immune(target, source, Tags.Holy)
+        return not is_immune(target, source, Tags.Holy, already_checked)
 
 class RevelationBuff(Buff):
     def on_init(self):
@@ -5963,7 +5963,7 @@ class WoeBlastSpell(SimpleRangedAttack):
         SimpleRangedAttack.__init__(self, name=name, damage=damage, damage_type=tag, range=range)
         self.description = "Reduces %s resistance to 0 before dealing damage." % (self.damage_type.name)
 
-    def can_redeal(self, target):
+    def can_redeal(self, target, already_checked=[]):
         return True
 
     def hit(self, x, y):
@@ -6354,7 +6354,7 @@ class GrudgeReapSpell(SimpleMeleeAttack):
         return Spell.can_cast(self, x, y)
 
     # For my No More Scams mod
-    def can_redeal(self, target):
+    def can_redeal(self, target, already_checked=[]):
         return self.hatred
 
 class GrudgeReaperSpell(Spell):
@@ -6707,7 +6707,7 @@ class PrimordialRotBuff(Buff):
             self.spell.summon(self.spell.get_unit(self.owner.max_hp//2), target=self.owner, radius=5)
 
     # For my No More Scams mod
-    def can_redeal(self, target, source, damage_type):
+    def can_redeal(self, target, source, damage_type, already_checked=[]):
         return True
 
 class PrimordialRotSpell(Spell):
@@ -7298,7 +7298,7 @@ class PureglassKnightSpell(Spell):
             melee.buff_name = "Glassed"
             melee.buff_duration = self.get_stat("duration", base=3)
             # For my No More Scams mod
-            melee.can_redeal = lambda target: target.resists[Tags.Physical] < 200 and not target.has_buff(GlassPetrifyBuff)
+            melee.can_redeal = lambda target, already_checked=[]: target.resists[Tags.Physical] < 200 and not target.has_buff(GlassPetrifyBuff)
         leap = LeapAttack(damage=minion_damage, range=self.get_stat("minion_range"), is_leap=False, is_ghost=self.get_stat("phase"))
         leap.name = "Glass Charge"
         unit.spells = [melee, leap]
@@ -7643,7 +7643,7 @@ class InexorableDecay(Upgrade):
         yield
 
     # For my No More Scams mod
-    def can_redeal(self, target, source, damage_type):
+    def can_redeal(self, target, source, damage_type, already_checked=[]):
         return damage_type == Tags.Dark
 
 class RaiseWastewight(Upgrade):
@@ -7668,7 +7668,7 @@ class RaiseWastewight(Upgrade):
         unit.spells[0].onhit = lambda caster, target: drain_max_hp_kill(target, 2)
         unit.spells[0].description = "Drains 2 max HP. Targets with less than 2 max HP are instantly killed."
         # For my No More Scams mod
-        unit.spells[0].can_redeal = lambda target: True
+        unit.spells[0].can_redeal = lambda target, already_checked=[]: True
         apply_minion_bonuses(self.prereq, unit)
         self.owner.level.queue_spell(self.do_summon(unit, evt.unit))
 
@@ -8172,7 +8172,7 @@ class BloodyMassBloodSplatter(SimpleRangedAttack):
                 self.caster.source.caster.apply_buff(BloodrageBuff(1), self.get_stat("duration"))
 
     # For my No More Scams mod
-    def can_redeal(self, target):
+    def can_redeal(self, target, already_checked=[]):
         return target.resists[Tags.Dark] - self.get_penetration() < 100
 
     def get_stat(self, attr, base=None):
