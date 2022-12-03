@@ -7247,6 +7247,11 @@ class PureglassKnightBuff(Buff):
             yield
         target.deal_damage(self.damage, Tags.Physical, self)
 
+class NoShieldLimitUnit(Unit):
+    def add_shields(self, shields):
+        self.level.show_effect(self.x, self.y, Tags.Shield_Apply)
+        self.shields += shields
+
 class PureglassKnightSpell(Spell):
 
     def on_init(self):
@@ -7278,12 +7283,12 @@ class PureglassKnightSpell(Spell):
         return stats
 
     def get_description(self):
-        return ("Summon a [living] [holy] [arcane] [glass] knight. It has fixed 1 HP, but gains [1_SH:shields] per 10 bonus to [minion_health:minion_health] this spell has, rounded up (currently [{shields}_SH:shields]).\n"
+        return ("Summon a [living] [holy] [arcane] [glass] knight. It has fixed 1 HP, but gains [1_SH:shields] per 10 bonus to [minion_health:minion_health] this spell has, rounded up (currently [{shields}_SH:shields]); it can have more than the usual limit of [20_SH:shields].\n"
                 "The knight has a melee attack and a charge attack with [{minion_range}_range:minion_range], both of which deal [{minion_damage}_physical:physical] damage.\n"
                 "Whenever the knight loses [SH:shields], it has a 25% chance to summon another knight with [1_SH:shields].").format(**self.fmt_dict())
 
     def summon_knight(self, target, minor=False):
-        unit = Unit()
+        unit = NoShieldLimitUnit()
         unit.asset = ["MissingSynergies", "Units", "pureglass_knight"]
         unit.name = "Pureglass Knight"
         unit.max_hp = 1
