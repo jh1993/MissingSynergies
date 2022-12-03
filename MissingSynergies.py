@@ -8762,8 +8762,8 @@ class CantripAdept(Upgrade):
         self.asset = ["MissingSynergies", "Icons", "cantrip_adept"]
         self.tags = [Tags.Sorcery]
         self.level = 6
-        self.description = "The first time each turn you damage an enemy with a level 1 [sorcery] spell, that enemy takes additional damage of the same type equal to the combined level of all of your spells, spell upgrades, and skills.\nThis refreshes before the beginning of your turn."
-        self.global_triggers[EventOnDamaged] = self.on_damaged
+        self.description = "The first time each turn you attempt to damage an enemy with a level 1 [sorcery] spell, deal additional damage of the same type equal to the combined level of all of your spells, spell upgrades, and skills.\nThis refreshes before the beginning of your turn."
+        self.global_triggers[EventOnPreDamaged] = self.on_pre_damaged
         self.active = True
     
     def get_damage(self):
@@ -8779,11 +8779,15 @@ class CantripAdept(Upgrade):
     def on_pre_advance(self):
         self.active = True
     
-    def on_damaged(self, evt):
-        if not self.active or not are_hostile(evt.unit, self.owner) or not isinstance(evt.source, Spell) or evt.source.level != 1 or Tags.Sorcery not in evt.source.tags:
+    def on_pre_damaged(self, evt):
+        if evt.damage <= 0 or not self.active or not are_hostile(evt.unit, self.owner) or not isinstance(evt.source, Spell) or evt.source.level != 1 or Tags.Sorcery not in evt.source.tags:
             return
         self.active = False
+        self.owner.level.queue_spell(self.deal_damage(evt))
+
+    def deal_damage(self, evt):
         evt.unit.deal_damage(self.get_damage(), evt.damage_type, self)
+        yield
 
 class BleedBuff(Buff):
 
@@ -9095,17 +9099,21 @@ class HeavyElements(Upgrade):
         self.asset = ["MissingSynergies", "Icons", "heavy_elements"]
         self.tags = [Tags.Fire, Tags.Lightning, Tags.Ice, Tags.Arcane]
         self.level = 6
-        self.description = "Whenever one of your [fire], [lightning], [ice], [arcane], or [elemental] minions damages an enemy with an attack, that enemy takes additional damage of the same type equal to 10% of the minion's max HP, rounded down."
-        self.global_triggers[EventOnDamaged] = self.on_damaged
+        self.description = "Whenever one of your [fire], [lightning], [ice], [arcane], or [elemental] minions attempts to damage an enemy with an attack, deal additional damage of the same type equal to 10% of the minion's max HP, rounded down."
+        self.global_triggers[EventOnPreDamaged] = self.on_pre_damaged
     
-    def on_damaged(self, evt):
-        if not are_hostile(evt.unit, self.owner):
+    def on_pre_damaged(self, evt):
+        if evt.damage <= 0 or not are_hostile(evt.unit, self.owner):
             return
         if not isinstance(evt.source, Spell) or not evt.source.owner or evt.source.owner.is_player_controlled:
             return
         if not [tag for tag in [Tags.Fire, Tags.Lightning, Tags.Ice, Tags.Arcane, Tags.Elemental] if tag in evt.source.owner.tags]:
             return
+        self.owner.level.queue_spell(self.deal_damage(evt))
+
+    def deal_damage(self, evt):
         evt.unit.deal_damage(evt.source.owner.max_hp//10, evt.damage_type, self)
+        yield
 
 class FleshLoan(Upgrade):
 
