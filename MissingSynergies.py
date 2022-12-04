@@ -6,6 +6,7 @@ from CommonContent import *
 from Monsters import *
 from Variants import *
 from Shrines import *
+from Consumables import *
 import random, math, os, sys
 
 from mods.Bugfixes.Bugfixes import RemoveBuffOnPreAdvance, MinionBuffAura
@@ -7595,12 +7596,11 @@ class RedheartSpider(Upgrade):
         self.minion_health = 70
         self.minion_range = 2
         self.minion_damage = 2
-        self.timer = 1
-        self.minion = None
         self.owner_triggers[EventOnUnitAdded] = lambda evt: self.do_summon()
+        self.owner_triggers[EventOnSpellCast] = self.on_spell_cast
 
     def get_description(self):
-        return ("Begin each level accompanied by the Redheart Spider. If it dies, it will be summoned again after [10_turns:duration].\n"
+        return ("Begin each level accompanied by the Redheart Spider. If it dies, it will be summoned again when you use a mana potion.\n"
                 "The Redheart Spider is a [holy] [nature] [demon] [spider] minion with [{minion_health}_HP:minion_health] and an attack that deals [{minion_damage}_physical:physical] damage with [{minion_range}_range:minion_range]. Its attacks gain damage equal to 20% of its max HP, range equal to 10% of its max HP, and inflict duration-stacking [poison] with duration equal to damage dealt.\n"
                 "The Redheart Spider has an aura with radius equal to the square root of its max HP, rounded down. Each turn, enemies in this aura have their [poison] durations increased by [2_turns:duration], and have a 25% chance to be [stunned] or go [berserk]. Whenever a [spider] dies within the aura, it will be eaten, adding its max HP to the Redheart Spider's and adding [1_SH:shields].").format(**self.fmt_dict())
 
@@ -7617,20 +7617,15 @@ class RedheartSpider(Upgrade):
         unit.resists[Tags.Fire] = 100
         unit.spells = [RedheartSpiderBite(self.get_stat("minion_damage"), self.get_stat("minion_range"))]
         unit.buffs = [SpiderBuff(), RedheartSpiderBuff()]
-        success = self.summon(unit, radius=RANGE_GLOBAL)
-        if success:
-            self.minion = unit
-            self.timer = 10
-        else:
-            self.timer = 1
+        self.summon(unit, radius=RANGE_GLOBAL)
 
-    def on_advance(self):
-        if all(u.team == TEAM_PLAYER for u in self.owner.level.units):
+    def on_spell_cast(self, evt):
+        if not isinstance(evt.spell, SpellCouponSpell):
             return
-        if not self.minion or not self.minion.is_alive():
-            self.timer -= 1
-            if self.timer <= 0:
-                self.do_summon()
+        for unit in self.owner.level.units:
+            if unit.source is self:
+                return
+        self.do_summon()
 
 class InexorableDecay(Upgrade):
 
