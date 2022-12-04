@@ -8721,7 +8721,7 @@ class ReflexArc(Upgrade):
         return stats
 
     def get_description(self):
-        return ("Each turn, apply [{poison_duration}_turns:duration] of [poison] and deal [{damage}_lightning:lightning] and [{damage}_poison:poison] damage to a random enemy in line of sight within [{range}_tiles:range] of yourself. Enemies immune to both damage types will not be targeted.\n"
+        return ("Each turn, apply [{poison_duration}_turns:duration] of [poison] and deal [{damage}_lightning:lightning] and [{damage}_poison:poison] damage to a random enemy in line of sight within [{range}_tiles:range] of yourself.\n"
                 "This counts as you casting a level 1 [nature] [lightning] [sorcery] spell.\n"
                 "This skill benefits 10 times from bonuses to [duration].").format(**self.fmt_dict())
 
