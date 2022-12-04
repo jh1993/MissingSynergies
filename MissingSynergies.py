@@ -6215,7 +6215,9 @@ class MadWerewolfSpell(Spell):
         self.summon(unit, target=Point(x, y))
 
 class ParlorTrickDummySpell(Spell):
-    def __init__(self, tag):
+    def __init__(self, tag=None):
+        if not tag:
+            tag = random.choice([Tags.Fire, Tags.Ice, Tags.Lightning, Tags.Nature, Tags.Holy, Tags.Dark, Tags.Arcane])
         Spell.__init__(self)
         self.tags = [tag]
         self.name = "%s Trick" % tag.name
@@ -7070,7 +7072,9 @@ class AegisOverloadSpell(Spell):
                 self.caster.level.queue_spell(self.bolt(unit, tag, random.choice(targets), resist, damage, disrupt, duration))
 
 class ChaosTrickDummySpell(Spell):
-    def __init__(self, tag, level):
+    def __init__(self, tag=None, level=1):
+        if not tag:
+            tag = random.choice([Tags.Fire, Tags.Lightning, Tags.Chaos])
         Spell.__init__(self)
         self.tags = [tag]
         self.name = "%s Trick" % tag.name
