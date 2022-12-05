@@ -2893,9 +2893,10 @@ class MorbidSphereSpell(OrbSpell):
         if self.get_stat("ghost"):
             ghost = Bloodghast()
             self.modify_unit(ghost, 4)
-            ghost.spells[0].onhit = lambda caster, target: caster.apply_buff(BloodrageBuff(1), caster.get_stat(self.get_stat("duration", base=10), ghost.spells[0], "duration"))
-            ghost.spells[0].description = ""
-            ghost.spells[0].get_description = lambda: "Gain +1 damage for %i turns with each attack" % ghost.get_stat(self.get_stat("duration", base=10), ghost.spells[0], "duration")
+            melee = ghost.spells[0]
+            melee.onhit = lambda caster, target: caster.apply_buff(BloodrageBuff(1), caster.get_stat(self.get_stat("duration", base=10), melee, "duration"))
+            melee.description = ""
+            melee.get_description = lambda: "Gain +1 damage for %i turns with each attack" % ghost.get_stat(self.get_stat("duration", base=10), melee, "duration")
             self.summon(ghost, target=orb, radius=5)
     
     def on_orb_walk(self, existing):
