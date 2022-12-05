@@ -288,7 +288,7 @@ class Electrolysis(Upgrade):
         return stats
 
     def get_description(self):
-        return ("If a [poisoned:poison] enemy takes [lightning] damage from a source other than this skill, it is electrolyzed, immediately reducing its [poison] duration by half. On death, remove all poison from an electrolyzed enemy.\n"
+        return ("If a [poisoned:poison] enemy takes [lightning] damage from a source other than this skill, it is electrolyzed, reducing its [poison] duration by half. On death, remove all poison from an electrolyzed enemy.\n"
                 "For every 10 turns of poison removed this way, rounded up, a bolt of toxic lightning is shot from the electrolyzed enemy toward a random enemy within a [{radius}_tile:radius] burst. An enemy can be hit by multiple bolts, and the electrolyzed enemy can also be hit.\n"
                 "An enemy hit by a bolt is [acidified:poison], losing [100_poison:poison] resistance.\n"
                 "If the hit enemy is already [acidified:poison], it is instead [poisoned:poison] for [{total_duration}_turns:duration]. This duration benefits from bonuses to both [duration] and [damage].\n"
@@ -8935,7 +8935,7 @@ class ConfusedStruggleSpell(Spell):
         self.cool_down = self.spell.get_stat("confusion_cooldown")
 
     def get_description(self):
-        return "Deals %i physical damage to the caster or an adjacent ally. Must be used whenever possible." % self.spell.get_stat("damage")
+        return "Deals %i physical damage to the caster or an adjacent ally%s. Must be used whenever possible." % (self.spell.get_stat("damage"), (", and 2 physical damage to all allies within %i tiles" % math.ceil(self.spell.get_stat("minion_range")/3)) if self.spell.get_stat("scream") else "")
 
     def can_cast(self, x, y):
         if self.caster.has_buff(StunImmune):
@@ -8952,6 +8952,27 @@ class ConfusedStruggleSpell(Spell):
 
     def cast_instant(self, x, y):
         self.caster.level.deal_damage(x, y, self.spell.get_stat("damage"), Tags.Physical, self.spell)
+
+        if self.spell.get_stat("scream"):
+            radius = math.ceil(self.spell.get_stat("minion_range")/3)
+            effects_left = 7
+
+            for unit in self.caster.level.get_units_in_ball(self.caster, radius):
+                if are_hostile(self.caster, unit):
+                    continue
+                unit.deal_damage(2, Tags.Physical, self.spell)
+                effects_left -= 1
+
+            # Show some graphical indication of this aura if it didnt hit much
+            points = self.caster.level.get_points_in_ball(self.caster.x, self.caster.y, radius)
+            points = [p for p in points if not self.caster.level.get_unit_at(p.x, p.y)]
+            random.shuffle(points)
+            for _ in range(effects_left):
+                if not points:
+                    break
+                p = points.pop()
+                self.caster.level.show_effect(p.x, p.y, Tags.Physical, minor=True)
+
         if self.caster.gets_clarity:
             # Apply clarity for 2 turns so that 1 turn of it remains after the turn that was spent struggling.
             self.caster.apply_buff(StunImmune(), 2)
@@ -9074,10 +9095,11 @@ class XenodruidFormSpell(Spell):
         self.upgrades["germination"] = (1, 5, "Spell Germination", "Whenever you cast a spell, you summon a number of braintangler bushes at random locations around the target tile equal to the spell's level.")
         self.upgrades["parasite"] = (1, 5, "Brain Parasite", "Whenever a confused enemy dies, summon a braintangler bush at its location.")
         self.upgrades["lethargy"] = (1, 3, "Lethargy", "Each turn, a confused enemy has a 50% chance per ability (except for the ability forced upon it by confusion) to increase the ability's remaining cooldown by [1_turn:duration], before it acts.\nThis does not affect abilities with no cooldown, and cannot increase an ability's cooldown beyond its maximum cooldown.\nEnemies that can gain clarity are unaffected by this upgrade.")
+        self.upgrades["scream"] = (1, 5, "Confused Screaming", "Whenever a confused enemy uses the special confusion ability, it will also deal [2_physical:physical] damage to all of its allies in a radius equal to 1/3 of this spell's [minion_range:minion_range] stat, rounded up.\nThis damage is fixed, and cannot be increased using shrines, skills, or buffs.")
     
     def get_description(self):
         return ("Transform into an alien treant for [{duration}_turns:duration], summoning [{num_summons}:num_summons] braintangler bushes each turn at random locations within [{minion_range}_tiles:minion_range] of yourself. They are immobile [arcane] minions with [{minion_health}_HP:minion_health], and can inflict confusion on an enemy within [{minion_range}_tiles:minion_range] or decrease an enemy's confusion cooldown by [1_turn:duration].\n"
-                "A confused enemy gains a special attack that deals [{damage}_physical:physical] damage to itself or another enemy adjacent to it, with a [{confusion_cooldown}_turns:cooldown] cooldown, which must be used whenever possible, counting as damage done by this spell. If the enemy can gain clarity, it gains clarity after using the confusion attack, which cannot be used during clarity.").format(**self.fmt_dict())
+                "A confused enemy gains a special attack that causes itself or another enemy adjacent to it to take [{damage}_physical:physical] damage from this spell, with a [{confusion_cooldown}_turns:cooldown] cooldown, which must be used whenever possible. It causes clarity if the user can gain clarity, and cannot be used during clarity.").format(**self.fmt_dict())
 
     def summon_bush(self, target, sort_dist=False):
         unit = Unit()
