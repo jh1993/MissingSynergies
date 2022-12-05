@@ -3733,7 +3733,7 @@ class ChaosHailSpell(Spell):
         self.max_hits = 3
 
         self.upgrades["duration"] = (5, 3)
-        self.upgrades["radius"] = (3, 2)
+        self.upgrades["radius"] = (6, 4)
         self.upgrades["num_targets"] = (2, 3)
         self.upgrades["max_hits"] = (2, 6, "Max Hits", "Each target can now be hit up to [5:num_targets] times.")
     
