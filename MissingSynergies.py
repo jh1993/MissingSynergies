@@ -7282,10 +7282,6 @@ class PureglassKnightSpell(Spell):
     def fmt_dict(self):
         stats = Spell.fmt_dict(self)
         stats["duration"] = self.get_stat("duration", base=3)
-        return stats
-
-    def fmt_dict(self):
-        stats = Spell.fmt_dict(self)
         stats["shields"] = math.ceil(self.get_stat("minion_health")/10)
         return stats
 
