@@ -9080,16 +9080,16 @@ class XenodruidFormSpell(Spell):
 
         self.minion_health = 20
         self.minion_range = 12
-        self.confusion_cooldown = 12
+        self.confusion_cooldown = 16
         self.num_summons = 2
         self.duration = 15
         self.damage = 20
 
         self.upgrades["minion_health"] = (20, 3)
         self.upgrades["num_summons"] = (1, 3)
-        self.upgrades["confusion_cooldown"] = (-3, 2)
+        self.upgrades["confusion_cooldown"] = (-4, 3)
         self.upgrades["germination"] = (1, 5, "Spell Germination", "Whenever you cast a spell, you summon a number of braintangler bushes at random locations around the target tile equal to the spell's level.")
-        self.upgrades["parasite"] = (1, 5, "Brain Parasite", "Whenever a confused enemy dies, summon a braintangler bush at its location.")
+        self.upgrades["parasite"] = (1, 7, "Brain Parasite", "Whenever a confused enemy dies, summon a braintangler bush at its location.")
         self.upgrades["lethargy"] = (1, 3, "Lethargy", "Each turn, a confused enemy has a 50% chance per ability (except for the ability forced upon it by confusion) to increase the ability's remaining cooldown by [1_turn:duration], before it acts.\nThis does not affect abilities with no cooldown, and cannot increase an ability's cooldown beyond its maximum cooldown.\nEnemies that can gain clarity are unaffected by this upgrade.")
         self.upgrades["scream"] = (1, 5, "Confused Screaming", "Whenever a confused enemy uses the special confusion ability, it will also deal [2_physical:physical] damage to all of its allies in a radius equal to 1/3 of this spell's [minion_range:minion_range] stat, rounded up.\nThis damage is fixed, and cannot be increased using shrines, skills, or buffs.")
     
