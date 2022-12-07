@@ -8288,8 +8288,19 @@ class QuantumOverlayBuff(Buff):
             self.deduct_hp(evt.source.owner, 1)
 
     def on_spell_cast(self, evt):
-        if self.owner.level.can_see(evt.x, evt.y, self.owner.x, self.owner.y) or evt.spell.get_stat("requires_los") < 0:
+
+        if self.owner.level.can_see(evt.x, evt.y, self.owner.x, self.owner.y) or not evt.spell.requires_los:
             return
+
+        bonus_total = self.owner.spell_bonuses[type(evt.spell)].get("requires_los", 0)
+        # Add tag bonuses
+        for tag in evt.spell.tags:
+            bonus_total += self.owner.tag_bonuses[tag].get("requires_los", 0)
+        # Add global bonus
+        bonus_total += self.owner.global_bonuses.get("requires_los", 0)
+        if bonus_total < -1:
+            return
+
         total_level = evt.spell.level
         for buff in self.owner.buffs:
             if not isinstance(buff, Upgrade) or buff.prereq is not evt.spell or isinstance(buff, ShrineBuff):
