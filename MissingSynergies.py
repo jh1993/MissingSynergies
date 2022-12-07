@@ -9266,11 +9266,11 @@ class FleshburstZombieBuff(Buff):
         self.color = Tags.Undead.color
         self.radius = self.spell.get_stat("radius")
         self.maggot = self.spell.get_stat("maggot")
-        self.description = "On death, deal dark and poison damage equal to half of this unit's max HP to enemies in a %i tile radius, and summon a blighted skeleton%s." % (self.radius, ", plus a flesh maggot per 15 max HP this unit had, rounded up" if self.maggot else "")
+        self.description = "On death, deal dark and poison damage equal to 25%% of this unit's max HP to enemies in a %i tile radius, and summon a blighted skeleton%s." % (self.radius, ", plus a flesh maggot per 15 max HP this unit had, rounded up" if self.maggot else "")
         self.owner_triggers[EventOnDeath] = lambda evt: self.owner.level.queue_spell(self.fleshburst())
     
     def fleshburst(self):
-        damage = self.owner.max_hp//2
+        damage = self.owner.max_hp//4
         for point in self.owner.level.get_points_in_ball(self.owner.x, self.owner.y, self.radius):
             unit = self.owner.level.get_unit_at(point.x, point.y)
             if not unit or not are_hostile(unit, self.owner):
@@ -9323,7 +9323,7 @@ class BlightedSkeletonAura(DamageAuraBuff):
             self.owner_triggers[EventOnDeath] = lambda evt: self.owner.level.queue_spell(self.boneburst())
 
     def boneburst(self):
-        damage = self.owner.max_hp//2
+        damage = self.owner.max_hp//4
         for point in self.owner.level.get_points_in_ball(self.owner.x, self.owner.y, self.radius):
             unit = self.owner.level.get_unit_at(point.x, point.y)
             if not unit or not are_hostile(unit, self.owner):
@@ -9335,7 +9335,7 @@ class BlightedSkeletonAura(DamageAuraBuff):
     def get_tooltip(self):
         desc = DamageAuraBuff.get_tooltip(self)
         if self.has_boneburst:
-            desc += "\nOn death, deal physical damage equal to half of this unit's max HP to enemies in a %i tile radius" % self.radius
+            desc += "\nOn death, deal physical damage equal to 25%% of this unit's max HP to enemies in a %i tile radius" % self.radius
         return desc
 
 class FleshburstZombieSpell(Spell):
@@ -9355,7 +9355,7 @@ class FleshburstZombieSpell(Spell):
         self.upgrades["radius"] = (2, 4)
         self.upgrades["max_charges"] = (5, 3)
         self.upgrades["maggot"] = (1, 5, "Flesh Maggots", "On death, the fleshburst zombie also summons a flesh maggot per 15 max HP it had, rounded up.\nFlesh maggots are [nature] [undead] minions with [{maggot_health}_HP:minion_health] and melee attacks that deal [{maggot_damage}_physical:physical] damage.")
-        self.upgrades["boneburst"] = (1, 4, "Bone Burst", "When blighted skeletons die, they deal [physical] damage equal to half their max HP to enemies in a radius equal to their aura radius.")
+        self.upgrades["boneburst"] = (1, 4, "Bone Burst", "When blighted skeletons die, they deal [physical] damage equal to 25% of their max HP to enemies in a radius equal to their aura radius.")
     
     def fmt_dict(self):
         stats = Spell.fmt_dict(self)
@@ -9366,7 +9366,7 @@ class FleshburstZombieSpell(Spell):
     
     def get_description(self):
         return ("Summon a fleshburst zombie, a [nature] [undead] minion with [{total_health}_HP:minion_health], which also benefits from [minion_damage:minion_damage] bonuses, and a suicidal leap attack with a range of [{minion_range}_tiles:minion_range].\n"
-                "On death, the fleshburst zombie deals [dark] and [poison] damage equal to half of its max HP to enemies in a [{radius}_tile:radius] radius, and summons a blighted skeleton with the same max HP at its former location.\n"
+                "On death, the fleshburst zombie deals [dark] and [poison] damage equal to 25% of its max HP to enemies in a [{radius}_tile:radius] radius, and summons a blighted skeleton with the same max HP at its former location.\n"
                 "The blighted skeleton is a [nature] [undead] minion with a melee attack that deals [{minion_damage}_physical:physical] damage. Each turn, it deals fixed [2_dark:dark] or [2_poison:poison] damage to enemies in a [{radius}_tile:radius] radius.").format(**self.fmt_dict())
 
     def cast_instant(self, x, y):
