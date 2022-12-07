@@ -6767,7 +6767,7 @@ class PrimordialRotSpell(Spell):
         unit.max_hp = max_hp
         unit.asset = ["MissingSynergies", "Units", ""]
         self.update_sprite(unit)
-        unit.tags = [Tags.Nature, Tags.Undead, Tags.Slime]
+        unit.tags = [Tags.Dark, Tags.Nature, Tags.Undead, Tags.Slime]
         unit.resists[Tags.Poison] = 100
         unit.resists[Tags.Physical] = 50
         unit.spells = [SimpleMeleeAttack(damage=self.get_stat("minion_damage"), damage_type=Tags.Dark)]
@@ -9157,14 +9157,14 @@ class FleshLoan(Upgrade):
         self.asset = ["MissingSynergies", "Icons", "flesh_loan"]
         self.tags = [Tags.Dark, Tags.Nature]
         self.level = 5
-        self.description = "Whenever you summon a minion, you take [dark] damage equal to 5% of the minion's max HP, rounded up. If the damage taken is not 0, that minion becomes [living] and gains max and current HP equal to 10 times the damage dealt. This effect triggers before most other effects that trigger when minions are summoned.\nAt the beginning of each of your turns, if a minion is no longer alive, or if there are no enemies in the realm, you heal for the same damage that you took when summoning it, once per minion."
+        self.description = "Whenever you summon a minion, you take [dark] damage equal to 5% of the minion's max HP, rounded down. If the damage taken is not 0, that minion becomes [living] and gains max and current HP equal to 10 times the damage dealt. This effect triggers before most other effects that trigger when minions are summoned.\nAt the beginning of each of your turns, if a minion is no longer alive, or if there are no enemies in the realm, you heal for the same damage that you took when summoning it, once per minion."
         self.hp_loaned = {}
         self.global_triggers[EventOnUnitPreAdded] = self.on_unit_pre_added
     
     def on_unit_pre_added(self, evt):
         if are_hostile(evt.unit, self.owner) or evt.unit.is_player_controlled:
             return
-        dealt = self.owner.deal_damage(math.ceil(evt.unit.max_hp/20), Tags.Dark, self)
+        dealt = self.owner.deal_damage(evt.unit.max_hp//20, Tags.Dark, self)
         if not dealt:
             return
         evt.unit.max_hp += dealt*10
@@ -9402,7 +9402,7 @@ class FleshburstZombieSpell(Spell):
         skeleton.asset = ["MissingSynergies", "Units", "blighted_skeleton"]
         skeleton.name = "Blighted Skeleton"
         skeleton.max_hp = unit.max_hp
-        skeleton.tags = [Tags.Dark, Tags.Poison, Tags.Nature, Tags.Undead]
+        skeleton.tags = [Tags.Nature, Tags.Undead]
         skeleton.resists[Tags.Poison] = 100
         skeleton.spells = [SimpleMeleeAttack(self.get_stat("minion_damage"))]
         skeleton.buffs = [BlightedSkeletonAura(self)]
