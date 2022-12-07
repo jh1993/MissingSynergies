@@ -42,7 +42,6 @@ Level 4:
 + Divine Gaze (Holy/Eye/Sorcery)
 + Electric Net (Nature/Lightning/Sorcery)
 + Essence Leech (Arcane/Dark/Enchantment)
-+ Fleshburst Zombie (Dark/Nature/Conjuration)
 + Iron Turtle (Metallic/Nature/Conjuration)
 + Karmic Loan (Holy/Enchantment)
 + Orb of Flesh (Nature/Orb/Conjuration)
@@ -61,6 +60,7 @@ Level 5:
 + Cosmic Stasis (Arcane/Ice/Enchantment)
 + Elemental Chaos (Arcane/Ice/Chaos/Conjuration)
 + Flesh Sacrifice (Dark/Conjuration)
++ Fleshburst Zombie (Dark/Nature/Conjuration)
 + Gathering Storm (Lightning/Ice/Conjuration)
 + Golden Trickster (Holy/Arcane/Metallic/Chaos/Conjuration)
 + Irradiate (Arcane/Nature/Enchantment)
@@ -108,6 +108,7 @@ Skills:
 
 Level 4:
 + Chaos Trick (Chaos/Fire/Lightning)
++ Flesh Loan (Dark/Nature)
 + Fulgurite Alchemy (Arcane/Lightning)
 + Nuclear Winter (Lightning/Ice/Nature)
 + Razor Scales (Dragon/Metallic)
@@ -119,7 +120,6 @@ Level 5:
 + Bombastic Arrival (Fire/Translocation)
 + Draconian Brutality (Dragon/Nature/Translocation)
 + Electrolysis (Lightning/Nature)
-+ Flesh Loan (Dark/Nature)
 + Forceful Channeling (Sorcery/Conjuration)
 + Fractured Memories (Arcane/Chaos)
 + Inexorable Decay (Dark)

@@ -6683,9 +6683,8 @@ class PrimordialRotBuff(Buff):
         self.color = Tags.Dark.color
         self.max_hp_steal = self.spell.get_stat("max_hp_steal")
         self.wasting = self.spell.get_stat("wasting")
-        self.description = "Attacks steal %i max HP and deal bonus damage based on max HP.\n\nSplits into two copies with half HP on death if max HP is at least 8." % self.max_hp_steal
+        self.description = "Attacks steal %i max HP and deal bonus damage based on max HP." % self.max_hp_steal
         self.global_triggers[EventOnPreDamaged] = self.on_pre_damaged
-        self.owner_triggers[EventOnDeath] = self.on_death
     
     def on_pre_damaged(self, evt):
         if evt.damage <= 0 or evt.source.owner is not self.owner or not isinstance(evt.source, Spell):
@@ -6710,15 +6709,25 @@ class PrimordialRotBuff(Buff):
     def on_advance(self):
         self.spell.update_sprite(self.owner)
 
-    def on_death(self, evt):
-        if self.owner.max_hp < 8:
-            return
-        for _ in range(2):
-            self.spell.summon(self.spell.get_unit(self.owner.max_hp//2), target=self.owner, radius=5)
-
     # For my No More Scams mod
     def can_redeal(self, target, source, damage_type, already_checked=[]):
         return True
+
+def PrimordialRotUnit(spell, max_hp):
+    unit = Unit()
+    unit.name = "Primordial Rot"
+    unit.max_hp = max_hp
+    unit.asset = ["MissingSynergies", "Units", ""]
+    spell.update_sprite(unit)
+    unit.tags = [Tags.Dark, Tags.Nature, Tags.Undead, Tags.Slime]
+    unit.resists[Tags.Poison] = 100
+    unit.resists[Tags.Physical] = 50
+    unit.spells = [SimpleMeleeAttack(damage=spell.get_stat("minion_damage"), damage_type=Tags.Dark)]
+    unit.buffs = [PrimordialRotBuff(spell)]
+    if max_hp >= 8:
+        unit.buffs.append(SplittingBuff(lambda: PrimordialRotUnit(spell, unit.max_hp//2)))
+    unit.turns_to_death = spell.get_stat("minion_duration")
+    return unit
 
 class PrimordialRotSpell(Spell):
 
@@ -6744,7 +6753,7 @@ class PrimordialRotSpell(Spell):
     def get_description(self):
         return ("Summon a [nature] [undead] [slime] minion for [{minion_duration}_turns:minion_duration]. It has [{minion_health}_HP:minion_health] and a melee attack that deals [{minion_damage}_dark:dark] damage.\n"
                 "The slime's attacks steal [{max_hp_steal}:dark] max HP, and instantly kill targets with less max HP than that. Its melee attacks deal bonus damage equal to 25% of its max HP, and other attacks deal bonus damage equal to 10% of its max HP.\n"
-                "On death, the slime splits into two slimes with half max HP if its max HP was at least 8.").format(**self.fmt_dict())
+                "On death, the slime splits into two slimes with half max HP if its initial max HP was at least 8.").format(**self.fmt_dict())
 
     def update_sprite(self, unit):
         if unit.max_hp >= 256:
@@ -6761,22 +6770,8 @@ class PrimordialRotSpell(Spell):
         unit.asset[2] = new_asset
         unit.Anim = None
     
-    def get_unit(self, max_hp):
-        unit = Unit()
-        unit.name = "Primordial Rot"
-        unit.max_hp = max_hp
-        unit.asset = ["MissingSynergies", "Units", ""]
-        self.update_sprite(unit)
-        unit.tags = [Tags.Dark, Tags.Nature, Tags.Undead, Tags.Slime]
-        unit.resists[Tags.Poison] = 100
-        unit.resists[Tags.Physical] = 50
-        unit.spells = [SimpleMeleeAttack(damage=self.get_stat("minion_damage"), damage_type=Tags.Dark)]
-        unit.buffs = [PrimordialRotBuff(self)]
-        unit.turns_to_death = self.get_stat("minion_duration")
-        return unit
-    
     def cast_instant(self, x, y):
-        self.summon(self.get_unit(self.get_stat("minion_health")), target=Point(x, y))
+        self.summon(PrimordialRotUnit(self, self.get_stat("minion_health")), target=Point(x, y))
 
 class UnnaturalVitalityBuff(Buff):
 
@@ -9156,18 +9151,18 @@ class FleshLoan(Upgrade):
         self.name = "Flesh Loan"
         self.asset = ["MissingSynergies", "Icons", "flesh_loan"]
         self.tags = [Tags.Dark, Tags.Nature]
-        self.level = 5
-        self.description = "Whenever you summon a minion, you take [dark] damage equal to 5% of the minion's max HP, rounded down. If the damage taken is not 0, that minion becomes [living] and gains max and current HP equal to 10 times the damage dealt. This effect triggers before most other effects that trigger when minions are summoned.\nAt the beginning of each of your turns, if a minion is no longer alive, or if there are no enemies in the realm, you heal for the same damage that you took when summoning it, once per minion."
+        self.level = 4
+        self.description = "Whenever you summon a minion, you take [dark] damage equal to 10% of the minion's max HP, rounded up. If the damage taken is not 0, that minion becomes [living] and gains max and current HP equal to 5 times the damage dealt. This effect triggers before most other effects that trigger when minions are summoned.\nAt the beginning of each of your turns, if a minion is no longer alive, or if there are no enemies in the realm, you heal for the same damage that you took when summoning it, once per minion."
         self.hp_loaned = {}
         self.global_triggers[EventOnUnitPreAdded] = self.on_unit_pre_added
     
     def on_unit_pre_added(self, evt):
         if are_hostile(evt.unit, self.owner) or evt.unit.is_player_controlled:
             return
-        dealt = self.owner.deal_damage(evt.unit.max_hp//20, Tags.Dark, self)
+        dealt = self.owner.deal_damage(math.ceil(evt.unit.max_hp/10), Tags.Dark, self)
         if not dealt:
             return
-        evt.unit.max_hp += dealt*10
+        evt.unit.max_hp += dealt*5
         self.hp_loaned[evt.unit] = dealt
         if Tags.Living not in evt.unit.tags:
             evt.unit.tags.append(Tags.Living)
