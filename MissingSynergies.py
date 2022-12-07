@@ -9266,7 +9266,7 @@ class FleshburstZombieBuff(Buff):
         self.color = Tags.Undead.color
         self.radius = self.spell.get_stat("radius")
         self.maggot = self.spell.get_stat("maggot")
-        self.description = "On death, deal dark and poison damage equal to 25%% of this unit's max HP to enemies in a %i tile radius, and summon a blighted skeleton%s." % (self.radius, ", plus a flesh maggot per 15 max HP this unit had, rounded up" if self.maggot else "")
+        self.description = "On death, deal dark and poison damage equal to 25%% of this unit's max HP to enemies in a %i tile radius, and summon a blighted skeleton%s." % (self.radius, ", plus a flesh maggot per 15 max HP this unit had, rounded down" if self.maggot else "")
         self.owner_triggers[EventOnDeath] = lambda evt: self.owner.level.queue_spell(self.fleshburst())
     
     def fleshburst(self):
@@ -9344,17 +9344,17 @@ class FleshburstZombieSpell(Spell):
         self.name = "Fleshburst Zombie"
         self.asset = ["MissingSynergies", "Icons", "fleshburst_zombie"]
         self.tags = [Tags.Dark, Tags.Nature, Tags.Conjuration]
-        self.level = 4
+        self.level = 5
         self.max_charges = 7
 
-        self.radius = 4
+        self.radius = 3
         self.minion_health = 20
         self.minion_damage = 10
         self.minion_range = 6
 
-        self.upgrades["radius"] = (2, 4)
-        self.upgrades["max_charges"] = (5, 3)
-        self.upgrades["maggot"] = (1, 5, "Flesh Maggots", "On death, the fleshburst zombie also summons a flesh maggot per 15 max HP it had, rounded up.\nFlesh maggots are [nature] [undead] minions with [{maggot_health}_HP:minion_health] and melee attacks that deal [{maggot_damage}_physical:physical] damage.")
+        self.upgrades["radius"] = (2, 3)
+        self.upgrades["minion_damage"] = (12, 4)
+        self.upgrades["maggot"] = (1, 5, "Flesh Maggots", "On death, the fleshburst zombie also summons a flesh maggot per 15 max HP it had, rounded down.\nFlesh maggots are [nature] [undead] minions with [{maggot_health}_HP:minion_health] and melee attacks that deal [{maggot_damage}_physical:physical] damage.")
         self.upgrades["boneburst"] = (1, 4, "Bone Burst", "When blighted skeletons die, they deal [physical] damage equal to 25% of their max HP to enemies in a radius equal to their aura radius.")
     
     def fmt_dict(self):
@@ -9385,7 +9385,7 @@ class FleshburstZombieSpell(Spell):
             return
         maggot_health = self.get_stat("minion_health", base=5)
         maggot_damage = self.get_stat("minion_damage", base=3)
-        for _ in range(math.ceil(unit.max_hp/15)):
+        for _ in range(unit.max_hp//15):
             maggot = Unit()
             maggot.asset = ["MissingSynergies", "Units", "flesh_maggot"]
             maggot.name = "Flesh Maggot"
