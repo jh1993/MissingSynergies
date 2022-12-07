@@ -42,6 +42,7 @@ Level 4:
 + Divine Gaze (Holy/Eye/Sorcery)
 + Electric Net (Nature/Lightning/Sorcery)
 + Essence Leech (Arcane/Dark/Enchantment)
++ Fleshburst Zombie (Dark/Nature/Conjuration)
 + Iron Turtle (Metallic/Nature/Conjuration)
 + Karmic Loan (Holy/Enchantment)
 + Orb of Flesh (Nature/Orb/Conjuration)
