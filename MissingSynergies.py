@@ -9265,8 +9265,13 @@ class FleshburstZombieBuff(Buff):
         self.owner_triggers[EventOnDeath] = lambda evt: self.owner.level.queue_spell(self.fleshburst())
     
     def fleshburst(self):
+        self.spell.summon_skeleton(self.owner)
+        if self.maggot:
+            self.spell.summon_maggots(self.owner)
         damage = self.owner.max_hp//4
-        for point in self.owner.level.get_points_in_ball(self.owner.x, self.owner.y, self.radius):
+        points = list(self.owner.level.get_points_in_ball(self.owner.x, self.owner.y, self.radius))
+        random.shuffle(points)
+        for point in points:
             unit = self.owner.level.get_unit_at(point.x, point.y)
             if not unit or not are_hostile(unit, self.owner):
                 self.owner.level.show_effect(point.x, point.y, Tags.Dark)
@@ -9274,10 +9279,8 @@ class FleshburstZombieBuff(Buff):
             else:
                 unit.deal_damage(damage, Tags.Dark, self)
                 unit.deal_damage(damage, Tags.Poison, self)
-        self.spell.summon_skeleton(self.owner)
-        if self.maggot:
-            self.spell.summon_maggots(self.owner)
-        yield
+            if random.random() < 0.5:
+                yield
 
 class FleshburstZombieLeap(LeapAttack):
 
@@ -9319,13 +9322,16 @@ class BlightedSkeletonAura(DamageAuraBuff):
 
     def boneburst(self):
         damage = self.owner.max_hp//4
-        for point in self.owner.level.get_points_in_ball(self.owner.x, self.owner.y, self.radius):
+        points = list(self.owner.level.get_points_in_ball(self.owner.x, self.owner.y, self.radius))
+        random.shuffle(points)
+        for point in points:
             unit = self.owner.level.get_unit_at(point.x, point.y)
             if not unit or not are_hostile(unit, self.owner):
                 self.owner.level.show_effect(point.x, point.y, Tags.Physical)
             else:
                 unit.deal_damage(damage, Tags.Physical, self)
-        yield
+            if random.random() < 0.5:
+                yield
 
     def get_tooltip(self):
         desc = DamageAuraBuff.get_tooltip(self)
@@ -9346,6 +9352,7 @@ class FleshburstZombieSpell(Spell):
         self.minion_health = 20
         self.minion_damage = 10
         self.minion_range = 6
+        self.range = 10
 
         self.upgrades["radius"] = (2, 3)
         self.upgrades["minion_damage"] = (12, 4)
