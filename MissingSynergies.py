@@ -2330,7 +2330,7 @@ class OrbOfFleshSpell(OrbSpell):
         self.upgrades["explosion"] = (1, 4, "Gore Explosion", "On death, the affected unit explodes to randomly deal [poison] or [physical] damage equal to 20% of its max HP, to all enemies in a burst with radius equal to half of the orb's minion range, rounded up.")
     
     def get_description(self):
-        return ("Summon a flesh orb with [{minion_health}_HP:minion_health] next to the caster. Each turn a piece of it detaches and fuses with a visible enemy up to [{minion_range}_tiles:minion_range] away, dying after [{num_targets}:num_targets] enemies are affected.\n"
+        return ("Summon a flesh orb with [{minion_health}_HP:minion_health] next to the caster. Each turn a piece of it detaches and fuses with a visible enemy up to [{minion_range}_tiles:minion_range] away, affecting up to [{num_targets}:num_targets] enemies.\n"
                 "Each target becomes [living], loses [100_poison:poison] resistance, and takes [{minion_damage}_poison:poison] damage per turn.\n"
                 "Its max and current HP increases by amounts equal to the orb's max HP, but it will die instantly when its max HP drops to that amount or lower.\n"
                 "The orb has no will of its own, each turn it will float one tile towards the target.\n"
@@ -2340,6 +2340,10 @@ class OrbOfFleshSpell(OrbSpell):
         orb.resists[Tags.Poison] = 0
         orb.asset = ["MissingSynergies", "Units", "orb_of_flesh"]
         orb.targets_left = self.get_stat("num_targets")
+        buff = orb.get_buff(OrbBuff)
+        if buff:
+            # If the orb is resurrected.
+            buff.owner_triggers[EventOnDeath] = lambda evt: setattr(orb, "targets_left", self.get_stat("num_targets"))
     
     def on_orb_collide(self, orb, next_point):
         orb.level.show_effect(next_point.x, next_point.y, Tags.Tongue)
@@ -2351,12 +2355,10 @@ class OrbOfFleshSpell(OrbSpell):
             yield
         target.apply_buff(OrbOfFleshBuff(self))
         orb.targets_left -= 1
-        if orb.targets_left <= 0:
-            orb.kill()
-            # In case the orb is resurrected
-            orb.targets_left = self.get_stat("num_targets")
 
     def on_orb_move(self, orb, next_point):
+        if orb.targets_left <= 0:
+            return
         targets = orb.level.get_units_in_ball(next_point, self.get_stat("minion_range"))
         targets = [target for target in targets if orb.level.can_see(next_point.x, next_point.y, target.x, target.y) and not target.has_buff(OrbOfFleshBuff)]
         targets = [target for target in targets if target is not self.caster and not isinstance(target.source, OrbOfFleshSpell)]
@@ -7022,6 +7024,8 @@ class AegisOverloadSpell(Spell):
             if unit.is_player_controlled or are_hostile(unit, self.caster):
                 continue
             for tag in unit.resists.keys():
+                if tag == Tags.Heal:
+                    continue
                 if unit.resists[tag] > 100:
                     eligible.append(unit)
                     break
@@ -7059,6 +7063,8 @@ class AegisOverloadSpell(Spell):
         for unit in units:
             tags = []
             for tag in unit.resists.keys():
+                if tag == Tags.Heal:
+                    continue
                 if unit.resists[tag] <= 100:
                     continue
                 tags.append(tag)
@@ -7940,6 +7946,8 @@ class IronTurtleAura(DamageAuraBuff):
 
         self.damage_type = []
         for tag in self.owner.resists.keys():
+            if tag == Tags.Heal:
+                continue
             if self.owner.resists[tag] > 100:
                 self.damage_type.append(tag)
         if not self.damage_type:
