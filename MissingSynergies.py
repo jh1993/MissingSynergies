@@ -2046,7 +2046,6 @@ class CopperFurnaceSpell(Spell):
                 ally_type = random.choice([SpiderFurnace, MetalMantisFurnace])
         ally = ally_type()
         ally.source = self
-        apply_minion_bonuses(self, ally)
         if not is_copper:
             buff = ally.buffs[1] if ally_type == SpiderFurnace else ally.buffs[0]
             buff.radius = self.get_stat("radius", base=buff.radius)
@@ -2078,12 +2077,20 @@ class CopperFurnaceSpell(Spell):
                 existing_fiend = unit
         if existing:
             if self.get_stat("tech_support") and not existing_fiend:
-                self.summon(self.get_ally(random.choice([True, False]), is_fiend=1), target=existing)
+                unit = self.get_ally(random.choice([True, False]), is_fiend=1)
+                apply_minion_bonuses(self, unit)
+                self.summon(unit, target=existing)
             else:
-                self.summon(self.get_ally(False), target=existing)
-                self.summon(self.get_ally(True), target=existing)
+                unit = self.get_ally(False)
+                apply_minion_bonuses(self, unit)
+                self.summon(unit, target=existing)
+                unit = self.get_ally(True)
+                apply_minion_bonuses(self, unit)
+                self.summon(unit, target=existing)
                 if self.get_stat("summon_chance") > 10:
-                    self.summon(self.get_ally(random.choice([True, False])), target=existing)
+                    unit = self.get_ally(random.choice([True, False]))
+                    apply_minion_bonuses(self, unit)
+                    self.summon(unit, target=existing)
             return
         
         unit = Unit()
