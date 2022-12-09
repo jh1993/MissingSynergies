@@ -2359,7 +2359,7 @@ class OrbOfFleshSpell(OrbSpell):
     def on_orb_move(self, orb, next_point):
         targets = orb.level.get_units_in_ball(next_point, self.get_stat("minion_range"))
         targets = [target for target in targets if orb.level.can_see(next_point.x, next_point.y, target.x, target.y) and not target.has_buff(OrbOfFleshBuff)]
-        targets = [target for target in targets if target is not self.caster and target is not orb]
+        targets = [target for target in targets if target is not self.caster and not isinstance(target.source, OrbOfFleshSpell)]
         if not self.get_stat("symbiosis"):
             targets = [target for target in targets if are_hostile(target, self.caster)]
         if not targets:
