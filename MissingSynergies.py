@@ -9426,5 +9426,50 @@ class FleshburstZombieSpell(Spell):
         skeleton.buffs = [BlightedSkeletonAura(self)]
         self.summon(skeleton, target=unit)
 
+class Halogenesis(Upgrade):
+
+    def on_init(self):
+        self.name = "Halogenesis"
+        self.asset = ["MissingSynergies", "Icons", "halogenesis"]
+        self.level = 5
+        self.tags = [Tags.Holy, Tags.Nature]
+        self.minion_duration = 16
+        self.minion_health = 25
+        self.minion_damage = 12
+        self.minion_range = 6
+        self.radius = 3
+        self.global_triggers[EventOnDeath] = self.on_death
+    
+    def get_description(self):
+        return ("Whenever a [metallic], [glass], [petrified], or [glassified] unit dies while [acidified:poison], summon a salt elemental near it that lasts [{minion_duration}_turns:minion_duration].\n"
+                "The salt elemental is a stationary [holy] [elemental] minion with [{minion_health}_HP:minion_health]. It has an attack with a range of [{minion_range}_tiles:minion_range] that deals [{minion_damage}_holy:holy] damage, and an aura that deals [1_poison:poison] damage to enemies in a [{radius}_tile:radius] radius each turn.").format(**self.fmt_dict())
+
+    def on_death(self, evt):
+        if not evt.unit.has_buff(Acidified):
+            return
+        should_summon = False
+        if Tags.Metallic in evt.unit.tags or Tags.Glass in evt.unit.tags:
+            should_summon = True
+        if evt.unit.has_buff(PetrifyBuff) or evt.unit.has_buff(GlassPetrifyBuff):
+            should_summon = True
+        if not should_summon:
+            return
+        self.owner.level.queue_spell(self.do_summon(evt.unit))
+
+    def do_summon(self, target):
+        unit = Unit()
+        unit.asset = ["MissingSynergies", "Units", "salt_elemental"]
+        unit.name = "Salt Elemental"
+        unit.stationary = True
+        unit.tags = [Tags.Poison, Tags.Holy, Tags.Elemental]
+        unit.max_hp = self.get_stat("minion_health")
+        unit.spells = [SimpleRangedAttack(damage=self.get_stat("minion_damage"), damage_type=Tags.Holy, range=self.get_stat("minion_range"))]
+        unit.buffs = [DamageAuraBuff(damage=1, damage_type=Tags.Poison, radius=self.get_stat("radius"))]
+        unit.resists[Tags.Physical] = 50
+        unit.resists[Tags.Holy] = 100
+        unit.turns_to_death = self.get_stat("minion_duration")
+        self.summon(unit, target=target, radius=5)
+        yield
+
 all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell])
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis])

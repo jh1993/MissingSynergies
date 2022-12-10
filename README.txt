@@ -122,6 +122,7 @@ Level 5:
 + Electrolysis (Lightning/Nature)
 + Forceful Channeling (Sorcery/Conjuration)
 + Fractured Memories (Arcane/Chaos)
++ Halogenesis (Holy/Nature)
 + Inexorable Decay (Dark)
 + Orb Substitution (Orb/Translocation)
 + Reflex Arc (Nature/Lightning/Sorcery)
