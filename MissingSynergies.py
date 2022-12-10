@@ -922,7 +922,8 @@ class PrismShellBuff(Buff):
         self.owner.level.queue_spell(send_bolts(path_effect, target_effect, self.owner, self.get_targets()))
     
     def on_pre_damaged(self, evt):
-        if evt.damage <= 0 or not evt.unit.shields or self.owner.resists[evt.damage_type] >= 100:
+        penetration = evt.penetration if hasattr(evt, "penetration") else 0
+        if evt.damage <= 0 or not self.owner.shields or self.owner.resists[evt.damage_type] - penetration >= 100:
             return
         target_effect = lambda target: target.apply_buff(FrozenBuff(), 3)
         path_effect = lambda point: self.owner.level.show_effect(point.x, point.y, Tags.Ice)
