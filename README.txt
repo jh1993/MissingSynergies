@@ -143,6 +143,7 @@ Level 7:
 + Ataraxia (Sorcery/Enchantment/Conjuration)
 + Breath of Annihilation (Dragon/Chaos)
 + Dying Star (Fire)
++ Luminous Muse (Holy/Arcane/Conjuration)
 + Redheart Spider (Holy/Nature/Dark/Conjuration)
 + Whispers of Oblivion (Dark/Chaos)
 

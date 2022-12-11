@@ -1704,7 +1704,7 @@ class TwistedMutationSpell(Spell):
         self.minion_damage = 3
         self.radius = 4
 
-        self.upgrades["hp_bonus"] = (30, 2, "Twisted Vitality", "The target gains [30_HP:minion_health].")
+        self.upgrades["hp_bonus"] = (1, 2, "Twisted Vitality", "The target gains [30_HP:minion_health].\nThis bonus can only be granted once per unit.")
         self.upgrades["on_death"] = (1, 4, "Twisted Remains", "On death, the target spawns a giant spider, green slime, or large toxic worm ball for every 10 max HP it had.")
         self.upgrades["adapt"] = (1, 3, "Chaos Adaptation", "The target gains [50_physical:physical], [50_fire:fire], and [50_lightning:lightning] resistance.\nWhen it takes damage, its resistance to that damage type is increased by a random amount and resistance to another random damage type is decreased by the same amount, without increasing any resistance above 100 or decreasing below 0.")
     
@@ -1753,9 +1753,10 @@ class TwistedMutationSpell(Spell):
         if not unit:
             return
 
-        if self.get_stat("hp_bonus"):
-            unit.max_hp += self.get_stat("hp_bonus")
-            unit.cur_hp += self.get_stat("hp_bonus")
+        if self.get_stat("hp_bonus") and not hasattr(unit, "twisted_vitality_buffed"):
+            unit.max_hp += 30
+            unit.deal_damage(-30, Tags.Heal, self)
+            unit.twisted_vitality_buffed = True
         if Tags.Spider not in unit.tags:
             unit.tags.append(Tags.Spider)
             buff = SpiderBuff()
@@ -9471,5 +9472,98 @@ class Halogenesis(Upgrade):
         self.summon(unit, target=target, radius=5)
         yield
 
+class LuminousMuseRequiem(Spell):
+
+    def __init__(self, damage):
+        Spell.__init__(self)
+        self.damage = damage
+        self.damage_type = [Tags.Arcane, Tags.Holy]
+        self.range = RANGE_GLOBAL
+        self.requires_los = False
+        self.name = "Requiem"
+    
+    def get_description(self):
+        return "Ignores LOS. Deals both damage types. Damage is based on missing HP."
+    
+    def get_stat(self, attr, base=None):
+        bonus = self.caster.max_hp - self.caster.cur_hp if attr == "damage" else 0
+        return Spell.get_stat(self, attr, base) + bonus
+
+    def cast(self, x, y):
+        for p in Bolt(self.caster.level, self.caster, Point(x, y)):
+            self.caster.level.show_effect(p.x, p.y, Tags.Holy, minor=True)
+            self.caster.level.show_effect(p.x, p.y, Tags.Arcane, minor=True)
+            yield
+        damage = self.get_stat("damage")
+        self.caster.level.deal_damage(x, y, damage, Tags.Holy, self)
+        self.caster.level.deal_damage(x, y, damage, Tags.Arcane, self)
+
+class LuminousMuseAria(Spell):
+
+    def on_init(self):
+        self.name = "Aria"
+        self.range = 0
+    
+    def get_shield_max(self):
+        return math.floor(math.sqrt(self.caster.cur_hp/10))
+
+    def can_cast(self, x, y):
+        if self.get_shield_max() <= self.caster.source.owner.shields:
+            return False
+        return Spell.can_cast(self, x, y)
+
+    def get_description(self):
+        return "Grants its summoner 1 SH, up to a max of %i, based on current HP." % self.get_shield_max()
+
+    def cast(self, x, y):
+        for p in Bolt(self.caster.level, self.caster, self.caster.source.owner):
+            self.caster.level.show_effect(p.x, p.y, Tags.Holy, minor=True)
+            self.caster.level.show_effect(p.x, p.y, Tags.Arcane, minor=True)
+            yield
+        self.caster.source.owner.add_shields(1)
+
+class LuminousMuse(Upgrade):
+
+    def on_init(self):
+        self.name = "Luminous Muse"
+        self.asset = ["MissingSynergies", "Icons", "luminous_muse"]
+        self.tags = [Tags.Holy, Tags.Arcane, Tags.Conjuration]
+        self.level = 7
+        self.minion_health = 20
+        self.minion_damage = 5
+        self.minion = None
+        self.owner_triggers[EventOnUnitAdded] = self.on_unit_added
+    
+    def get_description(self):
+        return ("Begin each level accompanied by the Luminous Muse, a flying [holy] [arcane] minion with [{minion_health}_HP:minion_health]. It cannot be killed by damage as long as you live, and if somehow killed, will be resurrected on your next turn.\n"
+                "The Luminous Muse can grant you [1_SH:shields] per turn, up to a maximum equal to the square root of 10% of its current HP, rounded down.\n"
+                "If the Luminous Muse cannot grant you any more [SH:shields], it will use an attack that has unlimited range and ignores line of sight, dealing [{minion_damage}_holy:holy] and [{minion_damage}_arcane:arcane] damage. The damage of this attack is increased by a value equal to its missing HP.").format(**self.fmt_dict())
+
+    def do_summon(self):
+        unit = Unit()
+        unit.asset = ["MissingSynergies", "Units", "luminous_muse"]
+        unit.name = "Luminous Muse"
+        unit.unique = True
+        unit.tags = [Tags.Holy, Tags.Arcane]
+        unit.max_hp = self.get_stat("minion_health")
+        unit.resists[Tags.Holy] = 100
+        unit.resists[Tags.Arcane] = 100
+        unit.spells = [LuminousMuseAria(), LuminousMuseRequiem(self.get_stat("minion_damage"))]
+        buff = Soulbound(self.owner)
+        buff.description = "Cannot die to damage when its summoner is alive. Automatically resurrects if dead."
+        buff.color = Tags.Holy.color
+        unit.buffs = [buff]
+        if self.summon(unit, radius=RANGE_GLOBAL):
+            self.minion = unit
+    
+    def on_unit_added(self, evt):
+        self.do_summon()
+    
+    def on_advance(self):
+        if all([unit.team == TEAM_PLAYER for unit in self.owner.level.units]):
+            return
+        if not self.minion or not self.minion.is_alive():
+            self.do_summon()
+
 all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell])
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse])
