@@ -9544,6 +9544,7 @@ class LuminousMuse(Upgrade):
         unit.asset = ["MissingSynergies", "Units", "luminous_muse"]
         unit.name = "Luminous Muse"
         unit.unique = True
+        unit.flying = True
         unit.tags = [Tags.Holy, Tags.Arcane]
         unit.max_hp = self.get_stat("minion_health")
         unit.resists[Tags.Holy] = 100
