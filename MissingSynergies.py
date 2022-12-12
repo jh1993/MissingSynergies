@@ -9566,5 +9566,86 @@ class LuminousMuse(Upgrade):
         if not self.minion or not self.minion.is_alive():
             self.do_summon()
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell])
+class ChaoticSparkSpell(Spell):
+
+    def on_init(self):
+        self.name = "Chaotic Spark"
+        self.asset = ["MissingSynergies", "Icons", "chaotic_spark"]
+        self.tags = [Tags.Fire, Tags.Lightning, Tags.Chaos, Tags.Sorcery]
+        self.level = 2
+
+        self.range = 12
+        self.cascade_range = 4
+        self.num_targets = 2
+        self.radius = 2
+        self.damage = 6
+        self.max_charges = 8
+
+        self.upgrades["max_charges"] = (8, 3)
+        self.upgrades["num_targets"] = (1, 2, "Num Jumps")
+        self.upgrades["cascade_range"] = (2, 2, "Jump Range", "Increase jump range by 4.")
+        self.upgrades["radius"] = (1, 3, "Blast Radius")
+        self.upgrades["physical"] = (1, 4, "Heavy Spark", "Each hit has a 50% chance to also deal [physical] damage.")
+
+    def get_description(self):
+        return ("Deal [{damage}_fire:fire] or [{damage}_lightning:lightning] damage to enemies in a beam.\n"
+                "Upon reaching the target tile, the beam jumps toward a random tile in line of sight within [{jump_range}_tiles:cascade_range], again dealing the same damage to enemies in a beam. This jump is done [{num_targets}:num_targets] times in total. The jump range benefits doubly from bonuses to [cascade_range:cascade_range].\n"
+                "Each tile hit has a 25% chance to explode, again dealing the same damage to enemies in a [{radius}_tile:radius] burst.").format(**self.fmt_dict())
+
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["jump_range"] = self.get_stat("cascade_range")*2
+        return stats
+
+    def get_impacted_tiles(self, x, y):
+        return list(Bolt(self.caster.level, self.caster, Point(x, y)))
+    
+    def hit(self, x, y, damage, physical):
+        tag = random.choice([Tags.Fire, Tags.Lightning])
+        heavy = random.random() < 0.5
+        unit = self.caster.level.get_unit_at(x, y)
+        if not unit or not are_hostile(unit, self.caster):
+            self.caster.level.show_effect(x, y, tag)
+            if physical and heavy:
+                self.caster.level.show_effect(x, y, Tags.Physical)
+        else:
+            unit.deal_damage(damage, tag, self)
+            if physical and heavy:
+                unit.deal_damage(damage, Tags.Physical, self)
+
+    def boom(self, x, y, damage, radius, physical):
+        if random.random() >= 0.25:
+            return
+        for stage in Burst(self.caster.level, Point(x, y), radius):
+            for p in stage:
+                self.hit(p.x, p.y, damage, physical)
+            yield
+
+    def cast(self, x, y):
+
+        damage = self.get_stat("damage")
+        radius = self.get_stat("radius")
+        jumps_left = self.get_stat("num_targets")
+        jump_range = self.get_stat("cascade_range")*2
+        physical = self.get_stat("physical")
+        target = Point(x, y)
+
+        for p in Bolt(self.caster.level, self.caster, target):
+            self.hit(p.x, p.y, damage, physical)
+            yield from self.boom(p.x, p.y, damage, radius, physical)
+            yield
+        
+        while jumps_left > 0:
+            old_target = target
+            new_targets = [p for p in self.caster.level.get_points_in_ball(target.x, target.y, jump_range) if self.caster.level.can_see(p.x, p.y, target.x, target.y)]
+            if not new_targets:
+                return
+            target = random.choice(new_targets)
+            for p in Bolt(self.caster.level, old_target, target):
+                self.hit(p.x, p.y, damage, physical)
+                yield from self.boom(p.x, p.y, damage, radius, physical)
+                yield
+            jumps_left -= 1
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse])

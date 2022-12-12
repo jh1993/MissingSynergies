@@ -14,6 +14,7 @@ Level 1:
 + Parlor Trick (Chaos/Sorcery)
 
 Level 2:
++ Chaotic Spark (Fire/Lightning/Chaos/Sorcery)
 + Kingswater (Holy/Nature/Sorcery)
 + Volatile Orb (Chaos/Orb/Conjuration/Sorcery)
 
