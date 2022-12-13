@@ -1522,7 +1522,7 @@ class DragonSwipe(Spell):
 
     def on_init(self):
         self.name = "Swipe"
-        self.description = "Hits in an arc"
+        self.description = "Hits enemies in an arc."
         self.range = 1.5
         self.melee = True
         self.can_target_self = False
@@ -1537,9 +1537,10 @@ class DragonSwipe(Spell):
         damage = self.get_stat("damage")
         for p in self.get_impacted_tiles(x, y):
             unit = self.caster.level.get_unit_at(p.x, p.y)
-            if unit and not are_hostile(self.caster, unit):
-                continue
-            self.caster.level.deal_damage(p.x, p.y, damage, self.damage_type, self)
+            if not unit or not are_hostile(self.caster, unit):
+                self.caster.level.show_effect(p.x, p.y, self.damage_type)
+            else:
+                unit.deal_damage(damage, self.damage_type, self)
             yield
 
 class DraconianBrutality(Upgrade):
@@ -1817,22 +1818,17 @@ def get_spirit_combo(tags):
 class CustomSpiritBlast(SimpleRangedAttack):
 
     def __init__(self, spell, tags):
-        self.spell = spell
+        self.power = spell.get_stat("power")
         SimpleRangedAttack.__init__(self, damage=spell.get_stat("minion_damage"), damage_type=tags if len(tags) == 2 else tags[0], range=spell.get_stat("minion_range"), radius=1)
         self.name = "%s Blast" % get_spirit_combo(tags)
+        if self.power and len(tags) == 2:
+            self.all_damage_types = True
     
     def get_description(self):
-        if self.spell.get_stat("power"):
-            if isinstance(self.damage_type, list):
-                desc = "Deals %s and %s damage" % (self.damage_type[0].name, self.damage_type[1].name)
-            else:
-                desc = "Hits twice"
-            return self.description + "\n%s" % desc
-        else:
-            return self.description
+        return "Hits twice" if self.power and not isinstance(self.damage_type, list) else ""
     
     def hit(self, x, y):
-        if not self.spell.get_stat("power"):
+        if not self.power:
             SimpleRangedAttack.hit(self, x, y)
         else:
             if isinstance(self.damage_type, list):
@@ -4437,21 +4433,33 @@ class StormBeam(Spell):
         Spell.__init__(self)
         self.name = "Storm Beam"
         self.range = range
+        # Just to get the damage stat to display properly.
+        self.damage = 0
         self.damage_type = [Tags.Lightning, Tags.Ice]
-        self.description = "Beam attack. Deals lightning and ice damage equal to 10% of the user's max HP."
+        self.all_damage_types = True
+        self.description = "Beam attack. Damage is equal to 10% of the user's max HP."
     
+    def get_stat(self, attr, base=None):
+        if attr == "damage":
+            return self.caster.max_hp//10
+        else:
+            return Spell.get_stat(self, attr, base)
+
     def cast_instant(self, x, y):
+        damage = self.get_stat("damage")
         for point in Bolt(self.caster.level, self.caster, Point(x, y)):
-            self.caster.level.deal_damage(point.x, point.y, self.caster.max_hp//10, Tags.Lightning, self)
-            self.caster.level.deal_damage(point.x, point.y, self.caster.max_hp//10, Tags.Ice, self)
+            self.caster.level.deal_damage(point.x, point.y, damage, Tags.Lightning, self)
+            self.caster.level.deal_damage(point.x, point.y, damage, Tags.Ice, self)
 
 class StormProtectionBuff(Buff):
+
     def on_init(self):
         self.name = "Storm Protection"
         self.asset = ["MissingSynergies", "Statuses", "storm_protection"]
         self.color = Tags.Lightning.color
         self.stack_type = STACK_REPLACE
         self.show_effect = False
+
     def on_applied(self, owner):
         self.resists[Tags.Lightning] = (100 - self.owner.resists[Tags.Lightning]) if self.owner.resists[Tags.Lightning] < 100 else 0
         self.resists[Tags.Ice] = (100 - self.owner.resists[Tags.Ice]) if self.owner.resists[Tags.Ice] < 100 else 0
@@ -4782,7 +4790,7 @@ class LiquidMetalBlade(Spell):
 
     def on_init(self):
         self.name = "Liquid Metal Blade"
-        self.description = "Hits in an arc. Deals 3 extra damage per turn of freeze on the target."
+        self.description = "Hits enemies in an arc. Deals 3 extra damage per turn of freeze on the target."
         self.range = 1.5
         self.melee = True
         self.can_target_self = False
@@ -5557,7 +5565,7 @@ class AfterlifeEchoesBuff(Buff):
 class AfterlifeShadeBolt(SimpleRangedAttack):
     def __init__(self, damage, range):
         SimpleRangedAttack.__init__(self, "Twilight Bolt", damage=damage, damage_type=[Tags.Holy, Tags.Dark], range=range)
-        self.description = "Deals both damage types."
+        self.all_damage_types = True
     def hit(self, x, y):
         damage = self.get_stat("damage")
         self.caster.level.deal_damage(x, y, damage, Tags.Dark, self)
@@ -9484,12 +9492,13 @@ class LuminousMuseRequiem(Spell):
         Spell.__init__(self)
         self.damage = damage
         self.damage_type = [Tags.Arcane, Tags.Holy]
+        self.all_damage_types = True
         self.range = RANGE_GLOBAL
         self.requires_los = False
         self.name = "Requiem"
     
     def get_description(self):
-        return "Ignores LOS. Deals both damage types. Damage is based on missing HP."
+        return "Ignores LOS. Damage is based on missing HP."
     
     def get_stat(self, attr, base=None):
         bonus = self.caster.max_hp - self.caster.cur_hp if attr == "damage" else 0
