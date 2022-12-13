@@ -108,6 +108,7 @@ Level 7:
 Skills:
 
 Level 4:
++ Cantrip Adept (Sorcery)
 + Chaos Trick (Chaos/Fire/Lightning)
 + Flesh Loan (Dark/Nature)
 + Fulgurite Alchemy (Arcane/Lightning)
@@ -133,7 +134,6 @@ Level 5:
 
 Level 6:
 + Abyssal Insight (Dark/Eye)
-+ Cantrip Adept (Sorcery)
 + Dragon Archmage (Dragon/Sorcery)
 + Heavy Elements (Fire/Lightning/Ice/Arcane)
 + Locus of Energy (Arcane/Lightning)
