@@ -8920,8 +8920,14 @@ class ForcefulChanneling(Upgrade):
         self.asset = ["MissingSynergies", "Icons", "forceful_channeling"]
         self.tags = [Tags.Sorcery, Tags.Conjuration]
         self.level = 5
-        self.description = "Each turn, each spell you channel has a 25% chance to repeat its effect once."
+        self.description = "Each turn, each spell you channel has a 25% chance to repeat its effect once.\nYou also become immune to [stun], [freeze], [petrify], [glassify], and similar debuffs when channeling."
     
+    def on_pre_advance(self):
+        buffs = [buff for buff in self.owner.buffs if isinstance(buff, ChannelBuff)]
+        if not buffs:
+            return
+        self.owner.apply_buff(StunImmune(), 1)
+
     def on_advance(self):
         for buff in list(self.owner.buffs):
             if not isinstance(buff, ChannelBuff) or buff.cast_after_channel or random.random() >= 0.25:
