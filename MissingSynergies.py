@@ -8786,7 +8786,7 @@ class CantripAdept(Upgrade):
         self.name = "Cantrip Adept"
         self.asset = ["MissingSynergies", "Icons", "cantrip_adept"]
         self.tags = [Tags.Sorcery]
-        self.level = 6
+        self.level = 4
         self.description = "The first time each turn you attempt to damage an enemy with a level 1 [sorcery] spell, deal additional damage of the same type equal to the combined level of all of your spells, spell upgrades, and skills.\nThis refreshes before the beginning of your turn."
         self.global_triggers[EventOnPreDamaged] = self.on_pre_damaged
         self.active = True
