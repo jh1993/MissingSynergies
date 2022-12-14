@@ -75,6 +75,7 @@ Level 5:
 + Static Field (Lightning/Enchantment)
 + Warp-Lens Golem (Arcane/Translocation/Eye/Conjuration)
 + Wastefire (Fire/Dark/Sorcery)
++ Weeping Medusa (Dark/Nature/Arcane/Conjuration)
 + Well of Oblivion (Dark/Translocation/Sorcery)
 
 Level 6:

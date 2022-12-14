@@ -2227,6 +2227,7 @@ class GenesisSpell(Spell):
                     buff.death_boom()
                 if x != existing.x or y != existing.y:
                     if self.caster.level.can_move(existing, x, y, teleport=True):
+                        self.caster.level.show_effect(existing.x, existing.y, Tags.Translocation)
                         self.caster.level.act_move(existing, x, y, teleport=True)
                         self.caster.level.show_effect(existing.x, existing.y, Tags.Translocation)
             existing.cur_hp = existing.max_hp
@@ -4547,7 +4548,7 @@ class GatheringStormSpell(Spell):
             return False
         unit = self.caster.level.get_unit_at(x, y)
         if unit:
-            return unit.name == "Storm Elemental"
+            return unit.source is self
         return True
 
     def fmt_dict(self):
@@ -4563,13 +4564,14 @@ class GatheringStormSpell(Spell):
 
         existing = None
         for unit in self.caster.level.units:
-            if unit.name == "Storm Elemental":
+            if unit.source is self:
                 existing = unit
                 break
 
         if existing and (existing.x != x or existing.y != y) and self.caster.level.can_move(existing, x, y, teleport=True):
             self.caster.level.show_effect(existing.x, existing.y, Tags.Translocation)
             self.caster.level.act_move(existing, x, y, teleport=True)
+            self.caster.level.show_effect(existing.x, existing.y, Tags.Translocation)
 
         cloud_damage = 0
         cloud_duration = 0
@@ -4877,7 +4879,6 @@ class LivingLabyrinthSpell(Spell):
         self.level = 5
         self.max_charges = 3
         self.range = 10
-        self.must_target_empty = True
         self.must_target_walkable = True
         self.requires_los = False
 
@@ -4907,6 +4908,14 @@ class LivingLabyrinthSpell(Spell):
             self.caster.level.gen_params.ensure_connectivity(chasm=True)
         yield
 
+    def can_cast(self, x, y):
+        if not Spell.can_cast(self, x, y):
+            return False
+        unit = self.caster.level.get_unit_at(x, y)
+        if unit:
+            return unit.source is self
+        return True
+
     def cast_instant(self, x, y):
 
         existing = None
@@ -4915,10 +4924,11 @@ class LivingLabyrinthSpell(Spell):
                 existing = unit
                 break
         if existing:
-            existing.deal_damage(existing.cur_hp - existing.max_hp, Tags.Heal, self)
+            existing.deal_damage(-existing.max_hp, Tags.Heal, self)
             if self.caster.level.can_move(existing, x, y, teleport=True):
                 self.caster.level.show_effect(existing.x, existing.y, Tags.Translocation)
                 self.caster.level.act_move(existing, x, y, teleport=True)
+                self.caster.level.show_effect(existing.x, existing.y, Tags.Translocation)
             self.caster.level.queue_spell(self.maze(x, y))
             return
         
@@ -5323,7 +5333,6 @@ class ChaosTheorySpell(Spell):
         self.max_charges = 2
         self.range = RANGE_GLOBAL
         self.requires_los = False
-        self.must_target_empty = True
 
         self.num_targets = 4
         self.radius = 4
@@ -5349,6 +5358,14 @@ class ChaosTheorySpell(Spell):
         return ("Summon the Butterfly Effect, a [demon] minion that creates thunderstorm and blizzard clouds.\n"
                 "Every [3_turns:duration], the Butterfly Effect teleports to a random cloud, and targets [{num_targets}:num_targets] to [{double_num_targets}:num_targets] random tiles in a [{double_radius}_radius:radius] around itself. If a target tile has a cloud, consume the cloud to deal [arcane] damage in a [{radius}_tile:radius] burst equal to the cloud's damage times strikechance and melt walls. Otherwise create a cloud.\n"
                 "Casting this spell again when the Butterfly Effect is already present will instead teleport it to the target tile, restore it to at least [{shields}_SH:shields], and immediately use its cloudburst.").format(**self.fmt_dict())
+
+    def can_cast(self, x, y):
+        if not Spell.can_cast(self, x, y):
+            return False
+        unit = self.caster.level.get_unit_at(x, y)
+        if unit:
+            return unit.source is self
+        return True
 
     def get_existing(self):
         for unit in self.caster.level.units:
@@ -5408,6 +5425,10 @@ class ChaosTheorySpell(Spell):
         existing = self.get_existing()
         if existing:
             existing.shields = max(self.get_stat("shields"), existing.shields)
+            if self.caster.level.can_move(existing, x, y, teleport=True):
+                self.caster.level.show_effect(existing.x, existing.y, Tags.Translocation)
+                self.caster.level.act_move(existing, x, y, teleport=True)
+                self.caster.level.show_effect(existing.x, existing.y, Tags.Translocation)
             self.cloudburst(existing, Point(x, y))
             return
         
@@ -6009,7 +6030,6 @@ class BoxOfWoeSpell(Spell):
         self.max_charges = 3
         self.range = 10
         self.requires_los = False
-        self.must_target_empty = True
         self.must_target_walkable = True
 
         self.minion_health = 25
@@ -6029,6 +6049,14 @@ class BoxOfWoeSpell(Spell):
                 "Every [{summon_cooldown}_turns:duration], the box summons three ghosts, each corresponding to the elements of [dark], [lightning], and [ice]. Each ghost has an attack with [{minion_range}_range:minion_range] that permanently reduces the target's resistance to its element to 0.\n"
                 "Casting this spell again while the box is already summoned will teleport it to the target tile and instantly summon its ghosts without triggering cooldown.").format(**self.fmt_dict())
 
+    def can_cast(self, x, y):
+        if not Spell.can_cast(self, x, y):
+            return False
+        unit = self.caster.level.get_unit_at(x, y)
+        if unit:
+            return unit.source is self and unit.name == "Box of Woe"
+        return True
+
     def cast_instant(self, x, y):
 
         existing = None
@@ -6040,6 +6068,7 @@ class BoxOfWoeSpell(Spell):
             if self.caster.level.can_move(existing, x, y, teleport=True):
                 self.caster.level.show_effect(existing.x, existing.y, Tags.Translocation)
                 self.caster.level.act_move(existing, x, y, teleport=True)
+                self.caster.level.show_effect(existing.x, existing.y, Tags.Translocation)
             self.summon_ghosts(existing)
             return
         
@@ -6626,7 +6655,6 @@ class MutantCyclopsSpell(Spell):
         self.max_charges = 3
         self.range = 10
         self.requires_los = False
-        self.must_target_empty = True
         self.must_target_walkable = True
 
         self.minion_health = 126
@@ -6646,6 +6674,14 @@ class MutantCyclopsSpell(Spell):
                 "The cyclops also has a leap attack with the same range and damage.\n"
                 "Casting this spell again when the cyclops is already summoned will teleport it to the target tile and fully heal it.").format(**self.fmt_dict())
 
+    def can_cast(self, x, y):
+        if not Spell.can_cast(self, x, y):
+            return False
+        unit = self.caster.level.get_unit_at(x, y)
+        if unit:
+            return unit.source is self
+        return True
+
     def cast_instant(self, x, y):
 
         existing = None
@@ -6654,9 +6690,11 @@ class MutantCyclopsSpell(Spell):
                 existing = unit
                 break
         if existing:
-            self.caster.level.show_effect(existing.x, existing.y, Tags.Translocation)
-            self.caster.level.act_move(existing, x, y, teleport=True)
             existing.deal_damage(-existing.max_hp, Tags.Heal, self)
+            if self.caster.level.can_move(existing, x, y, teleport=True):
+                self.caster.level.show_effect(existing.x, existing.y, Tags.Translocation)
+                self.caster.level.act_move(existing, x, y, teleport=True)
+                self.caster.level.show_effect(existing.x, existing.y, Tags.Translocation)
             return
         
         unit = Unit()
@@ -8220,7 +8258,6 @@ class FleshSacrificeSpell(Spell):
         self.max_charges = 6
         self.range = 10
         self.requires_los = False
-        self.must_target_empty = True
         self.must_target_walkable = True
 
         self.damage = 25
@@ -8244,6 +8281,14 @@ class FleshSacrificeSpell(Spell):
     def get_impacted_tiles(self, x, y):
         return [Point(x, y)]
 
+    def can_cast(self, x, y):
+        if not Spell.can_cast(self, x, y):
+            return False
+        unit = self.caster.level.get_unit_at(x, y)
+        if unit:
+            return unit.source is self
+        return True
+
     def cast_instant(self, x, y):
 
         dealt = self.caster.deal_damage(self.get_stat("damage"), Tags.Dark, self)
@@ -8258,8 +8303,10 @@ class FleshSacrificeSpell(Spell):
         if existing:
             existing.max_hp += dealt
             existing.deal_damage(-dealt, Tags.Heal, self)
-            self.caster.level.show_effect(existing.x, existing.y, Tags.Translocation)
-            self.caster.level.act_move(existing, x, y, teleport=True)
+            if self.caster.level.can_move(existing, x, y, teleport=True):
+                self.caster.level.show_effect(existing.x, existing.y, Tags.Translocation)
+                self.caster.level.act_move(existing, x, y, teleport=True)
+                self.caster.level.show_effect(existing.x, existing.y, Tags.Translocation)
             return
         
         unit = Unit()
@@ -9378,6 +9425,8 @@ class FleshburstZombieSpell(Spell):
         self.tags = [Tags.Dark, Tags.Nature, Tags.Conjuration]
         self.level = 5
         self.max_charges = 7
+        self.must_target_walkable = True
+        self.must_target_empty = True
 
         self.radius = 3
         self.minion_health = 20
@@ -9662,5 +9711,115 @@ class ChaoticSparkSpell(Spell):
                 yield
             jumps_left -= 1
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell])
+class WeepingMedusaStoneForm(PetrifyBuff):
+
+    def __init__(self, spell):
+        PetrifyBuff.__init__(self)
+        self.name = "Stone Form"
+        self.show_effect = False
+        self.buff_type = BUFF_TYPE_BLESS
+        self.stack_type = STACK_TYPE_TRANSFORM
+        self.asset = None
+        self.transform_asset_name = os.path.join("..", "..", "mods", "MissingSynergies", "Units", "weeping_medusa_statue")
+        self.duration = spell.get_stat("duration")
+        self.caustic = spell.get_stat("caustic")
+    
+    def on_pre_advance(self):
+        if all([u.has_buff(BlindBuff) or u.has_buff(Stun) for u in self.owner.level.get_units_in_los(self.owner) if are_hostile(u, self.owner)]):
+            self.owner.remove_buff(self)
+    
+    def on_advance(self):
+        for unit in self.owner.level.get_units_in_los(self.owner):
+            if not are_hostile(unit, self.owner):
+                continue
+            if random.random() < 1/6:
+                unit.apply_buff(PetrifyBuff(), self.duration)
+            if self.caustic and random.random() < 1/6:
+                unit.apply_buff(Acidified())
+
+class WeepingMedusaBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+
+    def on_init(self):
+        self.color = PetrifyBuff().color
+        self.description = "Before the beginning of this unit's turn, exit stone form if all enemies in LOS are blind or incapacitated. After this unit's turn, enter stone form if not all enemies in LOS are blind or incapacitated."
+    
+    def on_applied(self, owner):
+        self.owner.apply_buff(WeepingMedusaStoneForm(self.spell))
+    
+    def on_advance(self):
+        if self.owner.has_buff(WeepingMedusaStoneForm):
+            return
+        if not all([u.has_buff(BlindBuff) or u.has_buff(Stun) for u in self.owner.level.get_units_in_los(self.owner) if are_hostile(u, self.owner)]):
+            self.owner.apply_buff(WeepingMedusaStoneForm(self.spell))
+
+class WeepingMedusaSpell(Spell):
+
+    def on_init(self):
+        self.name = "Weeping Medusa"
+        self.asset = ["MissingSynergies", "Icons", "weeping_medusa"]
+        self.tags = [Tags.Dark, Tags.Nature, Tags.Arcane, Tags.Conjuration]
+        self.level = 5
+        self.max_charges = 6
+        self.range = RANGE_GLOBAL
+        self.requires_los = False
+        self.must_target_walkable = True
+
+        self.minion_health = 57
+        self.duration = 3
+        self.minion_damage = 4
+
+        self.upgrades["duration"] = (2, 3, "Petrify Duration")
+        self.upgrades["minion_damage"] = (4, 5)
+        self.upgrades["immaculate"] = (1, 2, "Immaculate Stone", "The Medusa is now immune to all debuffs.\nThe self-petrification of its stone form is not considered a debuff.")
+        self.upgrades["caustic"] = (1, 4, "Caustic Tears", "While in stone form, the Medusa also has the same chance to [acidify:poison] each enemy each turn, making it lose [100_poison:poison] resistance.")
+
+    def can_cast(self, x, y):
+        if not Spell.can_cast(self, x, y):
+            return False
+        unit = self.caster.level.get_unit_at(x, y)
+        if unit:
+            return unit.source is self
+        return True
+
+    def get_description(self):
+        return ("Summon the Weeping Medusa, a [dark] [nature] [arcane] [construct] with [{minion_health}_HP:minion_health], or teleport the Medusa to the target tile and fully heal it. It starts in stone form, where it is [petrified] but each turn has a 1/6 chance to [petrify] each enemy in LOS for [{duration}_turns:duration].\n"
+                "Before the beginning of its turn, it exits stone form if all enemies in its LOS are [blind] or incapacitated ([stunned], [frozen], [petrified], [glassified], or similar). After its turn, it enters stone form if this condition is not satisfied.\n"
+                "The Medusa has a leap attack with unlimited range that deals [{minion_damage}:minion_damage] [dark], [poison], or [arcane] damage, and similar a melee attack that hits 5 times.").format(**self.fmt_dict())
+
+    def cast_instant(self, x, y):
+
+        existing = None
+        for unit in self.caster.level.units:
+            if unit.source is self:
+                existing = unit
+                break
+        if existing:
+            existing.deal_damage(-existing.max_hp, Tags.Heal, self)
+            if self.caster.level.can_move(existing, x, y, teleport=True):
+                self.caster.level.show_effect(existing.x, existing.y, Tags.Translocation)
+                self.caster.level.act_move(existing, x, y, teleport=True)
+                self.caster.level.show_effect(existing.x, existing.y, Tags.Translocation)
+            return
+        
+        unit = Unit()
+        unit.unique = True
+        unit.name = "Weeping Medusa"
+        unit.asset = ["MissingSynergies", "Units", "weeping_medusa"]
+        unit.max_hp = self.get_stat("minion_health")
+        unit.tags = [Tags.Dark, Tags.Nature, Tags.Arcane, Tags.Construct]
+        unit.resists[Tags.Dark] = 75
+        unit.resists[Tags.Arcane] = 75
+        unit.resists[Tags.Poison] = 100
+        damage = self.get_stat("minion_damage")
+        unit.spells = [SimpleMeleeAttack(damage=damage, damage_type=[Tags.Dark, Tags.Poison, Tags.Arcane], attacks=5), LeapAttack(damage=damage, range=RANGE_GLOBAL, damage_type=[Tags.Dark, Tags.Poison, Tags.Arcane])]
+        unit.buffs = [WeepingMedusaBuff(self)]
+        if self.get_stat("immaculate"):
+            unit.debuff_immune = True
+        self.summon(unit, target=Point(x, y))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse])
