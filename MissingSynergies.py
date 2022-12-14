@@ -868,9 +868,9 @@ class ShadowAssassin(Upgrade):
         self.old_y = self.owner.y
     
     def get_description(self):
-        return ("Whenever you teleport, if there is only a single enemy adjacent to you on arrival, deal [{damage}_dark:dark], [{damage}_physical:physical], and [{damage}_poison:poison] damage to it.\n"
-                "Most forms of movement other than a unit's movement action count as teleportation.\n"
-                "If you teleported to that enemy from out of line of sight or at least [8_tiles:range] away, or the enemy is [blind], deal double damage.").format(**self.fmt_dict())
+        return ("Whenever you teleport, if there is only a single enemy adjacent to you on arrival, deal [{damage}_dark:dark], [{damage}_physical:physical], and [{damage}_poison:poison] damage to it. Most forms of movement other than a unit's movement action count as teleportation.\n"
+                "If you teleported to that enemy from out of line of sight, or the enemy is [blind] or incapacitated ([stunned], [frozen], [petrified], [glassified], or similar), deal double damage.\n"
+                "If none of these conditions are satisfied, you still have a chance to deal double damage. The chance to fail is equal to 100% divided by half of the distance between your previous position and the enemy, up to 100%.").format(**self.fmt_dict())
     
     def on_moved(self, evt):
         
@@ -890,7 +890,7 @@ class ShadowAssassin(Upgrade):
                 return
             
             damage = self.get_stat("damage")
-            if target.has_buff(BlindBuff) or not self.owner.level.can_see(target.x, target.y, self.old_x, self.old_y) or distance(target, Point(self.old_x, self.old_y)) >= 8:
+            if target.has_buff(BlindBuff) or target.has_buff(Stun) or not self.owner.level.can_see(target.x, target.y, self.old_x, self.old_y) or random.random() >= 2/distance(target, Point(self.old_x, self.old_y)):
                 damage *= 2
             for dtype in [Tags.Dark, Tags.Physical, Tags.Poison]:
                 target.deal_damage(damage, dtype, self)
