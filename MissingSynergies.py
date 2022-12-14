@@ -1159,7 +1159,7 @@ class PermaBerserkBuff(BerserkBuff):
 
     def __init__(self):
         BerserkBuff.__init__(self)
-        self.name = "Irremovable Berserk"
+        self.name = "Berserk"
     
     def on_unapplied(self):
         if self.owner.is_alive():
@@ -1186,7 +1186,7 @@ class WordOfDetonationSpell(Spell):
     
     def get_description(self):
         return ("Summon a fire bomber or void bomber next to every unit except the caster.\n"
-                "The bombers are hostile and permanently [berserked:berserk]. They disappear if there are no other enemies in the realm.").format(**self.fmt_dict())
+                "The bombers are hostile and permanently [berserk]; the debuff reapplies itself if removed. They disappear if there are no other enemies in the realm.").format(**self.fmt_dict())
     
     def get_impacted_tiles(self, x, y):
         return [u for u in self.owner.level.units if u is not self.caster]
@@ -1234,7 +1234,7 @@ class WordOfUpheavalSpell(Spell):
     
     def get_description(self):
         return ("Each unit that isn't [living] or [nature] has a 50% chance to take [{damage}_physical:physical] damage.\n"
-                "Each empty floor tile has a 25% chance to have an earth elemental summoned onto it. The elemental is hostile and permanently [berserked:berserk]. It disappears if there are no other enemies in the realm.\n"
+                "Each empty floor tile has a 25% chance to have an earth elemental summoned onto it. The elemental is hostile and permanently [berserk]; the debuff reapplies itself if removed. It disappears if there are no other enemies in the realm.\n"
                 "Turn all chasms into floors.\n"
                 "Turn all walls into chasms.").format(**self.fmt_dict())
     
@@ -1939,57 +1939,53 @@ class RuinousImpactSpell(Spell):
         self.can_target_self = True
 
         self.damage = 80
-        self.radius = 5
         self.duration = 33
 
         self.upgrades["damage"] = (20, 3)
-        self.upgrades["radius"] = (2, 3, "Radius", "The length of the interval at which the damage and wall destruction chance decrease is increased by [2:radius].")
+        self.upgrades["epicenter"] = (1, 5, "Epicenter", "Ruinous Impact now deals bonus damage equal to 100% of the maximum damage divided by 1 plus the distance of each unit from the target tile.")
         self.add_upgrade(RuinAdept())
 
     def get_description(self):
-        return ("Deal [fire], [lightning], [physical], and [dark] damage in a massive burst that covers the whole level, ignoring walls.\n"
-                "The initial damage is [{damage}:damage] at the point of impact with a 100% chance to destroy walls.\n"
-                "For every [{radius}_tiles:radius] away from the point of impact, the damage and chance to destroy walls is reduced by 5%.\n"
-                "After dealing damage, remove all buffs from the target and inflict Ruin for a fixed [33_turns:duration], which prevents the target from gaining buffs and cannot be removed prematurely.\n"
+        return ("Deal [fire], [lightning], [physical], and [dark] damage in a massive burst that covers the whole level, ignoring walls. The initial damage is [{damage}:damage] at the point of impact with a 100% chance to destroy walls.\n"
+                "After dealing damage, remove all buffs from the target and inflict Ruin for a fixed [33_turns:duration], which prevents the target from gaining buffs and reapplies itself if removed prematurely.\n"
+                "For every tile away from the point of impact, the damage and chance to destroy walls, remove buffs, and apply Ruin is reduced by 1%.\n"
                 "The caster is not immune to this spell. Use with extreme caution.").format(**self.fmt_dict())
     
     def get_impacted_tiles(self, x, y):
         points = []
         stagenum = 0
-        interval = self.get_stat('radius')
-        for stage in Burst(self.caster.level, Point(x, y), interval*11, ignore_walls=True):
-            if stagenum % interval == 0:
+        for stage in Burst(self.caster.level, Point(x, y), 60, ignore_walls=True):
+            if stagenum % 5 == 0:
                 points.extend(list(stage))
             stagenum += 1
         return points
 
-    def hit(self, point, damage, duration_bonus):
-        for dtype in [Tags.Fire, Tags.Lightning, Tags.Physical, Tags.Dark]:
-            self.caster.level.deal_damage(point.x, point.y, damage, dtype, self)
-        unit = self.caster.level.get_unit_at(point.x, point.y)
-        if unit:
-            buffs = list(unit.buffs)
-            for buff in buffs:
-                if buff.buff_type == BUFF_TYPE_BLESS:
-                    unit.remove_buff(buff)
-            duration = self.duration + duration_bonus*(1 if are_hostile(self.caster, unit) else -1)
-            if duration > 0:
-                unit.apply_buff(RuinBuff(), duration)
-
     def cast(self, x, y):
-        damage = self.get_stat("damage")
-        interval = self.get_stat('radius')
-        duration_bonus = self.get_stat("duration", base=0) if self.get_stat("adept") else 0
+        max_damage = self.get_stat("damage")
+        epicenter = self.get_stat("epicenter")
+        duration_bonus = (self.get_stat("duration") - self.duration) if self.get_stat("adept") else 0
         stagenum = 0
-        step = 0
-        for stage in Burst(self.caster.level, Point(x, y), interval*11, ignore_walls=True):
+        for stage in Burst(self.caster.level, Point(x, y), 60, ignore_walls=True):
+            damage = math.ceil(max_damage*(1 - 0.01*stagenum))
+            if epicenter:
+                damage += max_damage//(stagenum + 1)
             for point in stage:
-                self.hit(point, damage*(1 - 0.05*step), duration_bonus)
-                if self.caster.level.tiles[point.x][point.y].is_wall() and random.random() < 1 - 0.05*step:
+                for dtype in [Tags.Fire, Tags.Lightning, Tags.Physical, Tags.Dark]:
+                    self.caster.level.deal_damage(point.x, point.y, damage, dtype, self)
+                if random.random() >= 1 - 0.01*stagenum:
+                    continue
+                unit = self.caster.level.get_unit_at(point.x, point.y)
+                if unit:
+                    buffs = list(unit.buffs)
+                    for buff in buffs:
+                        if buff.buff_type == BUFF_TYPE_BLESS:
+                            unit.remove_buff(buff)
+                    duration = self.duration + duration_bonus*(1 if are_hostile(self.caster, unit) else -1)
+                    if duration > 0:
+                        unit.apply_buff(RuinBuff(), duration)
+                if self.caster.level.tiles[point.x][point.y].is_wall():
                     self.caster.level.make_floor(point.x, point.y)
             stagenum += 1
-            if stagenum % interval == 0:
-                step += 1
             yield
 
 class CopperFurnaceSpell(Spell):
