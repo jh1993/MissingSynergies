@@ -118,6 +118,7 @@ Level 4:
 + Razor Scales (Dragon/Metallic)
 + Shadow Assassin (Dark/Translocation)
 + Singular Eye (Eye)
++ Trick Walk (Translocation)
 + Unnatural Vitality (Dark/Nature)
 
 Level 5:

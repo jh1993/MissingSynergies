@@ -5187,8 +5187,8 @@ class KingswaterSpell(Spell):
                 "If an enemy is [metallic], [glass], [petrified], or [glassified], it is [acidified:poison], losing [100_poison:poison] resistance, and takes [{damage}_holy:holy] damage.").format(**self.fmt_dict())
 
     def hit(self, x, y, damage, duration, poison, precipitate):
-        self.caster.level.show_effect(x, y, Tags.Holy, minor=True)
-        self.caster.level.show_effect(x, y, Tags.Poison, minor=True)
+        self.caster.level.show_effect(x, y, Tags.Holy)
+        self.caster.level.show_effect(x, y, Tags.Poison)
         unit = self.caster.level.get_unit_at(x, y)
         if not unit or not are_hostile(unit, self.caster):
             return
@@ -9877,5 +9877,29 @@ class ThermalImbalanceSpell(Spell):
     def cast_instant(self, x, y):
         self.caster.apply_buff(ThermalImbalanceBuff(self), self.get_stat("duration"))
 
+class TrickWalk(Upgrade):
+
+    def on_init(self):
+        self.name = "Trick Walk"
+        self.asset = ["MissingSynergies", "Icons", "trick_walk"]
+        self.tags = [Tags.Translocation]
+        self.level = 4
+        self.description = "Whenever you pass your turn or move without teleporting, you pretend to teleport to the same tile, triggering all effects that are normally triggered when you teleport.\nMost forms of movement other than a unit's movement action count as teleportation."
+        self.owner_triggers[EventOnMoved] = self.on_moved
+        self.owner_triggers[EventOnPass] = self.on_pass
+    
+    def fake_teleport(self):
+        if all([u.team == TEAM_PLAYER for u in self.owner.level.units]):
+            return
+        self.owner.level.event_manager.raise_event(EventOnMoved(self.owner, self.owner.x, self.owner.y, teleport=True), self.owner)
+    
+    def on_moved(self, evt):
+        if evt.teleport:
+            return
+        self.fake_teleport()
+    
+    def on_pass(self, evt):
+        self.fake_teleport()
+
 all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell])
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk])
