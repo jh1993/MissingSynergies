@@ -355,6 +355,8 @@ class FrozenSpaceBuff(Buff):
         self.shielding = self.spell.get_stat("shielding")
         self.damage = self.spell.get_stat("damage")
         self.radius = self.spell.get_stat("radius")
+        self.stillness = self.spell.get_stat("stillness")
+        self.num_targets = self.spell.get_stat("num_targets", base=3)
         self.stack_type = STACK_REPLACE
 
     def on_advance(self):
@@ -368,7 +370,23 @@ class FrozenSpaceBuff(Buff):
             self.owner.level.show_effect(p.x, p.y, Tags.Ice, minor=True)
     
     def on_moved(self, evt):
-        if evt.teleport and distance(evt.unit, self.owner) <= self.radius:
+        if not evt.teleport:
+            return
+        if evt.unit is self.owner:
+            if self.stillness:
+                units = self.owner.level.get_units_in_ball(self.owner, self.radius)
+                allies = [unit for unit in units if not are_hostile(unit, self.owner) and unit is not self.owner]
+                enemies = [unit for unit in units if are_hostile(unit, self.owner)]
+                if enemies:
+                    random.shuffle(enemies)
+                    for unit in enemies[:self.num_targets]:
+                        self.effect(unit)
+                if allies and self.shielding:
+                    random.shuffle(allies)
+                    for unit in allies[:self.num_targets]:
+                        self.effect(unit)
+            return
+        elif distance(evt.unit, self.owner) <= self.radius:
             self.effect(evt.unit)
     
     def on_unit_added(self, evt):
@@ -376,8 +394,6 @@ class FrozenSpaceBuff(Buff):
             self.effect(evt.unit)
     
     def effect(self, unit):
-        if unit is self.owner:
-            return
         if not are_hostile(unit, self.owner):
             if self.shielding and unit.shields < 3:
                 unit.add_shields(1)
@@ -401,9 +417,15 @@ class FrozenSpaceSpell(Spell):
         self.upgrades['damage'] = (5, 3)
         self.upgrades['banishing'] = (1, 5, "Banishing", "Also works on units summoned inside this spell's area of effect.")
         self.upgrades['shielding'] = (1, 3, "Shielding Space", "Also affects your minions, giving them [1_SH:shields] instead on activation, up to a max of [3_SH:shield].")
+        self.upgrades["stillness"] = (1, 5, "Moving Stillness", "Whenever you teleport, [{num_targets}:num_targets] random enemies in this spell's radius are affected as if they have teleported.\nIf you have the Shielding Space upgrade, the same number of minions will also be affected.")
 
         self.tags = [Tags.Enchantment, Tags.Ice, Tags.Translocation]
         self.level = 3
+
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["num_targets"] = self.get_stat("num_targets", base=3)
+        return stats
 
     def get_description(self):
         return ("Whenever an enemy teleports to anywhere within [{radius}_tiles:radius] of you, that enemy takes [{damage}_ice:ice] damage and is [frozen] for [3_turns:duration].\n"
