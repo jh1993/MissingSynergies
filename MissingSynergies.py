@@ -109,6 +109,7 @@ class IrradiateBuff(Buff):
 
     def on_init(self):
         self.buff_type = BUFF_TYPE_CURSE
+        self.stack_type = STACK_REPLACE
         self.name = "Irradiated"
         self.color = Tags.Arcane.color
         self.asset = ["MissingSynergies", "Statuses", "irradiate"]
@@ -354,6 +355,7 @@ class FrozenSpaceBuff(Buff):
         self.shielding = self.spell.get_stat("shielding")
         self.damage = self.spell.get_stat("damage")
         self.radius = self.spell.get_stat("radius")
+        self.stack_type = STACK_REPLACE
 
     def on_advance(self):
         # Show some graphical indication of this aura
@@ -501,7 +503,9 @@ class PlanarBindingBuff(Buff):
         self.name = "Planar Binding"
         self.color = Tags.Holy.color
         self.buff_type = BUFF_TYPE_CURSE
+        self.stack_type = STACK_REPLACE
         self.asset = ["MissingSynergies", "Statuses", "planar_binding"]
+        self.redundancy = self.spell.get_stat("redundancy")
         if self.spell.get_stat("thorough"):
             self.owner_triggers[EventOnMoved] = self.on_moved
     
@@ -510,23 +514,21 @@ class PlanarBindingBuff(Buff):
         if self.owner.x != self.x or self.owner.y != self.y:
             point = self.owner.level.get_summon_point(self.x, self.y, flying=self.owner.flying)
             if point:
-                # Prevent infinite loop with Thorough Binding if the original location is blocked
                 self.x = point.x
                 self.y = point.y
                 self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
                 self.owner.level.act_move(self.owner, point.x, point.y, teleport=True)
                 self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
-            return
-        
-        # We can't actually teleport the unit onto the same tile as itself, because that tile is occupied by itself
-        # So we just cheat, raise an EventOnMoved, and pretend the teleport happened
-        if self.spell.get_stat("redundancy") and self.owner.is_alive():
-            self.owner.level.event_manager.raise_event(EventOnMoved(self.owner, self.x, self.y, teleport=True), self.owner)
-            self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
+            # Prevent infinite loop with Thorough Binding if the original location is blocked
+            self.x = self.owner.x
+            self.y = self.owner.y
 
     def on_advance(self):
         self.do_teleport()
-    
+        if self.redundancy and self.owner.is_alive():
+            self.owner.level.event_manager.raise_event(EventOnMoved(self.owner, self.x, self.y, teleport=True), self.owner)
+            self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
+
     def on_moved(self, evt):
         if not evt.teleport:
             return
@@ -549,7 +551,7 @@ class PlanarBindingSpell(Spell):
         self.upgrades["duration"] = (10, 3)
         self.upgrades["range"] = (7, 2)
         self.upgrades["requires_los"] = (-1, 2, "Blindcasting", "Planar Binding can be cast without line of sight.")
-        self.upgrades["redundancy"] = (1, 2, "Redundancy", "The target still counts as having teleported even if it did not move away from its original spot.")
+        self.upgrades["redundancy"] = (1, 2, "Redundancy", "The target still counts as having teleported an additional time per turn even if it did not move away from its original spot, triggering all effects that are triggered when it teleports.")
         self.upgrades["thorough"] = (1, 5, "Thorough Binding", "The target will now be immediately teleported back to its original location whenever it teleports.\nMost forms of movement other than a unit's movement action count as teleportation.")
     
     def get_description(self):
@@ -772,7 +774,7 @@ class MaskOfTroublesSpell(Spell):
         self.shields = 0
         
         self.upgrades["duration"] = (10, 4)
-        self.upgrades["stability"] = (1, 2, "Stability", "You no longer randomly teleport for the duration, but still count as having teleported 1 extra time per turn.")
+        self.upgrades["stability"] = (1, 2, "Stability", "You no longer randomly teleport for the duration, but still count as having teleported 1 extra time per turn, triggering all effects that trigger when you teleport.")
         self.upgrades["shields"] = (3, 2, "Shields", "Summoned troublers have an additional [3_SH:shields].")
         self.upgrades["endless"] = (1, 2, "Endless Troubles", "Summoned troublers respawn as baby troublers on death.")
     
