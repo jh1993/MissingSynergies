@@ -339,25 +339,6 @@ class Electrolysis(Upgrade):
                     poison.turns_left = duration
                     target.deal_damage(remainder, Tags.Lightning, self)
 
-class FrozenSpaceLeavingArea(Buff):
-
-    def __init__(self, source):
-        self.source = source
-        Buff.__init__(self)
-    
-    def on_init(self):
-        self.buff_type = BUFF_TYPE_PASSIVE
-        self.global_triggers[EventOnMoved] = self.on_moved
-    
-    def on_moved(self, evt):
-        if evt.unit is not self.owner and evt.unit is not self.source.owner:
-            return
-        if not distance(self.owner, self.source.owner) > self.source.radius:
-            return
-        if evt.teleport and evt.unit is self.owner and self.source.applied:
-            self.source.effect(self.owner)
-        self.owner.remove_buff(self)
-
 class FrozenSpaceBuff(Buff):
 
     def __init__(self, spell):
@@ -371,14 +352,8 @@ class FrozenSpaceBuff(Buff):
         self.global_triggers[EventOnMoved] = self.on_moved
         self.banishing = self.spell.get_stat("banishing")
         self.shielding = self.spell.get_stat("shielding")
-        self.bidirectional = self.spell.get_stat("bidirectional")
         self.damage = self.spell.get_stat("damage")
         self.radius = self.spell.get_stat("radius")
-    
-    def on_applied(self, owner):
-        if self.bidirectional:
-            for unit in self.owner.level.get_units_in_ball(self.owner, self.radius):
-                unit.apply_buff(FrozenSpaceLeavingArea(self))
 
     def on_advance(self):
         # Show some graphical indication of this aura
@@ -391,24 +366,12 @@ class FrozenSpaceBuff(Buff):
             self.owner.level.show_effect(p.x, p.y, Tags.Ice, minor=True)
     
     def on_moved(self, evt):
-        if evt.unit is self.owner:
-            self.on_applied(self.owner)
-            return
-        if distance(evt.unit, self.owner) <= self.radius:
-            if evt.teleport:
-                self.effect(evt.unit)
-            if self.bidirectional:
-                evt.unit.apply_buff(FrozenSpaceLeavingArea(self))
+        if evt.teleport and distance(evt.unit, self.owner) <= self.radius:
+            self.effect(evt.unit)
     
     def on_unit_added(self, evt):
-        if evt.unit is self.owner:
-            self.on_applied(self.owner)
-            return
-        if distance(self.owner, evt.unit) <= self.radius:
-            if self.banishing:
-                self.effect(evt.unit)
-            if self.bidirectional:
-                evt.unit.apply_buff(FrozenSpaceLeavingArea(self))
+        if self.banishing and distance(self.owner, evt.unit) <= self.radius:
+            self.effect(evt.unit)
     
     def effect(self, unit):
         if unit is self.owner:
@@ -434,7 +397,6 @@ class FrozenSpaceSpell(Spell):
 
         self.upgrades['radius'] = (3, 2)
         self.upgrades['damage'] = (5, 3)
-        self.upgrades['bidirectional'] = (1, 3, "Bidirectional", "Also works on units teleporting out of this spell's area of effect.")
         self.upgrades['banishing'] = (1, 5, "Banishing", "Also works on units summoned inside this spell's area of effect.")
         self.upgrades['shielding'] = (1, 3, "Shielding Space", "Also affects your minions, giving them [1_SH:shields] instead on activation, up to a max of [3_SH:shield].")
 
@@ -487,6 +449,7 @@ class WildHuntBuff(Buff):
                     self.owner.level.show_effect(unit.x, unit.y, Tags.Translocation)
                     self.owner.level.act_move(unit, point.x, point.y, teleport=True)
                     self.owner.level.show_effect(unit.x, unit.y, Tags.Translocation)
+        yield
     
     def on_advance(self):
         units = self.owner.level.units
@@ -552,6 +515,7 @@ class PlanarBindingBuff(Buff):
                 self.y = point.y
                 self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
                 self.owner.level.act_move(self.owner, point.x, point.y, teleport=True)
+                self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
             return
         
         # We can't actually teleport the unit onto the same tile as itself, because that tile is occupied by itself
@@ -3469,7 +3433,7 @@ class LocusOfEnergy(Upgrade):
         self.range = 10
     
     def get_description(self):
-        return ("Each turn, shoot a number of beams each targeting a random enemy within [{range}_tiles:range].\n"
+        return ("Each turn, shoot a number of beams with a range of [{range}_tiles:range], each targeting a random enemy.\n"
                 "The number of beams is equal to the square root of 10% of the total duration of all of your buffs, rounded up.\n"
                 "Each beam randomly deals [{damage}_lightning:lightning] or [{damage}_arcane:arcane] damage to all units in its path.\n").format(**self.fmt_dict())
     
@@ -9817,5 +9781,26 @@ class WeepingMedusaSpell(Spell):
             unit.debuff_immune = True
         self.summon(unit, target=Point(x, y))
 
+class TeleFrag(Upgrade):
+
+    def on_init(self):
+        self.name = "Tele-Frag"
+        self.asset = ["MissingSynergies", "Icons", "tele-frag"]
+        self.tags = [Tags.Metallic, Tags.Translocation]
+        self.level = 5
+        self.max_charges = 5
+        self.range = 10
+        self.global_triggers[EventOnMoved] = self.on_moved
+
+    def get_description(self):
+        return ("Whenever an enemy teleports, you intercept it by teleporting a small metal shard to the same location, dealing [{max_charges}_physical:physical] damage. This damage only benefits from bonuses to [max_charges:max_charges].\n"
+                "Most forms of movement other than a unit's movement action count as teleportation.\n"
+                "This skill has a maximum range of [{range}_tiles:range].").format(**self.fmt_dict())
+
+    def on_moved(self, evt):
+        if not evt.teleport or not are_hostile(evt.unit, self.owner) or distance(evt, self.owner) > self.get_stat("range"):
+            return
+        evt.unit.deal_damage(self.get_stat("max_charges"), Tags.Physical, self)
+
 all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell])
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag])

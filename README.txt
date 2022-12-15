@@ -132,6 +132,7 @@ Level 5:
 + Shock Troops (Fire/Lightning)
 + Soul Dregs (Holy/Dark)
 + Speed of Light (Holy/Translocation)
++ Tele-Frag (Metallic/Translocation)
 
 Level 6:
 + Abyssal Insight (Dark/Eye)
