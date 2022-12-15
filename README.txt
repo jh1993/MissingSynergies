@@ -89,6 +89,7 @@ Level 6:
 + Quantum Overlay (Arcane/Chaos/Enchantment)
 + Rainbow Egg (Dragon/Orb/Conjuration)
 + Raise Dracolich (Dragon/Dark/Enchantment)
++ Thermal Imbalance (Fire/Ice/Enchantment)
 + Twisted Mutation (Chaos/Nature/Enchantment)
 + Xenodruid Form (Arcane/Conjuration/Enchantment)
 

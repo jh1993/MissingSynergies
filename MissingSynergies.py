@@ -9802,5 +9802,80 @@ class TeleFrag(Upgrade):
             return
         evt.unit.deal_damage(self.get_stat("max_charges"), Tags.Physical, self)
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell])
+class ThermalGradientBuff(Buff):
+
+    def on_init(self):
+        self.name = "Thermal Gradient"
+        self.color = Tags.Fire.color
+        self.buff_type = BUFF_TYPE_CURSE
+        self.asset = ["MissingSynergies", "Statuses", "amplified_fire"]
+        self.resists[Tags.Fire] = -100
+
+    def on_pre_advance(self):
+        freeze = self.owner.get_buff(FrozenBuff)
+        if freeze:
+            self.turns_left = max(self.turns_left, freeze.turns_left)
+
+class ThermalImbalanceBuff(DamageAuraBuff):
+
+    def __init__(self, spell):
+        DamageAuraBuff.__init__(self, damage=2, damage_type=[Tags.Fire, Tags.Ice], radius=spell.get_stat("radius"))
+        self.source = spell
+        self.name = "Thermal Imbalance"
+        self.color = Tags.Ice.color
+        self.entropy = spell.get_stat("entropy")
+        self.gradient = spell.get_stat("gradient")
+        self.stack_type = STACK_REPLACE
+        self.global_triggers[EventOnBuffApply] = self.on_buff_apply
+        self.global_triggers[EventOnBuffRemove] = self.on_buff_remove
+
+    def on_advance(self):
+        if not self.entropy:
+            return
+        DamageAuraBuff.on_advance(self)
+    
+    def on_buff_apply(self, evt):
+        if not isinstance(evt.buff, FrozenBuff) or not are_hostile(evt.unit, self.owner) or evt.buff.turns_left <= 0:
+            return
+        if self.gradient:
+            evt.unit.apply_buff(ThermalGradientBuff(), evt.buff.turns_left)
+        evt.unit.deal_damage(evt.buff.turns_left, Tags.Fire, self.source)
+
+    def on_buff_remove(self, evt):
+        if not isinstance(evt.buff, FrozenBuff) or not are_hostile(evt.unit, self.owner) or evt.buff.turns_left <= 0:
+            return
+        evt.unit.deal_damage(evt.buff.turns_left, Tags.Ice, self.source)
+
+    def get_tooltip(self):
+        if not self.entropy:
+            return ""
+        return DamageAuraBuff.get_tooltip(self)
+
+class ThermalImbalanceSpell(Spell):
+
+    def on_init(self):
+        self.name = "Thermal Imbalance"
+        self.asset = ["MissingSynergies", "Icons", "thermal_imbalance"]
+        self.tags = [Tags.Fire, Tags.Ice, Tags.Enchantment]
+        self.level = 6
+        self.max_charges = 3
+        self.range = 0
+        self.radius = 7
+        self.duration = 5
+
+        self.upgrades["duration"] = (5, 3)
+        self.upgrades["radius"] = (3, 2)
+        self.upgrades["entropy"] = (1, 3, "Thermal Entropy", "Each turn, enemies inside this spell's radius also take [2_fire:fire] or [2_ice:ice] damage.\nThis damage is fixed, and cannot be increased using shrines, skills, or buffs.")
+        self.upgrades["gradient"] = (1, 5, "Thermal Gradient", "When an enemy inside this spell's radius is [frozen], before it takes [fire] damage from this spell, it loses [100_fire:fire] resistance for a duration equal to the [freeze] duration.\nWhenever the remaining duration of [freeze] on an enemy is refreshed or extended, the remaining duration of thermal gradient will be lengthened to match if it is shorter.")
+
+    def get_description(self):
+        return ("Thermal energy becomes imbalanced in a radius of [{radius}_tiles:radius] around yourself.\n"
+                "Whenever an enemy in the area is [frozen], it takes [fire] damage equal to the [freeze] duration.\n"
+                "Whenever an enemy in the area recovers from [freeze], it takes [ice] damage equal to the remaining [freeze] duration.\n"
+                "Lasts [{duration}_turns:duration].").format(**self.fmt_dict())
+
+    def cast_instant(self, x, y):
+        self.caster.apply_buff(ThermalImbalanceBuff(self), self.get_stat("duration"))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag])
