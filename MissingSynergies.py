@@ -9925,5 +9925,117 @@ class TrickWalk(Upgrade):
     def on_pass(self, evt):
         self.fake_teleport()
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell])
+class CoolantBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+    
+    def on_init(self):
+        self.name = "Coolant"
+        self.color = Tags.Ice.color
+        self.buff_type = BUFF_TYPE_CURSE
+        self.asset = ["MissingSynergies", "Statuses", "coolant"]
+        self.owner_triggers[EventOnDamaged] = self.on_damaged
+        self.owner_triggers[EventOnBuffApply] = self.on_buff_apply
+    
+    def on_advance(self):
+        self.owner.deal_damage(1, Tags.Poison, self.spell)
+    
+    def consume(self):
+        if self.turns_left <= 0:
+            return
+        for _ in range(self.turns_left):
+            self.owner.deal_damage(1, Tags.Poison, self.spell)
+        self.owner.apply_buff(FrozenBuff(), self.turns_left)
+
+    def on_damaged(self, evt):
+        if evt.damage_type != Tags.Ice:
+            return
+        self.owner.remove_buff(self)
+        self.consume()
+    
+    def on_buff_apply(self, evt):
+        if not isinstance(evt.buff, FrozenBuff):
+            return
+        self.owner.remove_buff(self)
+        self.consume()
+
+    def on_applied(self, owner):
+        if self.owner.has_buff(FrozenBuff):
+            self.consume()
+            return ABORT_BUFF_APPLY
+
+class CoolantSpraySpell(Spell):
+
+    def on_init(self):
+        self.name = "Coolant Spray"
+        self.asset = ["MissingSynergies", "Icons", "coolant_spray"]
+        self.tags = [Tags.Ice, Tags.Nature, Tags.Enchantment]
+        self.level = 3
+        self.max_charges = 8
+        self.range = 8
+        self.duration = 5
+        self.requires_los = False
+
+        self.upgrades["range"] = (4, 3)
+        self.upgrades["duration"] = (5, 3)
+        self.upgrades["acidify"] = (1, 4, "Corrosive Spray", "Affected enemies are also permanently [acidified:poison], losing [100_poison:poison] resistance.\nAn already [acidified:poison] enemy will instead take [poison] damage equal to this spell's [duration].")
+        self.upgrades["poison"] = (1, 4, "Toxicity", "Affected enemies are also [poisoned] for a duration equal to 5 times this spell's [duration].\nIf an enemy is already [poisoned], 20% of the excess [poison] duration will be dealt as [poison] damage, rounded up.")
+    
+    def get_description(self):
+        return ("Spray toxic coolant in a cone, soaking enemies in the area for [{duration}_turns:duration], which deals a fixed [1_poison:poison] damage per turn.\n"
+                "When an enemy soaked in coolant takes [ice] damage or is [frozen], the coolant will be consumed to instantly deal all of its remaining damage and inflict [freeze] with duration equal to its remaining duration.\n"
+                "If an enemy is already [frozen] when coolant is applied, the coolant will be consumed immediately for the same effect.").format(**self.fmt_dict())
+
+    def aoe(self, x, y):
+        target = Point(x, y)
+        return Burst(self.caster.level, 
+                    Point(self.caster.x, self.caster.y), 
+                    self.get_stat('range'), 
+                    burst_cone_params=BurstConeParams(target, math.pi/6))
+
+    def get_impacted_tiles(self, x, y):
+        return [p for stage in self.aoe(x, y) for p in stage]
+
+    def cast(self, x, y):
+
+        duration = self.get_stat("duration")
+        acidify = self.get_stat("acidify")
+        poison = self.get_stat("poison")
+
+        for stage in self.aoe(x, y):
+            for p in stage:
+
+                self.caster.level.show_effect(p.x, p.y, Tags.Poison)
+                self.caster.level.show_effect(p.x, p.y, Tags.Ice)
+                
+                unit = self.caster.level.get_unit_at(p.x, p.y)
+                if not unit or not are_hostile(unit, self.caster):
+                    continue
+                
+                if acidify:
+                    if unit.has_buff(Acidified):
+                        unit.deal_damage(duration, Tags.Poison, self)
+                    else:
+                        unit.apply_buff(Acidified())
+                
+                if poison:
+                    existing = unit.get_buff(Poison)
+                    amount = duration*5
+                    if existing:
+                        if existing.turns_left >= amount:
+                            unit.deal_damage(duration, Tags.Poison, self)
+                        else:
+                            unit.deal_damage(math.ceil((amount - existing.turns_left)/5), Tags.Poison, self)
+                            existing.turns_left = amount
+                    else:
+                        unit.apply_buff(Poison(), amount)
+                
+                unit.apply_buff(CoolantBuff(self), duration)
+            
+            yield
+                
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk])

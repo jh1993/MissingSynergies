@@ -22,6 +22,7 @@ Level 3:
 + Blade Rush (Metallic/Translocation/Sorcery)
 + Call Scapegoat (Dark/Nature/Conjuration)
 + Chaos Shuffle (Chaos/Translocation/Sorcery)
++ Coolant Spray (Ice/Nature/Enchantment)
 + Cult of Darkness (Dark/Enchantment/Conjuration)
 + Eternal Bomber (Holy/Conjuration/Sorcery)
 + Eye of the Tyrant (Dragon/Eye/Enchantment)
