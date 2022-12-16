@@ -3114,10 +3114,10 @@ class RainbowDragonMage(Buff):
         self.update_description()
     
     def update_description(self):
-        self.description = "Gains a random sorcery cantrip every %i turns, which can be only used once. Next one gained in %i turns." % (self.freq, self.cooldown)
+        self.description = "Gains a random damaging sorcery cantrip every %i turns, which can be only used once. Next one gained in %i turns." % (self.freq, self.cooldown)
 
     def on_applied(self, owner):
-        self.cantrips = [type(spell) for spell in make_player_spells() if spell.level == 1 and Tags.Sorcery in spell.tags]
+        self.cantrips = [type(spell) for spell in make_player_spells() if spell.level == 1 and Tags.Sorcery in spell.tags and hasattr(spell, "damage")]
         self.add_cantrip()
 
     def add_cantrip(self):
@@ -3162,7 +3162,7 @@ class RainbowEggSpell(OrbSpell):
 
         self.upgrades["minion_health"] = (25, 3)
         self.upgrades["penetration"] = (25, 3, "Resistance Penetration", "The rainbow drake's breath weapon penetrates an additional 25 resistance.")
-        self.upgrades["dragon_mage"] = (1, 3, "Dragon Mage", "The rainbow drake will gain a random [sorcery] cantrip every 3 turns if it does not have any, which can be used once before being removed.\nThese cantrips gain all of your upgrades and bonuses.")
+        self.upgrades["dragon_mage"] = (1, 3, "Dragon Mage", "The rainbow drake will gain a random damaging [sorcery] cantrip every 3 turns if it does not have any, which can be used once before being removed.\nThese cantrips gain all of your upgrades and bonuses.")
     
     def get_description(self):
         return ("Summon a rainbow egg with [{minion_health}_HP:minion_health] next to the caster, which hatches into a rainbow drake with the same max HP and [{breath_damage}:minion_damage] breath damage upon death. This does not work if the egg's death is faked.\n"
