@@ -9979,7 +9979,7 @@ class CoolantSpraySpell(Spell):
         self.requires_los = False
 
         self.upgrades["range"] = (4, 3)
-        self.upgrades["duration"] = (5, 3)
+        self.upgrades["spontaneous"] = (1, 3, "Spontaneous Freezing", "When affecting an enemy already soaked in coolant, this spell will now deal [ice] damage equal to the coolant's remaining duration before applying coolant again.")
         self.upgrades["acidify"] = (1, 4, "Corrosive Spray", "Affected enemies are also permanently [acidified:poison], losing [100_poison:poison] resistance.\nAn already [acidified:poison] enemy will instead take [poison] damage equal to this spell's [duration].")
         self.upgrades["poison"] = (1, 4, "Toxicity", "Affected enemies are also [poisoned] for a duration equal to 5 times this spell's [duration].\nIf an enemy is already [poisoned], 20% of the excess [poison] duration will be dealt as [poison] damage, rounded up.")
     
@@ -10001,6 +10001,7 @@ class CoolantSpraySpell(Spell):
     def cast(self, x, y):
 
         duration = self.get_stat("duration")
+        spontaneous = self.get_stat("spontaneous")
         acidify = self.get_stat("acidify")
         poison = self.get_stat("poison")
 
@@ -10032,6 +10033,10 @@ class CoolantSpraySpell(Spell):
                     else:
                         unit.apply_buff(Poison(), amount)
                 
+                if spontaneous:
+                    existing = unit.get_buff(CoolantBuff)
+                    if existing:
+                        unit.deal_damage(existing.turns_left, Tags.Ice, self)
                 unit.apply_buff(CoolantBuff(self), duration)
             
             yield
