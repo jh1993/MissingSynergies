@@ -9841,6 +9841,8 @@ class ThermalImbalanceBuff(DamageAuraBuff):
         DamageAuraBuff.on_advance(self)
     
     def on_buff_apply(self, evt):
+        if distance(evt.unit, self.owner) > self.radius:
+            return
         if not isinstance(evt.buff, FrozenBuff) or not are_hostile(evt.unit, self.owner) or evt.buff.turns_left <= 0:
             return
         if self.gradient:
@@ -9848,6 +9850,8 @@ class ThermalImbalanceBuff(DamageAuraBuff):
         evt.unit.deal_damage(evt.buff.turns_left, Tags.Fire, self.source)
 
     def on_buff_remove(self, evt):
+        if distance(evt.unit, self.owner) > self.radius:
+            return
         if not isinstance(evt.buff, FrozenBuff) or not are_hostile(evt.unit, self.owner) or evt.buff.turns_left <= 0:
             return
         evt.unit.deal_damage(evt.buff.turns_left, Tags.Ice, self.source)
