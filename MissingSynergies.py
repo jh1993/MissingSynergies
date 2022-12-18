@@ -8668,12 +8668,6 @@ class WebOfFireSpell(Spell):
             else:
                 self.caster.level.deal_damage(p.x, p.y, damage, Tags.Fire, self)
 
-class AntiEnergizeBuff(Buff):
-    def __init__(self, applier):
-        Buff.__init__(self)
-        self.buff_type = BUFF_TYPE_PASSIVE
-        self.applier = applier
-
 class ElectricNetSpell(Spell):
 
     def on_init(self):
@@ -8690,7 +8684,7 @@ class ElectricNetSpell(Spell):
 
         self.upgrades["radius"] = (2, 3)
         self.upgrades["duration"] = (12, 4)
-        self.upgrades["energize"] = (1, 6, "Energize", "Your [spider] minions affected by this spell have a 50% chance to immediately use one of their attacks.")
+        self.upgrades["energize"] = (1, 6, "Energize", "Your [spider] minions affected by this spell have a 50% chance to immediately perform an action. This does not trigger the per-turn effects of their buffs, debuffs, or passive abilities, or recover their cooldowns.\nYou cannot be affected even if you are a [spider] and an ally hits you with a copy of this spell.")
 
     def get_impacted_tiles(self, x, y):
         return [p for stage in Burst(self.caster.level, Point(x, y), self.get_stat('radius')) for p in stage]
@@ -8722,15 +8716,8 @@ class ElectricNetSpell(Spell):
                 elif unit and are_hostile(unit, self.caster):
                     unit.apply_buff(Stun(), 1)
                     unit.deal_damage(duration//2, Tags.Lightning, self)
-                if energize and unit and not are_hostile(unit, self.caster) and Tags.Spider in unit.tags and random.random() < 0.5:
-                    for spell in unit.spells:
-                        if not spell.can_pay_costs():
-                            continue
-                        target = spell.get_ai_target()
-                        if not target:
-                            continue
-                        self.caster.level.act_cast(unit, spell, target.x, target.y)
-                        break
+                if energize and unit and not unit.is_player_controlled and not are_hostile(unit, self.caster) and Tags.Spider in unit.tags and random.random() < 0.5:
+                    unit.advance()
             yield
 
 class ReflexArcSpell(Spell):
@@ -8931,7 +8918,7 @@ class SpeedOfLight(Upgrade):
         self.asset = ["MissingSynergies", "Icons", "speed_of_light"]
         self.tags = [Tags.Translocation, Tags.Holy]
         self.level = 5
-        self.description = "Whenever one of your minions teleports, it has a 25% chance to immediately use one of its attacks on a random valid enemy target. If the minion is [holy], the chance is instead 50%.\nThis can only trigger once per minion per turn, refreshed before the beginning of your turn.\nMost forms of movement other than a unit's movement action count as teleportation."
+        self.description = "Whenever one of your minions teleports, it has a 25% chance to immediately perform an action. If the minion is [holy], the chance is instead 50%. This does not trigger the per-turn effects of the minion's buffs, debuffs, or passive abilities, or recover their ability cooldowns.\nThis can only trigger once per minion per turn, refreshed before the beginning of your turn\nMost forms of movement other than a unit's movement action count as teleportation."
         self.global_triggers[EventOnMoved] = self.on_moved
         self.already_triggered = []
 
@@ -8944,15 +8931,8 @@ class SpeedOfLight(Upgrade):
         chance = 0.5 if Tags.Holy in evt.unit.tags else 0.25
         if random.random() >= chance:
             return
-        for spell in evt.unit.spells:
-            if not spell.can_pay_costs():
-                continue
-            target = spell.get_ai_target()
-            if not target:
-                continue
-            self.owner.level.act_cast(evt.unit, spell, target.x, target.y)
-            self.already_triggered.append(evt.unit)
-            return
+        self.already_triggered.append(evt.unit)
+        evt.unit.advance()
 
 class ForcefulChanneling(Upgrade):
 
