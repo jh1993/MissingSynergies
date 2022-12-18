@@ -68,6 +68,7 @@ Level 5:
 + Irradiate (Arcane/Nature/Enchantment)
 + Liquid Metal (Lightning/Ice/Metallic/Conjuration)
 + Living Labyrinth (Arcane/Conjuration)
++ Mad Maestro (Dark/Lightning/Conjuration)
 + Mad Werewolf (Dark/Nature/Arcane/Translocation/Conjuration)
 + Mask of Troubles (Arcane/Translocation/Conjuration/Enchantment)
 + Mass of Curses (Dark/Enchantment/Conjuration)

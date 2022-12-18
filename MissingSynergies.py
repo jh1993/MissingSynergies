@@ -10043,5 +10043,121 @@ class CoolantSpraySpell(Spell):
             
             yield
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell])
+class MadMaestroBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+    
+    def on_init(self):
+        self.name = "Brain Shock"
+        self.color = Tags.Lightning.color
+        self.strikechance = self.spell.get_stat("strikechance")
+        self.regen = self.spell.get_stat("regen")
+        self.symphony = self.spell.get_stat("symphony")
+        self.global_triggers[EventOnDamaged] = self.on_damaged
+        self.global_triggers[EventOnPreDamaged] = self.on_pre_damaged
+        self.description = "All lightning damage to enemies has a %i%% chance to berserk for 1 turn. %i%% of all lightning damage to berserk enemies is redealt as dark damage." % (self.strikechance, self.strikechance)
+    
+    def on_pre_damaged(self, evt):
+        if not evt.source or evt.source.owner is not self.owner:
+            return
+        if evt.damage_type != Tags.Lightning or not evt.unit.has_buff(BerserkBuff):
+            return
+        evt.unit.deal_damage(math.floor(evt.damage*self.strikechance/100), Tags.Dark, self)
+    
+    def on_damaged(self, evt):
+        if not evt.source or not evt.source.owner or not are_hostile(evt.unit, self.owner):
+            return
+        if evt.source.owner is self.owner:
+            if evt.damage_type != Tags.Lightning or random.random() >= self.strikechance/100:
+                return
+            evt.unit.apply_buff(BerserkBuff(), 1)
+        elif self.symphony and evt.source.owner.has_buff(BerserkBuff) and self.owner.level.can_see(evt.source.owner.x, evt.source.owner.y, self.owner.x, self.owner.y) and self.owner.level.can_see(evt.unit.x, evt.unit.y, self.owner.x, self.owner.y):
+            for p in Bolt(self.owner.level, self.owner, evt.unit):
+                self.owner.level.show_effect(p.x, p.y, Tags.Lightning, minor=True)
+            evt.unit.deal_damage(evt.damage, Tags.Lightning, self)
+
+    def on_advance(self):
+        if not self.regen:
+            return
+        self.owner.deal_damage(-len([u for u in self.owner.level.get_units_in_los(self.owner) if u.has_buff(BerserkBuff)]), Tags.Heal, self)
+
+    # For my No More Scams mod
+    def can_redeal(self, target, source, damage_type, already_checked=[]):
+        if not source or source.owner is not self.owner:
+            return False
+        if damage_type != Tags.Lightning or not target.has_buff(BerserkBuff):
+            return False
+        return is_immune(target, self, Tags.Dark, already_checked)
+
+class MadMaestroSpell(Spell):
+
+    def on_init(self):
+        self.name = "Mad Maestro"
+        self.asset = ["MissingSynergies", "Icons", "mad_maestro"]
+        self.tags = [Tags.Dark, Tags.Lightning, Tags.Conjuration]
+        self.level = 5
+        self.max_charges = 6
+        self.can_target_self = True
+
+        self.minion_health = 72
+        self.minion_damage = 7
+        self.minion_range = 9
+        self.cascade_range = 4
+        self.strikechance = 50
+        
+        self.upgrades["cascade_range"] = (3, 3, "Cascade Range", "Increases the cascade range of the maestro's chain lightning.")
+        self.upgrades["strikechance"] = (25, 4, "Mad Power", "The maestro's [lightning] damage now has a 75% chance to [berserk] on hit, and it redeals 75% of its [lightning] damage as [dark] damage to [berserk] units.")
+        self.upgrades["regen"] = (1, 3, "Mad Revelry", "Each turn, the maestro regenerates HP equal to the number of [berserk] units in its line of sight.")
+        self.upgrades["symphony"] = (1, 5, "Mad Symphony", "Whenever a [berserk] unit other than the maestro deals damage to an enemy, if both units are in the maestro's line of sight, the maestro deals that much [lightning] damage to the damaged enemy.")
+        self.upgrades["clarity"] = (1, 2, "Mad Clarity", "The maestro is now immune to all debuffs.")
+
+    def get_description(self):
+        return ("Summon the Aelf Mad Maestro. If the maestro is already summoned, instead [berserk] all enemies in its line of sight.\n"
+                "The maestro is a [living] [lightning] [dark] minion with [{minion_health}_HP:minion_health]. It has a chain lightning attack with a range of [{minion_range}_tiles:minion_range], which deals [{minion_damage}_lightning:lightning] damage and chains to enemies up to [{cascade_range}_tiles:cascade_range] away; the chain lightning cannot pass through walls.\n"
+                "All of the maestro's [lightning] damage has a [{strikechance}%:strikechance] chance to [berserk] enemies for [1_turn:duration], and it redeals [{strikechance}%:strikechance] of its [lightning] damage as [dark] damage to [berserk] units.").format(**self.fmt_dict())
+
+    def can_cast(self, x, y):
+        existing = None
+        for unit in self.caster.level.units:
+            if unit.source is self:
+                existing = unit
+                break
+        if existing:
+            return x == self.caster.x and y == self.caster.y
+        else:
+            return Spell.can_cast(self, x, y) and not self.caster.level.get_unit_at(x, y)
+
+    def cast_instant(self, x, y):
+
+        existing = None
+        for unit in self.caster.level.units:
+            if unit.source is self:
+                existing = unit
+                break
+        if existing:
+            for u in [u for u in self.caster.level.get_units_in_los(existing) if are_hostile(self.caster, u)]:
+                u.apply_buff(BerserkBuff(), 1)
+            return
+        
+        unit = Unit()
+        unit.unique = True
+        unit.name = "Aelf Mad Maestro"
+        unit.asset = ["MissingSynergies", "Units", "aelf_mad_maestro"]
+        unit.max_hp = self.minion_health
+        unit.tags = [Tags.Living, Tags.Lightning, Tags.Dark]
+        unit.resists[Tags.Dark] = 100
+        unit.resists[Tags.Lightning] = 100
+        unit.shields = 2
+        spell = MonsterChainLightning()
+        spell.arc_range = self.get_stat("cascade_range")
+        unit.spells = [spell]
+        unit.buffs = [MadMaestroBuff(self)]
+        if self.get_stat("clarity"):
+            unit.debuff_immune = True
+        apply_minion_bonuses(self, unit)
+        self.summon(unit, target=Point(x, y))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk])
