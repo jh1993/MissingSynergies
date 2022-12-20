@@ -10135,7 +10135,7 @@ class MadMaestroSpell(Spell):
         unit.resists[Tags.Lightning] = 100
         unit.shields = 2
         spell = MonsterChainLightning()
-        spell.arc_range = self.get_stat("cascade_range")
+        spell.cascade_range = self.get_stat("cascade_range")
         unit.spells = [spell]
         unit.buffs = [MadMaestroBuff(self)]
         if self.get_stat("clarity"):
