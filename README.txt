@@ -55,6 +55,7 @@ Level 4:
 
 Level 5:
 + Agonizing Storm (Dark/Lightning/Sorcery)
++ Bolt Jump (Lightning/Translocation/Sorcery)
 + Box of Woe (Dark/Lightning/Ice/Conjuration)
 + Crystal Hammer (Ice/Metallic/Sorcery)
 + Chaos Hail (Ice/Chaos/Enchantment)

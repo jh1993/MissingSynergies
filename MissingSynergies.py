@@ -620,22 +620,18 @@ class ChaosShuffleSpell(Spell):
     def shuffle(self, unit):
         self.shuffle_once(unit)
         if not self.get_stat("mass"):
-            yield False
+            return
         others = self.owner.level.get_units_in_ball(Point(unit.x, unit.y), self.get_stat("radius", base=3))
         others = [other for other in others if other is not unit and are_hostile(self.caster, other)]
         random.shuffle(others)
         for other in others:
             self.shuffle_once(other)
-            yield True
-        yield False
     
     def cast(self, x, y):
         unit = self.caster.level.get_unit_at(x, y)
         if unit:
             for _ in range(self.get_stat("num_targets")):
-                shuffling = self.shuffle(unit)
-                while next(shuffling):
-                    yield
+                self.shuffle(unit)
                 yield
 
 class BladeRushSpell(Spell):
@@ -10143,5 +10139,116 @@ class MadMaestroSpell(Spell):
         apply_minion_bonuses(self, unit)
         self.summon(unit, target=Point(x, y))
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell])
+class BoltJumpEndTurn(Buff):
+    def on_init(self):
+        self.buff_type = BUFF_TYPE_PASSIVE
+    def on_attempt_advance(self):
+        return False
+    def on_advance(self):
+        self.owner.remove_buff(self)
+
+class BoltJumpAfterimage(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+    
+    def on_init(self):
+        self.name = "Afterimage"
+        self.color = Tags.Lightning.color
+        self.stack_type = STACK_INTENSITY
+        self.show_effect = False
+    
+    def on_advance(self):
+        self.owner.remove_buff(self)
+        units = [unit for unit in self.owner.level.get_units_in_ball(self.owner, self.spell.get_stat("range")) if are_hostile(unit, self.owner)]
+        if self.spell.get_stat("requires_los"):
+            units = [unit for unit in units if self.owner.level.can_see(self.owner.x, self.owner.y, unit.x, unit.y)]
+        if not units:
+            return
+        self.owner.level.queue_spell(self.spell.jump(self.owner, random.choice(units), self.spell.get_stat("damage")))
+
+class BoltJumpInstantImage(Upgrade):
+
+    def on_init(self):
+        self.name = "Instant Image"
+        self.level = 6
+        self.owner_triggers[EventOnMoved] = self.on_moved
+    
+    def get_description(self):
+        return "Whenever you teleport, you instantly send out [%i:num_targets] afterimages at random enemies in range." % self.prereq.get_stat("num_targets", base=2)
+    
+    def on_moved(self, evt):
+        if not evt.teleport:
+            return
+        units = [unit for unit in self.owner.level.get_units_in_ball(self.owner, self.prereq.get_stat("range")) if are_hostile(unit, self.owner)]
+        if self.prereq.get_stat("requires_los"):
+            units = [unit for unit in units if self.owner.level.can_see(self.owner.x, self.owner.y, unit.x, unit.y)]
+        if not units:
+            return
+        random.shuffle(units)
+        damage = self.prereq.get_stat("damage")
+        for unit in units[:self.prereq.get_stat("num_targets", base=2)]:
+            self.owner.level.queue_spell(self.prereq.jump(self.owner, unit, damage))
+
+class BoltJumpSpell(Spell):
+
+    def on_init(self):
+        self.name = "Bolt Jump"
+        self.asset = ["MissingSynergies", "Icons", "bolt_jump"]
+        self.tags = [Tags.Lightning, Tags.Translocation, Tags.Sorcery]
+        self.level = 5
+        self.max_charges = 6
+        self.quick_cast = True
+
+        self.range = 5
+        self.damage = 16
+        self.end_turn_chance = 50
+        self.must_target_walkable = True
+        self.can_target_self = True
+
+        self.upgrades["max_charges"] = (5, 2)
+        self.upgrades["requires_los"] = (-1, 3, "Blindcasting", "Bolt Jump can be cast without line of sight.")
+        self.upgrades["range"] = (3, 3)
+        self.upgrades["end_turn_chance"] = (-25, 4)
+        self.add_upgrade(BoltJumpInstantImage())
+
+    def can_cast(self, x, y):
+        if x == self.caster.x and y == self.caster.y:
+            return True
+        if not Spell.can_cast(self, x, y):
+            return False
+        return not self.caster.level.get_unit_at(x, y)
+
+    def get_description(self):
+        return ("Teleport to the target tile, and deal [{damage}_lightning:lightning] damage to all adjacent enemies. If targeting yourself, you still count as having teleported.\n"
+                "Casting this spell does not consume a turn, but each cast has a [{end_turn_chance}%:strikechance] chance to end your turn.\n"
+                "When you cast this spell, gain an afterimage. When you end your turn, each afterimage is sent toward a random enemy in range to damage it and adjacent enemies. Afterimages can pass through walls if this spell gains blindcasting.").format(**self.fmt_dict())
+    
+    def jump(self, start, target, damage):
+        for p in self.caster.level.get_points_in_line(start, target, find_clear=False):
+            self.caster.level.leap_effect(p.x, p.y, Tags.Lightning.color, self.caster)
+            yield
+        for p in self.caster.level.get_points_in_ball(target.x, target.y, 1, diag=True):
+            unit = self.caster.level.get_unit_at(p.x, p.y)
+            if not unit or not are_hostile(unit, self.caster):
+                self.caster.level.show_effect(p.x, p.y, Tags.Lightning)
+            else:
+                unit.deal_damage(damage, Tags.Lightning, self)
+    
+    def cast(self, x, y):
+        self.caster.apply_buff(BoltJumpAfterimage(self))
+        if random.random() < self.get_stat("end_turn_chance")/100:
+            self.caster.apply_buff(BoltJumpEndTurn())
+        self.caster.invisible = True
+        start = Point(self.caster.x, self.caster.y)
+        if x == self.caster.x and y == self.caster.y:
+            self.caster.level.event_manager.raise_event(EventOnMoved(self.caster, x, y, teleport=True), self.caster)
+        else:
+            self.caster.level.act_move(self.caster, x, y, teleport=True)
+        damage = self.get_stat("damage")
+        yield from self.jump(start, Point(x, y), damage)
+        self.caster.invisible = False
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk])
