@@ -9897,6 +9897,7 @@ class TrickWalk(Upgrade):
     def fake_teleport(self):
         if all([u.team == TEAM_PLAYER for u in self.owner.level.units]):
             return
+        self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
         self.owner.level.event_manager.raise_event(EventOnMoved(self.owner, self.owner.x, self.owner.y, teleport=True), self.owner)
     
     def on_moved(self, evt):
