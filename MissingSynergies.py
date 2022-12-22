@@ -342,6 +342,25 @@ class Electrolysis(Upgrade):
                     poison.turns_left = duration
                     target.deal_damage(remainder, Tags.Lightning, self)
 
+class SpaceChillBuff(Buff):
+
+    def __init__(self, spell, buff_type):
+        self.spell = spell
+        Buff.__init__(self)
+        self.buff_type = buff_type
+    
+    def on_init(self):
+        self.name = "Space Chill"
+        self.asset = ["MissingSynergies", "Statuses", "space_chill"]
+        self.color = Tags.Ice.color
+        self.owner_triggers[EventOnMoved] = self.on_moved
+    
+    def on_moved(self, evt):
+        if not evt.teleport:
+            return
+        self.owner.remove_buff(self)
+        self.spell.effect(evt.unit)
+
 class FrozenSpaceBuff(Buff):
 
     def __init__(self, spell):
@@ -351,25 +370,22 @@ class FrozenSpaceBuff(Buff):
     def on_init(self):
         self.name = "Frozen Space"
         self.color = Tags.Ice.color
-        self.global_triggers[EventOnUnitAdded] = self.on_unit_added
+        self.instant = self.spell.get_stat("instant")
+        if self.instant:
+            self.global_triggers[EventOnUnitAdded] = self.on_unit_added
         self.global_triggers[EventOnMoved] = self.on_moved
-        self.banishing = self.spell.get_stat("banishing")
         self.shielding = self.spell.get_stat("shielding")
-        self.damage = self.spell.get_stat("damage")
         self.radius = self.spell.get_stat("radius")
         self.stillness = self.spell.get_stat("stillness")
         self.num_targets = self.spell.get_stat("num_targets", base=3)
         self.stack_type = STACK_REPLACE
 
-    def on_advance(self):
-        # Show some graphical indication of this aura
-        points = [p for p in self.owner.level.get_points_in_ball(self.owner.x, self.owner.y, self.radius) if not self.owner.level.get_unit_at(p.x, p.y)]
-        random.shuffle(points)
-        for _ in range(7):
-            if not points:
-                break
-            p = points.pop()
-            self.owner.level.show_effect(p.x, p.y, Tags.Ice, minor=True)
+    def on_pre_advance(self):
+        for unit in self.owner.level.get_units_in_ball(self.owner, self.radius):
+            if are_hostile(unit, self.owner):
+                unit.apply_buff(SpaceChillBuff(self.spell, BUFF_TYPE_CURSE))
+            elif self.shielding and unit is not self.owner:
+                unit.apply_buff(SpaceChillBuff(self.spell, BUFF_TYPE_BLESS))
     
     def on_moved(self, evt):
         if not evt.teleport:
@@ -382,26 +398,18 @@ class FrozenSpaceBuff(Buff):
                 if enemies:
                     random.shuffle(enemies)
                     for unit in enemies[:self.num_targets]:
-                        self.effect(unit)
+                        self.spell.effect(unit)
                 if allies and self.shielding:
                     random.shuffle(allies)
                     for unit in allies[:self.num_targets]:
-                        self.effect(unit)
+                        self.spell.effect(unit)
             return
-        elif distance(evt.unit, self.owner) <= self.radius:
-            self.effect(evt.unit)
+        elif self.instant and distance(evt.unit, self.owner) <= self.radius:
+            self.spell.effect(evt.unit)
     
     def on_unit_added(self, evt):
-        if self.banishing and distance(self.owner, evt.unit) <= self.radius:
-            self.effect(evt.unit)
-    
-    def effect(self, unit):
-        if not are_hostile(unit, self.owner):
-            if self.shielding and unit.shields < 3:
-                unit.add_shields(1)
-            return
-        unit.deal_damage(self.damage, Tags.Ice, self.spell)
-        unit.apply_buff(FrozenBuff(), 3)
+        if evt.unit is not self.owner and distance(self.owner, evt.unit) <= self.radius:
+            self.spell.effect(evt.unit)
 
 class FrozenSpaceSpell(Spell):
 
@@ -417,7 +425,7 @@ class FrozenSpaceSpell(Spell):
 
         self.upgrades['radius'] = (3, 2)
         self.upgrades['damage'] = (5, 3)
-        self.upgrades['banishing'] = (1, 5, "Banishing", "Also works on units summoned inside this spell's area of effect.")
+        self.upgrades['instant'] = (1, 5, "Instant Chill", "Units that teleport into or are summoned inside this spell's radius will also instantly be affected by the activation effect of Space Chill.")
         self.upgrades['shielding'] = (1, 3, "Shielding Space", "Also affects your minions, giving them [1_SH:shields] instead on activation, up to a max of [3_SH:shield].")
         self.upgrades["stillness"] = (1, 5, "Moving Stillness", "Whenever you teleport, [{num_targets}:num_targets] random enemies in this spell's radius are affected as if they have teleported.\nIf you have the Shielding Space upgrade, the same number of minions will also be affected.")
 
@@ -430,12 +438,21 @@ class FrozenSpaceSpell(Spell):
         return stats
 
     def get_description(self):
-        return ("Whenever an enemy teleports to anywhere within [{radius}_tiles:radius] of you, that enemy takes [{damage}_ice:ice] damage and is [frozen] for [3_turns:duration].\n"
+        return ("At the beginning of each turn, apply Space Chill to enemies within [{radius}_tiles:radius] around you.\n"
+                "Whenever an enemy with Space Chill teleports, Space Chill is consumed to deal [{damage}_ice:ice] damage and [freeze] that enemy for [3_turns:duration].\n"
                 "Most forms of movement other than a unit's movement action count as teleportation.\n"
                 "Lasts [{duration}_turns:duration].").format(**self.fmt_dict())
     
     def cast_instant(self, x, y):
         self.caster.apply_buff(FrozenSpaceBuff(self), self.get_stat('duration'))
+
+    def effect(self, unit):
+        if not are_hostile(unit, self.caster):
+            if self.get_stat("shielding") and unit.shields < 3:
+                unit.add_shields(1)
+            return
+        unit.deal_damage(self.get_stat("damage"), Tags.Ice, self)
+        unit.apply_buff(FrozenBuff(), 3)
 
 class WildHuntBuff(Buff):
 
@@ -8775,6 +8792,8 @@ class ReflexArc(Upgrade):
                 "This skill benefits 10 times from bonuses to [duration].").format(**self.fmt_dict())
 
     def on_advance(self):
+        if all(u.team == TEAM_PLAYER for u in self.owner.level.units):
+            return
         target = self.spell.get_ai_target()
         if not target:
             return
