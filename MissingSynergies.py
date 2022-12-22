@@ -534,16 +534,16 @@ class WildHuntSpell(Spell):
 
 class PlanarBindingBuff(Buff):
     
-    def __init__(self, spell, x, y):
+    def __init__(self, spell, x, y, buff_type):
         self.spell = spell
         self.x = x
         self.y = y
         Buff.__init__(self)
+        self.buff_type = buff_type
 
     def on_init(self):
         self.name = "Planar Binding"
         self.color = Tags.Holy.color
-        self.buff_type = BUFF_TYPE_CURSE
         self.stack_type = STACK_REPLACE
         self.asset = ["MissingSynergies", "Statuses", "planar_binding"]
         self.redundancy = self.spell.get_stat("redundancy")
@@ -551,7 +551,6 @@ class PlanarBindingBuff(Buff):
             self.owner_triggers[EventOnMoved] = self.on_moved
     
     def do_teleport(self):
-    
         if self.owner.x != self.x or self.owner.y != self.y:
             point = self.owner.level.get_summon_point(self.x, self.y, flying=self.owner.flying)
             if point:
@@ -601,7 +600,7 @@ class PlanarBindingSpell(Spell):
     def cast_instant(self, x, y):
         unit = self.caster.level.get_unit_at(x, y)
         if unit:
-            unit.apply_buff(PlanarBindingBuff(self, x, y), self.get_stat("duration"))
+            unit.apply_buff(PlanarBindingBuff(self, x, y, BUFF_TYPE_CURSE if are_hostile(unit, self.caster) else BUFF_TYPE_BLESS), self.get_stat("duration"))
 
 class ChaosShuffleSpell(Spell):
 
@@ -10270,5 +10269,216 @@ class BoltJumpSpell(Spell):
         yield from self.jump(start, Point(x, y), damage)
         self.caster.invisible = False
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell])
+class HealthMutation(Buff):
+
+    def __init__(self, buff_type):
+        Buff.__init__(self)
+        self.buff_type = buff_type
+        self.name = "Health Mutation"
+        self.color = Tags.Heal.color
+        self.asset = ["MissingSynergies", "Statuses", "mutation"]
+        self.stack_type = STACK_INTENSITY
+    
+    def on_applied(self, owner):
+        if self.buff_type == BUFF_TYPE_BLESS:
+            self.owner.max_hp += 30
+            self.owner.deal_damage(-30, Tags.Heal, self)
+        else:
+            drain_max_hp(self.owner, 30)
+    
+    def on_unapplied(self):
+        if self.buff_type == BUFF_TYPE_BLESS:
+            drain_max_hp(self.owner, 30)
+        else:
+            self.owner.max_hp += 30
+
+class LeapMutation(Buff):
+    def __init__(self, damage, leap_range):
+        Buff.__init__(self)
+        self.spells = [LeapAttack(damage=damage, range=leap_range)]
+        self.name = "Leap Mutation"
+        self.color = Tags.Physical.color
+        self.asset = ["MissingSynergies", "Statuses", "mutation"]
+
+class TentacleMutation(Buff):
+    def __init__(self, damage, pull_range):
+        Buff.__init__(self)
+        spell = PullAttack(damage=damage, range=pull_range, color=Tags.Tongue.color)
+        spell.name = "Tentacle"
+        self.spells = [spell]
+        self.name = "Tentacle Mutation"
+        self.color = Tags.Tongue.color
+        self.asset = ["MissingSynergies", "Statuses", "mutation"]
+
+class GeneticBreakdownBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+    
+    def on_init(self):
+        self.name = "Genetic Breakdown"
+        self.asset = ["MissingSynergies", "Statuses", "mutation"]
+        self.buff_type = BUFF_TYPE_CURSE
+        self.color = Tags.Poison.color
+        self.stack_type = STACK_INTENSITY
+        self.damage = self.spell.get_stat("damage", base=5)
+    
+    def on_advance(self):
+        self.owner.deal_damage(self.damage, Tags.Poison, self.spell)
+        existing = self.owner.get_buff(Poison)
+        if existing:
+            existing.turns_left += self.damage
+        else:
+            self.owner.apply_buff(Poison(), self.damage)
+
+class ChaoticFluxBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+    
+    def on_init(self):
+        self.name = "Chaotic Flux"
+        self.asset = ["MissingSynergies", "Statuses", "mutation"]
+        self.buff_type = BUFF_TYPE_CURSE
+        self.color = Tags.Chaos.color
+        self.stack_type = STACK_INTENSITY
+        self.owner_triggers[EventOnPreDamaged] = self.on_pre_damaged
+    
+    def on_pre_damaged(self, evt):
+        if isinstance(evt.source, GeneHarvestSpell) or evt.damage <= 0:
+            return
+        self.owner.deal_damage(evt.damage//4, random.choice([Tags.Fire, Tags.Lightning, Tags.Physical]), self.spell)
+
+    # For my No More Scams mod
+    def can_redeal(self, target, source, damage_type, already_checked=[]):
+        if target is not self.owner or isinstance(source, GeneHarvestSpell):
+            return False
+        for tag in [Tags.Fire, Tags.Lightning, Tags.Physical]:
+            if not is_immune(target, self.spell, tag, already_checked):
+                return True
+        return False
+
+class GeneHarvestBuff(DamageAuraBuff):
+
+    def __init__(self, spell):
+        DamageAuraBuff.__init__(self, damage=2, damage_type=[Tags.Poison, Tags.Fire, Tags.Lightning, Tags.Physical], radius=spell.get_stat("radius"), friendly_fire=True)
+        self.source = spell
+        self.name = "Gene Harvest"
+        self.color = Tags.Chaos.color
+        self.stack_type = STACK_REPLACE
+        self.breakdown = spell.get_stat("breakdown")
+        self.flux = spell.get_stat("flux")
+        self.virulent = spell.get_stat("virulent")
+        self.hunt = spell.get_stat("hunt")
+
+    def on_advance(self):
+        DamageAuraBuff.on_advance(self)
+        while self.damage_dealt >= 25:
+            self.damage_dealt -= 25
+            self.effect()
+
+    def on_unapplied(self):
+        while self.damage_dealt >= 25:
+            self.damage_dealt -= 25
+            self.effect()
+        if random.random() < self.damage_dealt/25:
+            self.effect()
+
+    def effect(self):
+
+        units = self.owner.level.get_units_in_ball(self.owner, self.radius)
+        allies = [u for u in units if u is not self.owner and not u.is_player_controlled and not are_hostile(u, self.owner)]
+        enemies = [u for u in units if are_hostile(u, self.owner)]
+        if not allies and not enemies:
+            return
+        elif allies and not enemies:
+            target = random.choice(allies)
+        elif enemies and not allies:
+            target = random.choice(enemies)
+        else:
+            target = random.choice(random.choice([allies, enemies]))
+        
+        has_ranged = bool([spell for spell in target.spells if spell.range >= 2])
+        is_enemy = are_hostile(target, self.owner)
+        
+        health_mutation = HealthMutation(BUFF_TYPE_CURSE if is_enemy else BUFF_TYPE_BLESS)
+        
+        damage_mutation = GlobalAttrBonus("damage", -4 if is_enemy else 4)
+        damage_mutation.name = "Damage Mutation"
+        damage_mutation.buff_type = BUFF_TYPE_CURSE if is_enemy else BUFF_TYPE_BLESS
+        damage_mutation.asset = ["MissingSynergies", "Statuses", "mutation"]
+        damage_mutation.stack_type = STACK_INTENSITY
+        
+        range_mutation = GlobalAttrBonus("range", -1 if is_enemy else 1)
+        range_mutation.name = "Range Mutation"
+        range_mutation.buff_type = BUFF_TYPE_CURSE if is_enemy else BUFF_TYPE_BLESS
+        range_mutation.asset = ["MissingSynergies", "Statuses", "mutation"]
+        range_mutation.stack_type = STACK_INTENSITY
+
+        choices = [health_mutation, damage_mutation]
+        if has_ranged:
+            choices.append(range_mutation)
+        target.apply_buff(random.choice(choices))
+
+        if is_enemy:
+            if self.breakdown:
+                target.apply_buff(GeneticBreakdownBuff(self.source))
+            if self.flux:
+                target.apply_buff(ChaoticFluxBuff(self.source))
+        else:
+            if self.virulent:
+                regen = RegenBuff(self.source.get_stat("damage", base=5))
+                regen.asset = ["MissingSynergies", "Statuses", "mutation"]
+                target.apply_buff(regen)
+                aura = DamageAuraBuff(damage=1, damage_type=Tags.Poison, radius=self.radius//2)
+                aura.asset = ["MissingSynergies", "Statuses", "mutation"]
+                aura.name = "Virulent Aura"
+                aura.stack_type = STACK_INTENSITY
+                target.apply_buff(aura)
+            if self.hunt:
+                if not has_ranged:
+                    target.apply_buff(random.choice([LeapMutation, TentacleMutation])(self.source.get_stat("minion_damage", base=5), self.source.get_stat("minion_range", base=5)))
+                else:
+                    buff = Thorns(damage=self.source.get_stat("minion_damage", base=5), dtype=random.choice([Tags.Fire, Tags.Lightning]))
+                    buff.name = "%s Thorns" % buff.dtype.name
+                    buff.asset = ["MissingSynergies", "Statuses", "mutation"]
+                    buff.stack_type = STACK_INTENSITY
+                    target.apply_buff(buff)
+
+class GeneHarvestSpell(Spell):
+    
+    def on_init(self):
+        self.name = "Gene Harvest"
+        self.asset = ["MissingSynergies", "Icons", "gene_harvest"]
+        self.tags = [Tags.Chaos, Tags.Nature, Tags.Enchantment]
+        self.level = 4
+        self.range = 0
+        self.max_charges = 3
+        self.radius = 7
+        self.duration = 30
+
+        self.upgrades["radius"] = (3, 2)
+        self.upgrades["breakdown"] = (1, 3, "Genetic Breakdown", "When mutating an enemy, that enemy also gains a stack of Genetic Breakdown, which deals [{damage}_poison:poison] damage per turn, and inflicts the same duration of [poison] that stacks in duration with the target's existing [poison].\nThis counts as damage dealt by Gene Harvest, but not as damage dealt by the aura itself.")
+        self.upgrades["flux"] = (1, 5, "Chaotic Flux", "When mutating an enemy, that enemy also gains a stack of Chaotic Flux, which redeals 25% of all damage dealt to that enemy by sources other than Gene Harvest as [fire], [lightning], or [physical] damage, before counting resistances.\nThis counts as damage dealt by Gene Harvest, but not as damage dealt by the aura itself.")
+        self.upgrades["virulent"] = (1, 4, "Virulent Life", "When mutating a minion, that minion also gains regeneration that heals for [{damage}_HP:heal] each turn, and an aura that deals [1_poison:poison] damage per turn to enemies in a radius equal to half of this spell's radius, rounded down.\nMultiple instances of these buffs can be gained per minion.")
+        self.upgrades["hunt"] = (1, 4, "Hunter and the Hunted", "When mutating a minion, if that minion has no ranged attacks, it gains a leap attack or a pulling tentacle attack that deals [{minion_damage}_physical:physical] damage with a range of [{minion_range}_tiles:minion_range].\nOtherwise, the minion gains the ability to retaliate for [{minion_damage}_fire:fire] or [{minion_damage}_lightning:lightning] damage when attacked in melee; multiple instances of this buff can be gained per minion.")
+
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["damage"] = self.get_stat("damage", base=5)
+        stats["minion_damage"] = self.get_stat("minion_damage", base=5)
+        stats["minion_range"] = self.get_stat("minion_range", base=5)
+        return stats
+
+    def get_description(self):
+        return ("For [{duration}_turns:duration], deal [2_poison:poison], [2_fire:fire], [2_lightning:lightning], or [2_physical:physical] damage each turn to all units in a [{radius}_tile:radius] radius except the caster. This damage is fixed, and cannot be increased using shrines, skills, or buffs.\n"
+                "For every 25 damage dealt by the aura, apply a random beneficial mutation to a random minion or a random harmful mutation to a random enemy in the aura's radius, which stack.\n"
+                "Beneficial mutations grant [30_max_HP:heal] or [4_damage:damage] to all attacks. If it has ranged attacks, they may instead gain [1_range:range]. Harmful mutations penalize the same stats.").format(**self.fmt_dict())
+
+    def cast_instant(self, x, y):
+        self.caster.apply_buff(GeneHarvestBuff(self), self.get_stat("duration"))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk])

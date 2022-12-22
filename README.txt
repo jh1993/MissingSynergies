@@ -44,6 +44,7 @@ Level 4:
 + Divine Gaze (Holy/Eye/Sorcery)
 + Electric Net (Nature/Lightning/Sorcery)
 + Essence Leech (Arcane/Dark/Enchantment)
++ Gene Harvest (Chaos/Nature/Enchantment)
 + Iron Turtle (Metallic/Nature/Conjuration)
 + Karmic Loan (Holy/Enchantment)
 + Orb of Flesh (Nature/Orb/Conjuration)
