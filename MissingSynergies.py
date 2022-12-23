@@ -9634,7 +9634,7 @@ class ChaoticSparkSpell(Spell):
     def get_description(self):
         return ("Deal [{damage}_fire:fire] or [{damage}_lightning:lightning] damage to enemies in a beam.\n"
                 "Upon reaching the target tile, the beam jumps toward a random tile in line of sight within [{jump_range}_tiles:cascade_range], again dealing the same damage to enemies in a beam. This jump is done [{num_targets}:num_targets] times in total. The jump range benefits doubly from bonuses to [cascade_range:cascade_range].\n"
-                "Each tile hit has a 25% chance to explode, again dealing the same damage to enemies in a [{radius}_tile:radius] burst.").format(**self.fmt_dict())
+                "Each tile hit by a beam has a 25% chance to explode, again dealing the same damage to enemies in a [{radius}_tile:radius] burst.").format(**self.fmt_dict())
 
     def fmt_dict(self):
         stats = Spell.fmt_dict(self)
@@ -9672,24 +9672,29 @@ class ChaoticSparkSpell(Spell):
         jumps_left = self.get_stat("num_targets")
         jump_range = self.get_stat("cascade_range")*2
         physical = self.get_stat("physical")
+
+        start = Point(self.caster.x, self.caster.y)
         target = Point(x, y)
 
-        for p in Bolt(self.caster.level, self.caster, target):
-            self.hit(p.x, p.y, damage, physical)
-            yield from self.boom(p.x, p.y, damage, radius, physical)
-            yield
-        
-        while jumps_left > 0:
-            old_target = target
+        # Count the initial beam as a jump too.
+        while jumps_left > -1:
+            bursts = []
+            for p in Bolt(self.caster.level, start, target):
+                self.hit(p.x, p.y, damage, physical)
+                if random.random() < 0.25:
+                    bursts.append(list(Burst(self.caster.level, p, radius)))
+            for i in range(radius):
+                for burst in bursts:
+                    for p in burst[i]:
+                        self.hit(p.x, p.y, damage, physical)
+                yield
+            start = target
             new_targets = [p for p in self.caster.level.get_points_in_ball(target.x, target.y, jump_range) if self.caster.level.can_see(p.x, p.y, target.x, target.y)]
             if not new_targets:
                 return
             target = random.choice(new_targets)
-            for p in Bolt(self.caster.level, old_target, target):
-                self.hit(p.x, p.y, damage, physical)
-                yield from self.boom(p.x, p.y, damage, radius, physical)
-                yield
             jumps_left -= 1
+            yield
 
 class WeepingMedusaStoneForm(PetrifyBuff):
 
