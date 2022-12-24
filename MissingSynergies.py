@@ -10247,7 +10247,7 @@ class BoltJumpSpell(Spell):
     def get_description(self):
         return ("Teleport to the target tile, and deal [{damage}_lightning:lightning] damage to all adjacent enemies. If targeting yourself, you still count as having teleported.\n"
                 "Casting this spell does not consume a turn, but each cast has a [{end_turn_chance}%:strikechance] chance to end your turn.\n"
-                "When you cast this spell, gain an afterimage. When you end your turn, each afterimage is sent toward a random enemy in range to deal [{damage}_lightning:lightning] damage to it and adjacent enemies.").format(**self.fmt_dict())
+                "When you cast this spell, gain an afterimage. When you end your turn, each afterimage is sent toward a random enemy in range and line of sight to deal [{damage}_lightning:lightning] damage to it and adjacent enemies.").format(**self.fmt_dict())
     
     def jump(self, start, target, damage):
         for p in self.caster.level.get_points_in_line(start, target, find_clear=False):
