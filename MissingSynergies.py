@@ -4721,8 +4721,6 @@ class SuperfluidityBuff(Buff):
     def __init__(self, spell):
         self.duration = spell.get_stat("duration")
         Buff.__init__(self)
-        if spell.get_stat("condensate"):
-            self.global_triggers[EventOnSpellCast] = self.on_spell_cast
     
     def on_init(self):
         self.name = "Superfluidity"
@@ -4770,18 +4768,6 @@ class SuperfluidityBuff(Buff):
         if target.is_alive():
             target.apply_buff(FrozenBuff(), self.duration)
 
-    def on_spell_cast(self, evt):
-        if not evt.caster.is_player_controlled or Tags.Ice not in evt.spell.tags:
-            return
-        if not self.owner.level.can_see(evt.x, evt.y, self.owner.x, self.owner.y):
-            return
-        points = [point for point in self.owner.level.get_points_in_los(self.owner) if self.owner.level.can_stand(point.x, point.y, self.owner)]
-        if not points:
-            return
-        target = min(points, key=lambda point: distance(point, Point(evt.x, evt.y)))
-        self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
-        self.owner.level.act_move(self.owner, target.x, target.y, teleport=True)
-
 class LiquidMetalBlade(Spell):
 
     def __init__(self, damage):
@@ -4790,7 +4776,7 @@ class LiquidMetalBlade(Spell):
 
     def on_init(self):
         self.name = "Liquid Metal Blade"
-        self.description = "Hits enemies in an arc. Deals 3 extra damage per turn of freeze on the target."
+        self.description = "Hits enemies in an arc. Deals 3 extra damage per turn of freeze on the target and refreezes for the same duration."
         self.range = 1.5
         self.melee = True
         self.can_target_self = False
@@ -4809,9 +4795,34 @@ class LiquidMetalBlade(Spell):
                 self.caster.level.show_effect(p.x, p.y, Tags.Physical)
                 continue
             freeze = unit.get_buff(FrozenBuff)
-            bonus = freeze.turns_left*3 if freeze else 0
-            unit.deal_damage(damage + bonus, Tags.Physical, self)
+            bonus = freeze.turns_left if freeze else 0
+            unit.deal_damage(damage + bonus*3, Tags.Physical, self)
+            if bonus:
+                unit.apply_buff(FrozenBuff(), bonus)
             yield
+
+class CloudCondensateBuff(Buff):
+
+    def __init__(self, spell):
+        Buff.__init__(self)
+        self.name = "Cloud Condensate"
+        self.damage = spell.get_stat("damage", base=5)
+        self.duration = spell.get_stat("duration")
+        self.description = "Each turn, if not inside a thunderstorm or blizzard cloud, create a random cloud on this unit's tile for %i turns." % self.duration
+        self.color = Tags.Metallic.color
+
+    def on_advance(self):
+        existing = self.owner.level.tiles[self.owner.x][self.owner.y].cloud
+        if isinstance(existing, StormCloud) or isinstance(existing, BlizzardCloud):
+            return
+        flip = random.choice([True, False])
+        if flip:
+            cloud = StormCloud(self.owner, self.damage*2)
+        else:
+            cloud = BlizzardCloud(self.owner, self.damage)
+        cloud.source = self
+        cloud.duration = self.duration
+        self.owner.level.add_obj(cloud, self.owner.x, self.owner.y)
 
 class LiquidMetalSpell(Spell):
 
@@ -4832,10 +4843,10 @@ class LiquidMetalSpell(Spell):
         self.upgrades["minion_health"] = (20, 4)
         self.upgrades["num_targets"] = (1, 3, "Num Targets", "The liquid metal cube's superconductivity can shoot [1:num_targets] additional beam.")
         self.upgrades["duration"] = (2, 2, "Duration", "The liquid metal cube's superfluidity can freeze enemies for [2:duration] additional turns.")
-        self.upgrades["condensate"] = (1, 4, "Quantum Condensate", "When you cast an [ice] spell, every liquid metal cube in LOS of the target point will teleport to the point in its LOS closest to the target point.")
+        self.upgrades["condensate"] = (1, 2, "Cloud Condensate", "Each turn, if the liquid metal cube is not inside a thunderstorm or blizzard cloud, it creates a random cloud on its tile that lasts for [{duration}_turns:duration].")
     
     def get_description(self):
-        return ("Summon a cube of superconductive, superfluid liquid metal. The cube is a stationary [metallic] [slime] minion with [{minion_health}_HP:minion_health], immunity to [ice] and [lightning], and a cleaving attack with [{minion_damage}_physical:physical] damage that deals [3:physical] extra damage per turn of [freeze] the target has.\n"
+        return ("Summon a cube of superconductive, superfluid liquid metal. The cube is a stationary [metallic] [slime] minion with [{minion_health}_HP:minion_health], immunity to [ice] and [lightning], and a cleaving attack with [{minion_damage}_physical:physical] damage that deals [3:physical] extra damage per turn of [freeze] the target has and refreezes for the same duration on hit.\n"
                 "When anything other than an instance of this buff tries to deal [lightning] damage to the cube, it shoots [{num_targets}:num_targets] beams dealing the same damage at enemies in line of sight.\n"
                 "When anything tries to deal [ice] damage to the cube, it leaps to a random enemy in line of sight to deal the same damage and [freeze] for [{duration}_turns:duration].").format(**self.fmt_dict())
     
@@ -4848,6 +4859,8 @@ class LiquidMetalSpell(Spell):
         unit.spells = [LiquidMetalBlade(self.get_stat("minion_damage"))]
         unit.buffs[0].spawner = self.get_cube
         unit.buffs.extend([SuperconductivityBuff(self), SuperfluidityBuff(self)])
+        if self.get_stat("condensate"):
+            unit.buffs.append(CloudCondensateBuff(self))
         return unit
     
     def cast_instant(self, x, y):
