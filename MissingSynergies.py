@@ -9670,14 +9670,6 @@ class ChaoticSparkSpell(Spell):
             if physical and heavy:
                 unit.deal_damage(damage, Tags.Physical, self)
 
-    def boom(self, x, y, damage, radius, physical):
-        if random.random() >= 0.25:
-            return
-        for stage in Burst(self.caster.level, Point(x, y), radius):
-            for p in stage:
-                self.hit(p.x, p.y, damage, physical)
-            yield
-
     def cast(self, x, y):
 
         damage = self.get_stat("damage")
