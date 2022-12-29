@@ -3751,6 +3751,24 @@ class ChaosHailSpell(Spell):
     def cast_instant(self, x, y):
         self.owner.apply_buff(ChaosHailBuff(self), self.get_stat("duration"))
 
+class UrticatingRainReflexiveSpray(Upgrade):
+
+    def on_init(self):
+        self.name = "Reflexive Spray"
+        self.level = 5
+        self.description = "The first time you cast a [nature] spell each turn, you will also automatically cast Urticating Rain if possible, consuming a charge as usual.\nThis refreshes before the beginning of your turn."
+        self.triggered = False
+        self.owner_triggers[EventOnSpellCast] = self.on_spell_cast
+    
+    def on_pre_advance(self):
+        self.triggered = False
+    
+    def on_spell_cast(self, evt):
+        if self.triggered or Tags.Nature not in evt.spell.tags or not self.prereq.can_pay_costs():
+            return
+        self.triggered = True
+        self.owner.level.act_cast(self.owner, self.prereq, self.owner.x, self.owner.y)
+
 class UrticatingRainSpell(Spell):
 
     def on_init(self):
@@ -3765,6 +3783,7 @@ class UrticatingRainSpell(Spell):
         self.upgrades["poison"] = (1, 2, "Venomous Nettle", "Urticating Rain also inflicts [{duration}_turns:duration] of [poison].")
         self.upgrades["blind"] = (1, 3, "Eye Irritant", "Urticating Rain also inflicts [1_turn:duration] of [blind].\nThis duration is fixed and unaffected by bonuses.")
         self.upgrades["fire"] = (1, 4, "Searing Pain", "Urticating Rain also deals [fire] damage.")
+        self.add_upgrade(UrticatingRainReflexiveSpray())
     
     def fmt_dict(self):
         stats = Spell.fmt_dict(self)
@@ -10490,5 +10509,115 @@ class GeneHarvestSpell(Spell):
     def cast_instant(self, x, y):
         self.caster.apply_buff(GeneHarvestBuff(self), self.get_stat("duration"))
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell])
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk])
+class OmnistrikeSpell(Spell):
+
+    def on_init(self):
+        self.name = "Omnistrike"
+        self.asset = ["MissingSynergies", "Icons", "omnistrike"]
+        self.tags = [Tags.Chaos, Tags.Translocation, Tags.Sorcery]
+        self.level = 7
+        self.range = 0
+        self.max_charges = 3
+        
+        self.radius = 4
+        self.num_targets = 5
+        self.damage = 24
+
+        self.upgrades["num_targets"] = (4, 4, "Num Teleports", "Omnistrike now teleports you [4:num_targets] more times.")
+        self.upgrades["radius"] = (2, 3, "Radius", "Increase minimum radius by [2:radius] and maximum radius by [4:radius].")
+        self.upgrades["scramble"] = (1, 3, "Omni-Scramble", "Enemies in the radius of each burst also have a chance to be randomly teleported to anywhere in the realm, equal to the percentage of this spell's maximum damage that is dealt to them at that distance.\nThis triggers after most effects that trigger when you teleport, and may cause an enemy to be hit by multiple bursts.")
+
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["double_radius"] = self.get_stat("radius")*2
+        return stats
+
+    def get_impacted_tiles(self, x, y):
+        return [Point(x, y)]
+    
+    def get_description(self):
+        return ("Teleport yourself to random tiles [{num_targets}:num_targets] times, swapping with other units if necessary, before teleporting back to your original tile. After each teleport, you release a [{radius}_to_{double_radius}_tile:radius] burst that passes through walls.\n"
+                "Each burst randomly deals [fire], [lightning], or [physical] damage to enemies. The damage begins at [{damage}:damage] to enemies adjacent to you, and gradually decreases to 0 at the outer edges of the burst.").format(**self.fmt_dict())
+
+    def boom(self, damage, min_radius, scramble, num_left, origin):
+
+        if num_left <= 0:
+            target = origin
+        else:
+            targets = [p for p in self.caster.level.iter_tiles() if self.caster.level.can_stand(p.x, p.y, self.caster, check_unit=False)]
+            if not targets:
+                return
+            target = random.choice(targets)
+        
+        existing = self.caster.level.get_unit_at(target.x, target.y)
+        self.caster.level.make_floor(target.x, target.y)
+        if existing and not self.caster.level.can_stand(self.caster.x, self.caster.y, existing, check_unit=False):
+            self.caster.level.make_floor(self.caster.x, self.caster.y)
+        self.caster.level.show_effect(self.caster.x, self.caster.y, Tags.Translocation)
+        self.caster.level.act_move(self.caster, target.x, target.y, teleport=True, force_swap=True)
+        self.caster.level.show_effect(self.caster.x, self.caster.y, Tags.Translocation)
+
+        radius = random.choice(range(min_radius, min_radius*2 + 1))
+        # Start at -1 so the first stage of the burst has 0% damage penalty.
+        stage_num = -1
+        for stage in Burst(self.caster.level, self.caster, radius, ignore_walls=True):
+            mult = (radius - stage_num)/radius
+            for p in stage:
+                dtype = random.choice([Tags.Fire, Tags.Lightning, Tags.Physical])
+                unit = self.caster.level.get_unit_at(p.x, p.y)
+                if not unit or not are_hostile(unit, self.caster):
+                    self.caster.level.show_effect(p.x, p.y, dtype)
+                else:
+                    unit.deal_damage(math.ceil(damage*mult), dtype, self)
+                    if scramble and random.random() < mult:
+                        self.caster.level.queue_spell(self.do_scramble(unit))
+            stage_num += 1
+            yield
+        
+        if num_left > 0:
+            self.caster.level.queue_spell(self.boom(damage, min_radius, scramble, num_left - 1, origin))
+
+    def do_scramble(self, unit):
+        randomly_teleport(unit, RANGE_GLOBAL)
+        yield
+    
+    def cast(self, x, y):
+        yield from self.boom(self.get_stat("damage"), self.get_stat("radius"), self.get_stat("scramble"), self.get_stat("num_targets"), Point(x, y))
+
+class ChaosCloning(Upgrade):
+
+    def on_init(self):
+        self.name = "Chaos Cloning"
+        self.asset = ["MissingSynergies", "Icons", "chaos_cloning"]
+        self.tags = [Tags.Chaos]
+        self.level = 5
+        self.description = "The first time you summon a minion each turn, you also summon a chaos spawn near that minion, which has the same max HP, [SH:shields], tags, and resistances.\nThe chaos spawn has a melee attack that deals [physical] damage equal to 1/4 of its initial max HP, and melee retaliation dealing [fire] and [lightning] damage equal to 1/8 of its initial max HP.\nThis effect refreshes before the beginning of your turn."
+        self.triggered = False
+        self.global_triggers[EventOnUnitAdded] = self.on_unit_added
+    
+    def on_pre_advance(self):
+        self.triggered = False
+    
+    def on_unit_added(self, evt):
+        if self.triggered or evt.unit.is_player_controlled or are_hostile(evt.unit, self.owner):
+            return
+        self.triggered = True
+        self.owner.level.queue_spell(self.do_summon(evt.unit))
+    
+    def do_summon(self, base):
+        unit = Unit()
+        unit.name = "Chaos Spawn"
+        unit.asset = ["MissingSynergies", "Units", "chaos_spawn"]
+        unit.max_hp = base.max_hp
+        unit.shields = base.shields
+        for tag in base.tags:
+            unit.tags.append(tag)
+        for tag in base.resists.keys():
+            unit.resists[tag] = base.resists[tag]
+        unit.spells = [SimpleMeleeAttack(unit.max_hp//4)]
+        unit.buffs = [Thorns(unit.max_hp//8, Tags.Fire), Thorns(unit.max_hp//8, Tags.Lightning)]
+        self.summon(unit, target=base, radius=5)
+        yield
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning])

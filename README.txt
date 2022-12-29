@@ -66,6 +66,7 @@ Level 5:
 + Flesh Sacrifice (Dark/Conjuration)
 + Fleshburst Zombie (Dark/Nature/Conjuration)
 + Gathering Storm (Lightning/Ice/Conjuration)
++ Gene Harvest (Chaos/Nature/Enchantment)
 + Golden Trickster (Holy/Arcane/Metallic/Chaos/Conjuration)
 + Irradiate (Arcane/Nature/Enchantment)
 + Liquid Metal (Lightning/Ice/Metallic/Conjuration)
@@ -101,6 +102,7 @@ Level 7:
 + Copper Furnace (Chaos/Metallic/Conjuration)
 + Empyreal Ascension (Fire/Holy/Sorcery/Enchantment)
 + Genesis (Holy/Chaos/Conjuration)
++ Omnistrike (Chaos/Translocation/Sorcery)
 + Primordial Rot (Dark/Nature/Conjuration)
 + Ruinous Impact (Dark/Chaos/Sorcery)
 + Spirit Bomb (Holy/Orb/Conjuration)
@@ -127,6 +129,7 @@ Level 4:
 
 Level 5:
 + Bombastic Arrival (Fire/Translocation)
++ Chaos Cloning (Chaos)
 + Draconian Brutality (Dragon/Nature/Translocation)
 + Electrolysis (Lightning/Nature)
 + Forceful Channeling (Sorcery/Conjuration)
