@@ -2245,10 +2245,12 @@ class GenesisSpell(Spell):
 
 class OrbOfFleshBuff(Buff):
 
-    def __init__(self, spell):
+    def __init__(self, spell, buff_type):
         self.spell = spell
         self.hp_threshold = spell.get_stat("minion_health")
         Buff.__init__(self)
+        self.buff_type = buff_type
+        self.resists[Tags.Poison if self.buff_type == BUFF_TYPE_CURSE else Tags.Heal] = -100
 
     def on_init(self):
         self.color = Tags.Living.color
@@ -2267,11 +2269,6 @@ class OrbOfFleshBuff(Buff):
             self.owner.tags.append(Tags.Living)
         else:
             self.nonliving = False
-        if are_hostile(self.owner, self.spell.caster):
-            self.resists[Tags.Poison] = -100
-            self.buff_type = BUFF_TYPE_CURSE
-        else:
-            self.resists[Tags.Heal] = -100
 
     def check_hp(self):
         if self.owner.cur_hp <= self.hp_threshold:
@@ -2357,7 +2354,7 @@ class OrbOfFleshSpell(OrbSpell):
         for point in orb.level.get_points_in_line(orb, target):
             orb.level.show_effect(point.x, point.y, Tags.Tongue)
             yield
-        target.apply_buff(OrbOfFleshBuff(self))
+        target.apply_buff(OrbOfFleshBuff(self, BUFF_TYPE_CURSE if are_hostile(target, self.caster) else BUFF_TYPE_BLESS))
         orb.targets_left -= 1
 
     def on_orb_move(self, orb, next_point):
