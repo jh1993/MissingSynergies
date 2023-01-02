@@ -346,6 +346,7 @@ class SpaceChillBuff(Buff):
 
     def __init__(self, spell, buff_type):
         self.spell = spell
+        self.applier = spell.caster
         Buff.__init__(self)
         self.buff_type = buff_type
     
@@ -381,6 +382,17 @@ class FrozenSpaceBuff(Buff):
         self.stack_type = STACK_REPLACE
 
     def on_pre_advance(self):
+        for unit in list(self.owner.level.units):
+            unit.remove_buffs(SpaceChillBuff)
+        self.apply_effects()
+    
+    def on_unapplied(self):
+        self.owner.apply_buff(RemoveBuffOnPreAdvance(SpaceChillBuff))
+
+    def on_applied(self, owner):
+        self.apply_effects()
+
+    def apply_effects(self):
         for unit in self.owner.level.get_units_in_ball(self.owner, self.radius):
             if are_hostile(unit, self.owner):
                 unit.apply_buff(SpaceChillBuff(self.spell, BUFF_TYPE_CURSE))
@@ -438,7 +450,7 @@ class FrozenSpaceSpell(Spell):
         return stats
 
     def get_description(self):
-        return ("At the beginning of each turn, apply Space Chill to enemies within [{radius}_tiles:radius] around you.\n"
+        return ("When you cast this spell, and at the beginning of each turn, apply Space Chill to enemies within [{radius}_tiles:radius] around you until the beginning of your next turn.\n"
                 "Whenever an enemy with Space Chill teleports, Space Chill is consumed to deal [{damage}_ice:ice] damage and [freeze] that enemy for [3_turns:duration].\n"
                 "Most forms of movement other than a unit's movement action count as teleportation.\n"
                 "Lasts [{duration}_turns:duration].").format(**self.fmt_dict())
