@@ -10628,5 +10628,93 @@ class ChaosCloning(Upgrade):
         self.summon(unit, target=base, radius=5)
         yield
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell])
+class DesiccationBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+    
+    def on_init(self):
+        self.name = "Desiccation"
+        self.show_effect = False
+        self.color = Tags.Fire.color
+        self.buff_type = BUFF_TYPE_CURSE
+        self.resists[Tags.Heal] = 200 if self.spell.get_stat("extreme") and random.random() < 0.25 else 100
+        if self.spell.get_stat("fossil"):
+            self.owner_triggers[EventOnDeath] = self.on_death
+    
+    def on_advance(self):
+        if self.owner.resists[Tags.Heal] > 100:
+            self.owner.deal_damage(math.ceil(self.spell.get_stat("damage")*(self.owner.resists[Tags.Heal] - 100)/100), Tags.Fire, self.spell)
+
+    def on_death(self, evt):
+        if Tags.Living not in self.owner.tags and Tags.Undead not in self.owner.tags:
+            return
+        self.owner.level.queue_spell(self.summon_fossil())
+    
+    def summon_fossil(self):
+        unit = Unit()
+        unit.name = "Animated Fossil"
+        unit.asset = ["MissingSynergies", "Units", "animated_fossil"]
+        unit.max_hp = self.owner.max_hp
+        unit.tags = [Tags.Fire, Tags.Nature, Tags.Undead]
+        unit.resists[Tags.Poison] = 100
+        for tag in [Tags.Fire, Tags.Lightning, Tags.Physical]:
+            unit.resists[tag] = 50
+        unit.spells = [SimpleMeleeAttack(damage=self.spell.get_stat("minion_damage", base=5))]
+        self.spell.summon(unit, target=self.owner)
+        yield
+
+class DroughtBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+
+    def on_init(self):
+        self.name = "Drought"
+        self.color = Tags.Fire.color
+
+    def on_pre_advance(self):
+        for unit in list(self.owner.level.units):
+            unit.remove_buffs(DesiccationBuff)
+    
+    def on_unapplied(self):
+        self.owner.apply_buff(RemoveBuffOnPreAdvance(DesiccationBuff))
+
+    def on_advance(self):
+        for unit in list(self.owner.level.units):
+            if are_hostile(unit, self.owner):
+                unit.apply_buff(DesiccationBuff(self.spell))
+
+class DroughtSpell(Spell):
+
+    def on_init(self):
+        self.name = "Drought"
+        self.asset = ["MissingSynergies", "Icons", "drought"]
+        self.tags = [Tags.Fire, Tags.Nature, Tags.Enchantment]
+        self.level = 5
+        self.max_charges = 4
+        self.range = 0
+        self.duration = 10
+        self.damage = 6
+
+        self.upgrades["duration"] = (10, 3)
+        self.upgrades["extreme"] = (1, 4, "Extreme Drought", "Each turn, each desiccated enemy has a 25% chance to instead have 200% healing penalty.")
+        self.upgrades["fossil"] = (1, 4, "Fossilize", "Desiccated [living] and [undead] enemies will be raised as animated fossils on death.\nAnimated fossils are [fire] [nature] [undead] minions, with the same max HP as the enemies they were raised from, many resistances, and melee attacks that deal [{minion_damage}_physical:physical] damage.")
+
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["minion_damage"] = self.get_stat("minion_damage", base=5)
+        return stats
+
+    def get_description(self):
+        return ("For [{duration}_turns:duration] each turn, each enemy is desiccated until the beginning of your next turn, causing them to suffer 100% healing penalty.\n"
+                "If a desiccated enemy's healing penalty is above 100%, it will take [fire] damage each turn equal to [{damage}:damage] multiplied by the percentage of healing penalty above 100%.\n"
+                "Additional healing penalty is typically inflicted by the [poison] debuff.").format(**self.fmt_dict())
+
+    def cast_instant(self, x, y):
+        self.caster.apply_buff(DroughtBuff(self), self.get_stat("duration"))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning])
