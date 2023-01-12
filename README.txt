@@ -67,7 +67,6 @@ Level 5:
 + Flesh Sacrifice (Dark/Conjuration)
 + Fleshburst Zombie (Dark/Nature/Conjuration)
 + Gathering Storm (Lightning/Ice/Conjuration)
-+ Gene Harvest (Chaos/Nature/Enchantment)
 + Golden Trickster (Holy/Arcane/Metallic/Chaos/Conjuration)
 + Irradiate (Arcane/Nature/Enchantment)
 + Liquid Metal (Lightning/Ice/Metallic/Conjuration)
