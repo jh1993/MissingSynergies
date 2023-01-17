@@ -8870,8 +8870,8 @@ class CantripAdept(Upgrade):
         self.asset = ["MissingSynergies", "Icons", "cantrip_adept"]
         self.tags = [Tags.Sorcery]
         self.level = 4
-        self.description = "The first time each turn you attempt to damage an enemy with a level 1 [sorcery] spell, deal additional damage of the same type equal to the combined level of all of your spells, spell upgrades, and skills.\nThis refreshes before the beginning of your turn."
-        self.global_triggers[EventOnPreDamaged] = self.on_pre_damaged
+        self.description = "The first time each turn you damage an enemy with a level 1 [sorcery] spell, deal additional damage of the same type equal to the combined level of all of your spells, spell upgrades, and skills.\nThis refreshes before the beginning of your turn."
+        self.global_triggers[EventOnDamaged] = self.on_damaged
         self.active = True
     
     def get_damage(self):
@@ -8887,15 +8887,11 @@ class CantripAdept(Upgrade):
     def on_pre_advance(self):
         self.active = True
     
-    def on_pre_damaged(self, evt):
-        if evt.damage <= 0 or not self.active or not are_hostile(evt.unit, self.owner) or not isinstance(evt.source, Spell) or evt.source.level != 1 or Tags.Sorcery not in evt.source.tags:
+    def on_damaged(self, evt):
+        if not self.active or not are_hostile(evt.unit, self.owner) or not isinstance(evt.source, Spell) or evt.source.level != 1 or Tags.Sorcery not in evt.source.tags:
             return
         self.active = False
-        self.owner.level.queue_spell(self.deal_damage(evt))
-
-    def deal_damage(self, evt):
         evt.unit.deal_damage(self.get_damage(), evt.damage_type, self)
-        yield
 
 class BleedBuff(Buff):
 
