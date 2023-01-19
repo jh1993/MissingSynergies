@@ -93,7 +93,7 @@ Level 6:
 + Pureglass Knight (Holy/Arcane/Conjuration)
 + Quantum Overlay (Arcane/Chaos/Enchantment)
 + Rainbow Egg (Dragon/Orb/Conjuration)
-+ Raise Dracolich (Dragon/Dark/Enchantment)
++ Raise Dracolich (Dragon/Dark/Enchantment/Conjuration)
 + Thermal Imbalance (Fire/Ice/Enchantment)
 + Twisted Mutation (Chaos/Nature/Enchantment)
 + Xenodruid Form (Arcane/Conjuration/Enchantment)

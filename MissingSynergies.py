@@ -1333,13 +1333,7 @@ class RaiseDracolichBreath(BreathWeapon):
             skeleton.spells[0].damage = self.caster.source.get_stat("minion_damage", base=skeleton.spells[0].damage)
             summoned = self.caster.source.summon(skeleton, target=unit, radius=0)
             if summoned and self.legacy:
-                sorcery = TouchedBySorcery(self.legacy)
-                # Gotta do this otherwise the game crashes due to some variants of this buff not having assets
-                if self.legacy in [Tags.Fire, Tags.Ice, Tags.Lightning, Tags.Poison, Tags.Arcane, Tags.Physical, Tags.Holy, Tags.Dark]:
-                    sorcery.asset = ["MissingSynergies", "Statuses", "%s_eye" % self.legacy.name.lower()]
-                else:
-                    sorcery.asset = None
-                skeleton.apply_buff(sorcery)
+                skeleton.apply_buff(TouchedBySorcery(self.legacy, self.caster.source))
 
 class RaiseDracolichSoulJar(LichSealSoulSpell):
 
@@ -1359,9 +1353,7 @@ class RaiseDracolichSoulJar(LichSealSoulSpell):
         if self.caster.source.summon(phylactery, Point(x, y)):
             self.caster.apply_buff(Soulbound(phylactery))
             if self.legacy:
-                sorcery = TouchedBySorcery(self.legacy)
-                sorcery.asset = sorcery.asset = ["MissingSynergies", "Statuses", "%s_eye" % self.legacy.name.lower()]
-                phylactery.apply_buff(sorcery)
+                phylactery.apply_buff(TouchedBySorcery(self.legacy, self.caster.source))
 
 class RaiseDracolichSpell(Spell):
 
