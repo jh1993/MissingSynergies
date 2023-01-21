@@ -157,6 +157,7 @@ Level 7:
 + Dying Star (Fire)
 + Luminous Muse (Holy/Arcane/Conjuration)
 + Redheart Spider (Holy/Nature/Dark/Conjuration)
++ Sudden Death (Dark)
 + Whispers of Oblivion (Dark/Chaos)
 
 ---
