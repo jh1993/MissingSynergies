@@ -155,6 +155,7 @@ Level 7:
 + Ataraxia (Sorcery/Enchantment/Conjuration)
 + Breath of Annihilation (Dragon/Chaos)
 + Dying Star (Fire)
++ Divine Retribution (Holy)
 + Luminous Muse (Holy/Arcane/Conjuration)
 + Redheart Spider (Holy/Nature/Dark/Conjuration)
 + Sudden Death (Dark)
