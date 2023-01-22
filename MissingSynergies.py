@@ -3106,7 +3106,7 @@ class RainbowBreath(BreathWeapon):
         self.penetration = spell.get_stat("penetration")
     
     def get_description(self):
-        return "Deals damage in a cone. Penetrates %s resistance by an amount equal to half of the user's own %s resistance%s." % (self.damage_type.name, self.damage_type.name, (" plus %i" % self.penetration) if self.penetration else "")
+        return "Deals damage to enemies in a cone. Penetrates %s resistance by an amount equal to half of the user's own %s resistance%s." % (self.damage_type.name, self.damage_type.name, (" plus %i" % self.penetration) if self.penetration else "")
 
     def per_square_effect(self, x, y):
         unit = self.caster.level.get_unit_at(x, y)
@@ -3114,7 +3114,7 @@ class RainbowBreath(BreathWeapon):
             amount = (self.caster.resists[self.damage_type]//2 if self.caster.resists[self.damage_type] >= 0 else 0) + self.penetration
             unit.deal_damage(self.get_stat("damage"), self.damage_type, self, penetration=amount)
         else:
-            self.caster.level.deal_damage(x, y, self.get_stat("damage"), self.damage_type, self)
+            self.caster.level.show_effect(x, y, self.damage_type)
     
     def can_redeal(self, unit, already_checked=[]):
         return unit.resists[self.damage_type] - (self.caster.resists[self.damage_type]//2 if self.caster.resists[self.damage_type] >= 0 else 0) - self.penetration < 100
@@ -3185,7 +3185,7 @@ class RainbowEggSpell(OrbSpell):
     
     def get_description(self):
         return ("Summon a rainbow egg with [{minion_health}_HP:minion_health] next to the caster, which hatches into a rainbow drake with the same max HP and [{breath_damage}:minion_damage] breath damage upon death.\n"
-                "The rainbow drake gains resistance to each element equal to half of all damage of that type done within [{radius}_tiles:radius] of the egg during its lifetime. Its breath weapon changes element randomly each turn to an element it resists, and penetrates enemy resistances by half of that amount.\n"
+                "The rainbow drake gains resistance to each element equal to half of all damage of that type done within [{radius}_tiles:radius] of the egg during its lifetime. Its breath weapon does not harm allies, changes element randomly each turn to an element it resists, and penetrates resistances by half of that amount.\n"
                 "The egg has no will of its own, each turn it will float one tile towards the target.\n"
                 "The egg's elemental weakness changes randomly each turn.").format(**self.fmt_dict())
 
