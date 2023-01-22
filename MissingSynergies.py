@@ -2704,7 +2704,7 @@ class MortalCoilSpell(Spell):
 
     def get_description(self):
         return ("The target enemy loses all reincarnations, and is Shackled for a duration equal to the number of lives lost, during which it is [stunned], loses [{resistance_reduction}_physical:physical] and [{resistance_reduction}_poison:poison] resistance, and cannot gain reincarnations.\n"
-                "The target then takes [{damage}_physical:physical] and [{damage}_poison:poison] damage. For each life lost, it takes an additional [{extra_damage}_physical:physical] and [{extra_damage}_poison:poison] damage, triggers all on-death effects, and the spell chains to a new target in range.\n"
+                "The target then takes [{damage}_physical:physical] and [{damage}_poison:poison] damage. For each life lost, it takes an additional [{extra_damage}_physical:physical] and [{extra_damage}_poison:poison] damage, triggers all on-death effects, and the spell chains to a new target in range, prioritizing targets with reincarnations.\n"
                 "This spell cannot remove lives from units that can gain clarity, or fake deaths if it fails to inflict Shackle.").format(**self.fmt_dict())
     
     def chain(self, start, end, already_hit, chains=1):
@@ -2748,8 +2748,14 @@ class MortalCoilSpell(Spell):
         targets = [target for target in self.caster.level.get_units_in_ball(end, self.get_stat("range")) if target not in already_hit and target is not self.caster]
         if not self.get_stat("friendly"):
             targets = [target for target in targets if are_hostile(target, self.caster)]
-        if targets:
-            self.caster.level.queue_spell(self.chain(end, random.choice(targets), already_hit, chains=chains))
+        if not targets:
+            return
+        reincarnating_targets = [unit for unit in targets if unit.has_buff(ReincarnationBuff)]
+        if reincarnating_targets:
+            target = random.choice(reincarnating_targets)
+        else:
+            target = random.choice(targets)
+        self.caster.level.queue_spell(self.chain(end, target, already_hit, chains=chains))
     
     def cast(self, x, y):
         yield from self.chain(self.caster, Point(x, y), [])
