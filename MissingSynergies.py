@@ -3051,9 +3051,7 @@ class RainbowEggBuff(Buff):
         self.absorbed[evt.damage_type] += evt.damage
     
     def on_death(self, evt):
-        # Don't let Mortal Coil proc this.
-        if not self.owner.is_alive():
-            self.owner.level.queue_spell(self.hatch())
+        self.owner.level.queue_spell(self.hatch())
 
     def hatch(self):
         drake = Unit()
@@ -3186,7 +3184,7 @@ class RainbowEggSpell(OrbSpell):
         self.upgrades["dragon_mage"] = (1, 3, "Dragon Mage", "The rainbow drake will gain a random damaging [sorcery] cantrip every 3 turns if it does not have any, which can be used once before being removed.\nThese cantrips gain all of your upgrades and bonuses.")
     
     def get_description(self):
-        return ("Summon a rainbow egg with [{minion_health}_HP:minion_health] next to the caster, which hatches into a rainbow drake with the same max HP and [{breath_damage}:minion_damage] breath damage upon death. This does not work if the egg's death is faked.\n"
+        return ("Summon a rainbow egg with [{minion_health}_HP:minion_health] next to the caster, which hatches into a rainbow drake with the same max HP and [{breath_damage}:minion_damage] breath damage upon death.\n"
                 "The rainbow drake gains resistance to each element equal to half of all damage of that type done within [{radius}_tiles:radius] of the egg during its lifetime. Its breath weapon changes element randomly each turn to an element it resists, and penetrates enemy resistances by half of that amount.\n"
                 "The egg has no will of its own, each turn it will float one tile towards the target.\n"
                 "The egg's elemental weakness changes randomly each turn.").format(**self.fmt_dict())
@@ -3217,9 +3215,7 @@ class SpiritBombBuff(Buff):
         self.color = Tags.Holy.color
     
     def on_death(self, evt):
-        # Don't let Mortal Coil proc this.
-        if not self.owner.is_alive():
-            self.owner.level.queue_spell(self.boom())
+        self.owner.level.queue_spell(self.boom())
 
     def get_bonus(self):
         return self.charges//2 + self.timer//2 + (self.owner.max_hp - self.base_hp)//20
@@ -3279,7 +3275,7 @@ class SpiritBombSpell(OrbSpell):
 
     def get_description(self):
         return ("Summon an orb of extremely concentrated energy next to the caster, consuming every remaining charge of this spell, each time counting as casting the spell once.\n"
-                "When the orb dies, it deals [{minion_damage}_holy:holy] damage to all enemies and destroys all walls in a [{radius}_tile:radius] burst, gaining +1 radius and +10 damage for every 2 turns it had existed, every 2 additional charge consumed, and each 20 bonus to max HP it had. This does not work if the orb's death is faked.\n"
+                "When the orb dies, it deals [{minion_damage}_holy:holy] damage to all enemies and destroys all walls in a [{radius}_tile:radius] burst, gaining +1 radius and +10 damage for every 2 turns it had existed, every 2 additional charge consumed, and each 20 bonus to max HP it had.\n"
                 "The orb has no will of its own, each turn it will float one tile towards the target.\n"
                 "The orb can be destroyed by dark damage.").format(**self.fmt_dict())
     
