@@ -106,7 +106,7 @@ Level 7:
 + Omnistrike (Chaos/Translocation/Sorcery)
 + Primordial Rot (Dark/Nature/Conjuration)
 + Ruinous Impact (Dark/Chaos/Sorcery)
-+ Spirit Bomb (Holy/Orb/Conjuration)
++ Spirit Bomb (Holy/Orb/Dragon/Conjuration)
 + Word of Detonation (Fire/Arcane/Word)
 + Word of Rust (Word/Metallic)
 + Word of Upheaval (Nature/Word)

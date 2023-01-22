@@ -3204,7 +3204,7 @@ class SpiritBombBuff(Buff):
         Buff.__init__(self)
         self.spell = spell
         self.charges = charges
-        self.base_damage = spell.get_stat("minion_damage")
+        self.base_damage = spell.get_stat("minion_damage") + spell.get_stat("breath_damage")
         self.base_radius = spell.get_stat("radius")
         self.base_hp = spell.minion_health
         self.timer = 0
@@ -3255,7 +3255,7 @@ class SpiritBombSpell(OrbSpell):
     def on_init(self):
         self.name = "Spirit Bomb"
         self.asset = ["MissingSynergies", "Icons", "spirit_bomb"]
-        self.tags = [Tags.Holy, Tags.Orb, Tags.Conjuration]
+        self.tags = [Tags.Holy, Tags.Orb, Tags.Dragon, Tags.Conjuration]
         self.level = 7
         self.max_charges = 1
         self.range = 9
@@ -3270,12 +3270,13 @@ class SpiritBombSpell(OrbSpell):
     
     def fmt_dict(self):
         stats = Spell.fmt_dict(self)
+        stats["total_damage"] = self.get_stat("minion_damage") + self.get_stat("breath_damage")
         stats["duration"] = self.get_stat("duration", base=3)
         return stats
 
     def get_description(self):
         return ("Summon an orb of extremely concentrated energy next to the caster, consuming every remaining charge of this spell, each time counting as casting the spell once.\n"
-                "When the orb dies, it deals [{minion_damage}_holy:holy] damage to all enemies and destroys all walls in a [{radius}_tile:radius] burst, gaining +1 radius and +10 damage for every 2 turns it had existed, every 2 additional charge consumed, and each 20 bonus to max HP it had.\n"
+                "When the orb dies, it deals [{total_damage}_holy:holy] damage to all enemies and destroys all walls in a [{radius}_tile:radius] burst, gaining +1 radius and +10 damage for every 2 turns it had existed, every 2 additional charge consumed, and each 20 bonus to max HP it had. It also benefits from bonuses to [breath_damage:breath_damage].\n"
                 "The orb has no will of its own, each turn it will float one tile towards the target.\n"
                 "The orb can be destroyed by dark damage.").format(**self.fmt_dict())
     
