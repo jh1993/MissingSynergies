@@ -62,6 +62,7 @@ Level 5:
 + Chaos Hail (Ice/Chaos/Enchantment)
 + Chaos Theory (Chaos/Ice/Arcane/Conjuration)
 + Cosmic Stasis (Arcane/Ice/Enchantment)
++ Damnation (Dark/Enchantment/Conjuration)
 + Drought (Fire/Nature/Enchantment)
 + Elemental Chaos (Arcane/Ice/Chaos/Conjuration)
 + Flesh Sacrifice (Dark/Conjuration)

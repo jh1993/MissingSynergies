@@ -10750,5 +10750,83 @@ class DivineRetribution(Upgrade):
         if evt.damage > self.max_damage:
             self.max_damage = evt.damage
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell])
+class DamnedBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+    
+    def on_init(self):
+        self.color = Tags.Demon.color
+        self.buff_type = BUFF_TYPE_PASSIVE
+        self.description = "On death, summon a damned shade allied to the wizard."
+        self.owner_triggers[EventOnDeath] = self.on_death
+    
+    def on_death(self, evt):
+        self.owner.level.queue_spell(self.do_summon())
+    
+    def do_summon(self):
+        unit = Unit()
+        unit.name = "Damned Shade"
+        unit.asset = ["MissingSynergies", "Units", "damned_shade"]
+        unit.max_hp = self.owner.max_hp
+        unit.tags = [Tags.Dark, Tags.Undead, Tags.Demon]
+        unit.resists[Tags.Poison] = 100
+        unit.resists[Tags.Physical] = 100
+        melee = SimpleMeleeAttack(damage=self.spell.get_stat("minion_damage"), damage_type=Tags.Dark, drain=True)
+        melee.name = "Damned Haunt"
+        melee.onhit = lambda caster, target: caster.apply_buff(BloodrageBuff(1), caster.get_stat(self.spell.get_stat("duration"), melee, "duration"))
+        melee.description = ""
+        melee.get_description = lambda: "Gain +1 damage for %i turns with each attack. Heals attacker for damage dealt." % unit.get_stat(self.spell.get_stat("duration"), melee, "duration")
+        leap = LeapAttack(damage=self.spell.get_stat("minion_damage"), range=self.spell.get_stat("minion_range"), damage_type=Tags.Dark, is_ghost=True)
+        leap.name = "Damned Charge"
+        unit.spells = [melee, leap]
+        unit.buffs = [TeleportyBuff()]
+        if self.spell.get_stat("double") and random.random() < 0.5:
+            unit.buffs.append(DamnedBuff(self.spell))
+        unit.turns_to_death = self.spell.get_stat("minion_duration")
+        self.spell.summon(unit, target=self.owner)
+        yield
+
+class DamnationSpell(Spell):
+
+    def on_init(self):
+        self.name = "Damnation"
+        self.asset = ["MissingSynergies", "Icons", "damnation"]
+        self.tags = [Tags.Dark, Tags.Enchantment, Tags.Conjuration]
+        self.level = 5
+        self.max_charges = 6
+
+        self.requires_los = False
+        self.range = 9
+        self.radius = 2
+        self.minion_damage = 5
+        self.minion_range = 5
+        self.minion_duration = 10
+        self.duration = 10
+
+        self.upgrades["max_charges"] = (6, 2)
+        self.upgrades["radius"] = (1, 3)
+        self.upgrades["minion_duration"] = (10, 3)
+        self.upgrades["double"] = (1, 5, "Double Damned", "Each damned shade has a 50% chance to also be damned, summoning another damned shade when it dies.")
+
+    def get_description(self):
+        return ("All enemies in a [{radius}_tile:radius] radius that do not have reincarnations lose 50% max HP but gain 1 reincarnation.\n"
+                "All enemies in the area are also damned, which is a passive effect that persists beyond death. When a damned enemy dies, you summon a damned shade near it with the same max HP.\n"
+                "Damned shades are [demon] [undead] minions with [physical] immunity. They have teleport attacks with a range of [{minion_range}_tiles:minion_range] that deal [{minion_damage}_dark:dark] damage, and melee attacks with the same damage that give themselves [{duration}_turns:duration] of bloodrage on hit and heal themselves for the damage done.").format(**self.fmt_dict())
+
+    def cast_instant(self, x, y):
+        for unit in self.caster.level.get_units_in_ball(Point(x, y), self.get_stat("radius")):
+            if not are_hostile(unit, self.caster):
+                continue
+            if not unit.has_buff(ReincarnationBuff):
+                unit.max_hp = max(1, unit.max_hp//2)
+                unit.cur_hp = min(unit.cur_hp, unit.max_hp)
+                buff = ReincarnationBuff(1)
+                buff.buff_type = BUFF_TYPE_PASSIVE
+                unit.apply_buff(buff)
+            unit.apply_buff(DamnedBuff(self))
+            self.caster.level.show_effect(unit.x, unit.y, Tags.Dark)
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution])
