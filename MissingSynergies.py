@@ -9219,7 +9219,7 @@ class HeavyElements(Upgrade):
         self.asset = ["MissingSynergies", "Icons", "heavy_elements"]
         self.tags = [Tags.Fire, Tags.Lightning, Tags.Ice, Tags.Arcane]
         self.level = 6
-        self.description = "Whenever one of your [fire], [lightning], [ice], [arcane], or [elemental] minions attempts to damage an enemy with an attack, deal additional damage of the same type equal to 10% of the minion's max HP, rounded down."
+        self.description = "Whenever one of your [fire], [lightning], [ice], [arcane], [dragon], or [elemental] minions attempts to damage an enemy with an attack, deal additional damage of the same type equal to 10% of the minion's max HP, rounded down."
         self.global_triggers[EventOnPreDamaged] = self.on_pre_damaged
     
     def on_pre_damaged(self, evt):
@@ -9227,7 +9227,7 @@ class HeavyElements(Upgrade):
             return
         if not isinstance(evt.source, Spell) or not evt.source.owner or evt.source.owner.is_player_controlled:
             return
-        if not [tag for tag in [Tags.Fire, Tags.Lightning, Tags.Ice, Tags.Arcane, Tags.Elemental] if tag in evt.source.owner.tags]:
+        if not [tag for tag in [Tags.Fire, Tags.Lightning, Tags.Ice, Tags.Arcane, Tags.Dragon, Tags.Elemental] if tag in evt.source.owner.tags]:
             return
         self.owner.level.queue_spell(self.deal_damage(evt))
 
