@@ -9797,7 +9797,7 @@ class WeepingMedusaSpell(Spell):
     def get_description(self):
         return ("Summon the Weeping Medusa, a [dark] [nature] [arcane] [construct] with [{minion_health}_HP:minion_health], or teleport the Medusa to the target tile and fully heal it. It starts in stone form, where it is [petrified] but each turn has a 1/6 chance to [petrify] each enemy in LOS for [{duration}_turns:duration].\n"
                 "Before the beginning of its turn, it exits stone form if all enemies in its LOS are [blind] or incapacitated ([stunned], [frozen], [petrified], [glassified], or similar). After its turn, it enters stone form if this condition is not satisfied.\n"
-                "The Medusa has a leap attack with unlimited range that deals [{minion_damage}:minion_damage] [dark], [poison], or [arcane] damage, and similar a melee attack that hits 5 times.").format(**self.fmt_dict())
+                "The Medusa has a leap attack with unlimited range that deals [{minion_damage}:minion_damage] [dark], [poison], or [arcane] damage, and a similar melee attack that hits 5 times.").format(**self.fmt_dict())
 
     def cast_instant(self, x, y):
 
