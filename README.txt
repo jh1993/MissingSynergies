@@ -149,6 +149,7 @@ Level 6:
 + Dragon Archmage (Dragon/Sorcery)
 + Heavy Elements (Fire/Lightning/Ice/Arcane)
 + Locus of Energy (Arcane/Lightning)
++ Scarlet Bison (Fire/Nature)
 + Secrets of Blood (Dark/Metallic)
 + Shivering Venom (Ice/Nature)
 

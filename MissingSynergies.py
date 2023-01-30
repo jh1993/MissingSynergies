@@ -10831,5 +10831,76 @@ class DamnationSpell(Spell):
             unit.apply_buff(DamnedBuff(self))
             self.caster.level.show_effect(unit.x, unit.y, Tags.Dark)
 
+class RedGorgonBreath(BreathWeapon):
+
+    def __init__(self, upgrade):
+        BreathWeapon.__init__(self)
+        self.name = "Crimson Breath"
+        self.range = upgrade.get_stat("minion_range")
+        self.cool_down = 10
+        self.damage_type = Tags.Fire
+        self.damage = upgrade.get_stat("minion_damage", base=9)
+        self.heal = self.damage//2
+    
+    def get_description(self):
+        return "Deals damage to enemies in a cone. Allies are instead healed for %i HP." % self.heal
+    
+    def per_square_effect(self, x, y):
+        unit = self.caster.level.get_unit_at(x, y)
+        if not unit or not are_hostile(unit, self.caster):
+            self.caster.level.show_effect(x, y, Tags.Fire)
+            if unit:
+                unit.deal_damage(-self.heal, Tags.Heal, self)
+        else:
+            unit.deal_damage(self.get_stat("damage"), Tags.Fire, self)
+
+class ScarletBison(Upgrade):
+
+    def on_init(self):
+        self.name = "Scarlet Bison"
+        self.asset = ["MissingSynergies", "Icons", "scarlet_bison"]
+        self.tags = [Tags.Fire, Tags.Nature]
+        self.level = 6
+        self.minion_health = 66
+        self.minion_damage = 13
+        self.minion_range = 5
+        self.healed = 0
+        self.owner_triggers[EventOnSpellCast] = self.on_spell_cast
+        self.owner_triggers[EventOnPreDamaged] = self.on_pre_damaged
+    
+    def fmt_dict(self):
+        stats = Upgrade.fmt_dict(self)
+        stats["breath_damage"] = self.get_stat("minion_damage", base=9)
+        return stats
+    
+    def get_description(self):
+        return ("Whenever you use a healing potion, summon a red gorgon. In addition, for every [50_healing:heal] you receive from any source, summon a red gorgon; this ignores healing penalty and counts wasted healing.\n"
+                "Red gorgons are [fire] [living] minions with [{minion_health}_HP:minion_health] and a melee attack dealing [{minion_damage}_physical:physical] damage. They also have a breath weapon with a [10_turns:duration] cooldown and range of [{minion_range}_tiles:minion_range], which deals [{breath_damage}_fire:fire] damage to enemies and heals allies for half that amount. The healing works on the wizard, but does not benefit from any damage buffs the gorgon may receive.").format(**self.fmt_dict())
+
+    def do_summon(self):
+        unit = Unit()
+        unit.name = "Red Gorgon"
+        unit.asset = ["MissingSynergies", "Units", "red_gorgon"]
+        unit.max_hp = self.get_stat("minion_health")
+        unit.tags = [Tags.Fire, Tags.Living]
+        unit.resists[Tags.Fire] = 100
+        unit.resists[Tags.Ice] = -50
+        unit.spells = [RedGorgonBreath(self), SimpleMeleeAttack(self.get_stat("minion_damage"))]
+        self.summon(unit, radius=5)
+        yield
+    
+    def on_spell_cast(self, evt):
+        if not isinstance(evt.spell, HealPotSpell):
+            return
+        self.owner.level.queue_spell(self.do_summon())
+    
+    def on_pre_damaged(self, evt):
+        if evt.damage >= 0 or evt.damage_type != Tags.Heal:
+            return
+        self.healed -= evt.damage
+        while self.healed >= 50:
+            self.healed -= 50
+            self.owner.level.queue_spell(self.do_summon())
+
 all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell])
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison])
