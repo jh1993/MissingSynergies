@@ -10902,5 +10902,171 @@ class ScarletBison(Upgrade):
             self.healed -= 50
             self.owner.level.queue_spell(self.do_summon())
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell])
+class WandOfDeathSpell(SimpleRangedAttack):
+
+    def __init__(self, spell, uses):
+        SimpleRangedAttack.__init__(self, name="Wand of Death", damage=spell.get_stat("minion_damage", base=200), damage_type=Tags.Dark, range=spell.get_stat("minion_range"))
+        self.uses = uses
+    
+    def can_pay_costs(self):
+        return self.uses > 0
+    
+    def pay_costs(self):
+        self.uses -= 1
+        if self.uses <= 0 and self in self.caster.spells:
+            self.caster.spells.remove(self)
+    
+    def get_description(self):
+        return "Can be used %i times." % self.uses
+
+class WandOfDeathBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+        self.buff_type = BUFF_TYPE_PASSIVE
+        self.color = Tags.Dark.color
+        self.explode = spell.get_stat("explode")
+        self.transfer = spell.get_stat("transfer")
+        if self.explode or self.transfer:
+            self.owner_triggers[EventOnDeath] = self.on_death
+    
+    def on_pre_advance(self):
+        wand = None
+        for i, spell in enumerate(self.owner.spells):
+            if isinstance(spell, WandOfDeathSpell):
+                if i == 0:
+                    return
+                wand = spell
+                break
+        if not wand:
+            return
+        self.owner.spells.remove(wand)
+        self.owner.spells.insert(0, wand)
+    
+    def on_death(self, evt):
+        wand = None
+        for spell in self.owner.spells:
+            if isinstance(spell, WandOfDeathSpell):
+                wand = spell
+                break
+        if not wand or not wand.uses:
+            return
+        if self.transfer:
+            units = [unit for unit in self.owner.level.get_units_in_ball(self.owner, wand.get_stat("range")) if not are_hostile(self.owner, unit) and not unit.is_player_controlled and wand.can_cast(unit.x, unit.y)]
+            if not units:
+                return
+            self.owner.level.queue_spell(self.transfer_wand(random.choice(units), wand.uses))
+        elif self.explode:
+            self.owner.level.queue_spell(self.explode_wand(wand))
+
+    def transfer_wand(self, unit, uses):
+        for p in Bolt(self.owner.level, self.owner, unit, find_clear=False):
+            self.owner.level.show_effect(p.x, p.y, Tags.Dark, minor=True)
+            yield
+        wand = None
+        for spell in unit.spells:
+            if isinstance(spell, WandOfDeathSpell):
+                wand = spell
+                break
+        if wand:
+            wand.uses += uses
+        else:
+            wand = WandOfDeathSpell(self.spell, uses)
+            wand.caster = unit
+            wand.owner = unit
+            unit.spells.insert(0, wand)
+            unit.apply_buff(WandOfDeathBuff(self.spell))
+        self.owner.level.show_effect(unit.x, unit.y, Tags.Buff_Apply, Tags.Dark.color)
+
+    def explode_wand(self, wand):
+        if wand.uses <= 0:
+            return
+        units = [unit for unit in self.owner.level.get_units_in_ball(self.owner, wand.get_stat("range")) if are_hostile(self.owner, unit) and wand.can_cast(unit.x, unit.y) and not is_immune(unit, wand, Tags.Dark)]
+        if not units:
+            return
+        target = random.choice(units)
+        self.owner.level.act_cast(self.owner, wand, target.x, target.y)
+        self.owner.level.queue_spell(self.explode_wand(wand))
+        yield
+
+    def get_tooltip(self):
+        if self.transfer:
+            return "On death, transfers all remaining wand of death uses to a random ally in range and line of sight."
+        elif self.explode:
+            return "On death, casts all remaining wand of death uses on random enemies in range and line of sight."
+        else:
+            return ""
+
+class FreeWands(Upgrade):
+
+    def on_init(self):
+        self.name = "Free Wands"
+        self.level = 6
+        self.description = "Whenever you summon a minion, it has a 5% chance to gain a wand of death that has 1 use, stacking with its existing wand uses if necessary."
+        self.global_triggers[EventOnUnitAdded] = self.on_unit_added
+    
+    def on_unit_added(self, evt):
+        if are_hostile(evt.unit, self.owner) or evt.unit.is_player_controlled or random.random() >= 0.05:
+            return
+        wand = None
+        for spell in evt.unit.spells:
+            if isinstance(spell, WandOfDeathSpell):
+                wand = spell
+                break
+        if wand:
+            wand.uses += 1
+        else:
+            wand = WandOfDeathSpell(self.prereq, 1)
+            wand.caster = evt.unit
+            wand.owner = evt.unit
+            evt.unit.spells.insert(0, wand)
+            evt.unit.apply_buff(WandOfDeathBuff(self.prereq))
+        self.owner.level.show_effect(evt.unit.x, evt.unit.y, Tags.Buff_Apply, Tags.Dark.color)
+
+class LuckyGnomeSpell(Spell):
+
+    def on_init(self):
+        self.name = "Lucky Gnome"
+        self.asset = ["MissingSynergies", "Icons", "lucky_gnome"]
+        self.tags = [Tags.Dark, Tags.Arcane, Tags.Nature, Tags.Conjuration]
+        self.level = 4
+        self.max_charges = 9
+        self.range = 9
+        self.must_target_empty = True
+        self.must_target_walkable = True
+
+        self.minion_health = 10
+        self.minion_damage = 1
+        self.minion_range = 4
+        self.minion_duration = 6
+        self.wand_uses = 3
+
+        self.upgrades["wand_uses"] = (2, 3)
+        self.upgrades["minion_range"] = (2, 4)
+        self.upgrades["iron"] = (1, 5, "Iron Gnome", "Summon iron gnomes instead of normal gnomes.\nIron gnomes and the faethorns they summon have more HP, deal more damage, and are [metallic] with more resistances.")
+        self.upgrades["transfer"] = (1, 5, "Wand Transfer", "Whenever a minion holding a wand of death dies, all remaining uses of its wand are transferred to another random minion in the wand's range and line of sight, stacking with the new minion's wand uses if necessary.", "wand behavior")
+        self.upgrades["explode"] = (1, 5, "Wand Explosion", "Whenever a minion holding a wand of death dies, it casts all remaining uses of its wand on random enemies in the wand's range and line of sight.", "wand behavior")
+        self.add_upgrade(FreeWands())
+    
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["wand_damage"] = self.get_stat("minion_damage", base=200)
+        stats["thorn_damage"] = self.get_stat("minion_damage", base=4)
+        return stats
+    
+    def get_description(self):
+        return ("Distort probability to summon an extraordinarily lucky gnome that randomly found a wand of death. The wand can be used [{wand_uses}_times:max_charges] before vanishing, and deals [{wand_damage}_dark:dark] damage with a range of [{minion_range}_tiles:minion_range].\n"
+                "When its wand is used up, the gnome will instead use its normal attack, which has the same range, deals [{minion_damage}_physical:physical] damage, and summons a faethorn near the target on hit. The gnome is a [living] [nature] [arcane] minion with [{minion_health}_HP:minion_health] and [1_SH:shields].\n"
+                "Faethorns are [nature] [arcane] stationary minions with [{minion_health}_HP:minion_health] and melee attacks dealing [{thorn_damage}_physical:physical] damage. They last for [{minion_duration}_turns:minion_duration].").format(**self.fmt_dict())
+
+    def cast_instant(self, x, y):
+        unit = Gnome() if not self.get_stat("iron") else GnomeIron()
+        apply_minion_bonuses(self, unit)
+        unit.turns_to_death = None
+        unit.spells.insert(0, WandOfDeathSpell(self, self.get_stat("wand_uses")))
+        unit.buffs.append(WandOfDeathBuff(self))
+        self.summon(unit, target=Point(x, y))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison])

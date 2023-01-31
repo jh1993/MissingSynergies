@@ -47,6 +47,7 @@ Level 4:
 + Gene Harvest (Chaos/Nature/Enchantment)
 + Iron Turtle (Metallic/Nature/Conjuration)
 + Karmic Loan (Holy/Enchantment)
++ Lucky Gnome (Dark/Nature/Arcane/Conjuration)
 + Orb of Flesh (Nature/Orb/Conjuration)
 + Prism Shell (Holy/Ice/Enchantment)
 + Psychedelic Spores (Arcane/Nature/Sorcery)
