@@ -11098,7 +11098,7 @@ class BlueSpikeBeastBuff(Buff):
             yield
     
     def get_tooltip(self):
-        return "Whenever this unit acts, it has a %i%% chance to act again, taking 1 physical damage when doing so. When damaged, has a %i%% chance to deal %i lightning damage to enemies in a %i tile burst%s." % (self.act_chance, self.act_chance//2, self.damage, self.radius, ", which ignores walls" if self.phase else "")
+        return "Whenever this unit acts, it has a %i%% chance to act again, taking 1 physical damage that penetrates all resistance when doing so. When damaged, has a %i%% chance to deal %i lightning damage to enemies in a %i tile burst%s." % (self.act_chance, self.act_chance//2, self.damage, self.radius, ", which ignores walls" if self.phase else "")
 
 class BlueSpikeBeast(Unit):
 
@@ -11141,7 +11141,7 @@ class BlueSpikeBeast(Unit):
         return True
 
     def self_damage(self):
-        self.deal_damage(1, Tags.Physical, self.buff)
+        self.deal_damage(1, Tags.Physical, self.buff, penetration=self.resists[Tags.Physical])
         yield
 
 class BlueSpikeBeastSpell(Spell):
@@ -11163,7 +11163,7 @@ class BlueSpikeBeastSpell(Spell):
         self.upgrades["minion_health"] = (15, 3)
         self.upgrades["act_chance"] = (20, 5, "Act Chance", "The blue spike beast has 20% additional chance to act again after each action, and 10% additional chance to unleash its retaliatory burst when damaged.")
         self.upgrades["phase"] = (1, 4, "Quantum Tunneling", "The blue spike beast's leap attack becomes a teleport attack that can pass through walls.\nIts retaliatory burst can now pass through walls as well.")
-        self.upgrades["gold"] = (1, 5, "Golden Force", "The blue spike beast becomes a [metallic] [holy] unit.\nIt gains [100_holy:holy], [100_ice:ice], [50_fire:fire], and [50_physical:physical] resistances.\nNote that [physical] resistance cannot reduce its self-damage below 1 unless it becomes immune to [physical] damage.")
+        self.upgrades["gold"] = (1, 5, "Golden Force", "The blue spike beast becomes a [metallic] [holy] unit.\nIt gains [100_holy:holy], [100_ice:ice], [50_fire:fire], and [50_physical:physical] resistances.")
         self.upgrades["shadow"] = (1, 4, "Shadow Spikes", "The blue spike beast can cast Pain Mirror with a cooldown of [20_turns:duration].\nThis Pain Mirror gains all of your upgrades and bonuses.")
 
     def fmt_dict(self):
@@ -11172,7 +11172,7 @@ class BlueSpikeBeastSpell(Spell):
         return stats
 
     def get_description(self):
-        return ("Summon a blue spike beast, a [living] [nature] [lightning] minion with [{minion_health}_HP:minion_health] and [lightning] immunity. It can move at supersonic speeds; whenever it acts, it has a [{act_chance}%:strikechance] chance to immediately act again without taking a turn, but then take [1_physical:physical] damage.\n"
+        return ("Summon a blue spike beast, a [living] [nature] [lightning] minion with [{minion_health}_HP:minion_health] and [lightning] immunity. It can move at supersonic speeds; whenever it acts, it has a [{act_chance}%:strikechance] chance to immediately act again without taking a turn, but then take [1_physical:physical] damage that penetrates all resistance.\n"
                 "Whenever the blue spike beast takes damage, it has a [{boom_chance}%:strikechance] chance to deal [{minion_damage}_lightning:lightning] damage to all enemies in a [{radius}_tile:radius] burst. It will also retaliate for [3_lightning:lightning] damage if attacked in melee.\n"
                 "The blue spike beast has a leap attack with unlimited range that deals [{minion_damage}_lightning:lightning] damage.").format(**self.fmt_dict())
 
