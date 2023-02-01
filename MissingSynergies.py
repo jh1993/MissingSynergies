@@ -11173,7 +11173,7 @@ class BlueSpikeBeastSpell(Spell):
         return stats
 
     def get_description(self):
-        return ("Summon a blue spike beast, a [living] [nature] [lightning] minion with [{minion_health}_HP:minion_health] and [lightning] immunity. It can roll at supersonic speeds; whenever it acts, it has a [{act_chance}%:strikechance] chance to immediately act again without taking a turn, but then take [1_physical:physical] damage that penetrates all resistance. Casting this spell again fully heals it and gives it an extra action.\n"
+        return ("Summon a blue spike beast, a [living] [nature] [lightning] minion with [{minion_health}_HP:minion_health] and [lightning] immunity. It can roll at supersonic speeds; whenever it acts, it has a [{act_chance}%:strikechance] chance to immediately act again without taking a turn, but then take [1_physical:physical] damage that cannot be resisted. Casting this spell again instead fully heals it and gives it an extra action.\n"
                 "Whenever the blue spike beast takes damage, it has a [{boom_chance}%:strikechance] chance to deal [{minion_damage}_lightning:lightning] damage to all enemies in a [{radius}_tile:radius] burst. It will also retaliate for [3_lightning:lightning] damage if attacked in melee. It has a leap attack with unlimited range and [{minion_damage}_lightning:lightning] damage.").format(**self.fmt_dict())
 
     def get_impacted_tiles(self, x, y):
