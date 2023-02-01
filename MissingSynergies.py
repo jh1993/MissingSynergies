@@ -11149,7 +11149,7 @@ class BlueSpikeBeastSpell(Spell):
     def on_init(self):
         self.name = "Blue Spike Beast"
         self.asset = ["MissingSynergies", "Icons", "blue_spike_beast"]
-        self.tags = [Tags.Lightning, Tags.Nature, Tags.Conjuration]
+        self.tags = [Tags.Lightning, Tags.Nature, Tags.Orb, Tags.Conjuration]
         self.level = 5
         self.max_charges = 4
         self.must_target_empty = True
@@ -11172,7 +11172,7 @@ class BlueSpikeBeastSpell(Spell):
         return stats
 
     def get_description(self):
-        return ("Summon a blue spike beast, a [living] [nature] [lightning] minion with [{minion_health}_HP:minion_health] and [lightning] immunity. It can move at supersonic speeds; whenever it acts, it has a [{act_chance}%:strikechance] chance to immediately act again without taking a turn, but then take [1_physical:physical] damage that penetrates all resistance.\n"
+        return ("Summon a blue spike beast, a [living] [nature] [lightning] minion with [{minion_health}_HP:minion_health] and [lightning] immunity. It can roll at supersonic speeds; whenever it acts, it has a [{act_chance}%:strikechance] chance to immediately act again without taking a turn, but then take [1_physical:physical] damage that penetrates all resistance.\n"
                 "Whenever the blue spike beast takes damage, it has a [{boom_chance}%:strikechance] chance to deal [{minion_damage}_lightning:lightning] damage to all enemies in a [{radius}_tile:radius] burst. It will also retaliate for [3_lightning:lightning] damage if attacked in melee.\n"
                 "The blue spike beast has a leap attack with unlimited range that deals [{minion_damage}_lightning:lightning] damage.").format(**self.fmt_dict())
 
