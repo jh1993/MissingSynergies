@@ -11105,6 +11105,7 @@ class BlueSpikeBeast(Unit):
     def __init__(self, spell):
         Unit.__init__(self)
         self.name = "Blue Spike Beast"
+        self.unique = True
         self.asset = ["MissingSynergies", "Units", "blue_spike_beast"]
         self.max_hp = spell.get_stat("minion_health")
         self.tags = [Tags.Living, Tags.Nature, Tags.Lightning]
@@ -11151,9 +11152,9 @@ class BlueSpikeBeastSpell(Spell):
         self.asset = ["MissingSynergies", "Icons", "blue_spike_beast"]
         self.tags = [Tags.Lightning, Tags.Nature, Tags.Orb, Tags.Conjuration]
         self.level = 5
-        self.max_charges = 4
+        self.max_charges = 8
         self.must_target_empty = True
-        self.must_target_walkable = True
+        self.can_target_self = True
 
         self.minion_health = 35
         self.minion_damage = 8
@@ -11172,14 +11173,33 @@ class BlueSpikeBeastSpell(Spell):
         return stats
 
     def get_description(self):
-        return ("Summon a blue spike beast, a [living] [nature] [lightning] minion with [{minion_health}_HP:minion_health] and [lightning] immunity. It can roll at supersonic speeds; whenever it acts, it has a [{act_chance}%:strikechance] chance to immediately act again without taking a turn, but then take [1_physical:physical] damage that penetrates all resistance.\n"
-                "Whenever the blue spike beast takes damage, it has a [{boom_chance}%:strikechance] chance to deal [{minion_damage}_lightning:lightning] damage to all enemies in a [{radius}_tile:radius] burst. It will also retaliate for [3_lightning:lightning] damage if attacked in melee.\n"
-                "The blue spike beast has a leap attack with unlimited range that deals [{minion_damage}_lightning:lightning] damage.").format(**self.fmt_dict())
+        return ("Summon a blue spike beast, a [living] [nature] [lightning] minion with [{minion_health}_HP:minion_health] and [lightning] immunity. It can roll at supersonic speeds; whenever it acts, it has a [{act_chance}%:strikechance] chance to immediately act again without taking a turn, but then take [1_physical:physical] damage that penetrates all resistance. Casting this spell again fully heals it and gives it an extra action.\n"
+                "Whenever the blue spike beast takes damage, it has a [{boom_chance}%:strikechance] chance to deal [{minion_damage}_lightning:lightning] damage to all enemies in a [{radius}_tile:radius] burst. It will also retaliate for [3_lightning:lightning] damage if attacked in melee. It has a leap attack with unlimited range and [{minion_damage}_lightning:lightning] damage.").format(**self.fmt_dict())
 
     def get_impacted_tiles(self, x, y):
         return [Point(x, y)]
 
+    def can_cast(self, x, y):
+        existing = None
+        for unit in self.caster.level.units:
+            if unit.source is self:
+                existing = unit
+                break
+        if existing:
+            return x == self.caster.x and y == self.caster.y
+        else:
+            return Spell.can_cast(self, x, y) and not self.caster.level.get_unit_at(x, y)
+
     def cast_instant(self, x, y):
+        existing = None
+        for unit in self.caster.level.units:
+            if unit.source is self:
+                existing = unit
+                break
+        if existing:
+            existing.deal_damage(-existing.max_hp, Tags.Heal, self)
+            existing.advance()
+            return
         self.summon(BlueSpikeBeast(self), target=Point(x, y))
 
 all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell])
