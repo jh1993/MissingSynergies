@@ -57,6 +57,7 @@ Level 4:
 
 Level 5:
 + Agonizing Storm (Dark/Lightning/Sorcery)
++ Blue Spike Beast (Lightning/Nature/Conjuration)
 + Bolt Jump (Lightning/Translocation/Sorcery)
 + Box of Woe (Dark/Lightning/Ice/Conjuration)
 + Crystal Hammer (Ice/Metallic/Sorcery)

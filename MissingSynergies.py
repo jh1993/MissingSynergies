@@ -8765,8 +8765,12 @@ class ElectricNetSpell(Spell):
                     unit.apply_buff(Stun(), 1)
                     unit.deal_damage(duration//2, Tags.Lightning, self)
                 if energize and unit and not unit.is_player_controlled and not are_hostile(unit, self.caster) and Tags.Spider in unit.tags and random.random() < 0.5:
-                    unit.advance()
+                    self.caster.level.queue_spell(self.extra_action(unit))
             yield
+
+    def extra_action(self, unit):
+        unit.advance()
+        yield
 
 class ReflexArcSpell(Spell):
 
@@ -8964,21 +8968,20 @@ class SpeedOfLight(Upgrade):
         self.asset = ["MissingSynergies", "Icons", "speed_of_light"]
         self.tags = [Tags.Translocation, Tags.Holy]
         self.level = 5
-        self.description = "Whenever one of your minions teleports, it has a 25% chance to immediately perform an action. If the minion is [holy], the chance is instead 50%. This does not trigger the per-turn effects of the minion's buffs, debuffs, or passive abilities, or recover their ability cooldowns.\nThis can only trigger once per minion per turn, refreshed before the beginning of your turn\nMost forms of movement other than a unit's movement action count as teleportation."
+        self.description = "Whenever one of your minions teleports, it has a 25% chance to immediately perform an action. If the minion is [holy], the chance is instead 50%. This does not trigger the per-turn effects of the minion's buffs, debuffs, or passive abilities, or recover their ability cooldowns.\nMost forms of movement other than a unit's movement action count as teleportation.\nNote that most minions with leap attacks or similar will prefer to use their melee attacks instead whenever possible. Some exceptions may exist, indicated by the unit's leap attack being listed before its melee attack."
         self.global_triggers[EventOnMoved] = self.on_moved
-        self.already_triggered = []
-
-    def on_pre_advance(self):
-        self.already_triggered = []
 
     def on_moved(self, evt):
-        if not evt.teleport or evt.unit.is_player_controlled or are_hostile(evt.unit, self.owner) or evt.unit in self.already_triggered:
+        if not evt.teleport or evt.unit.is_player_controlled or are_hostile(evt.unit, self.owner):
             return
         chance = 0.5 if Tags.Holy in evt.unit.tags else 0.25
         if random.random() >= chance:
             return
-        self.already_triggered.append(evt.unit)
-        evt.unit.advance()
+        self.owner.level.queue_spell(self.extra_action(evt.unit))
+
+    def extra_action(self, unit):
+        unit.advance()
+        yield
 
 class ForcefulChanneling(Upgrade):
 
@@ -11068,5 +11071,116 @@ class LuckyGnomeSpell(Spell):
         unit.buffs.append(WandOfDeathBuff(self))
         self.summon(unit, target=Point(x, y))
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell])
+class BlueSpikeBeastBuff(Buff):
+
+    def __init__(self, spell):
+        Buff.__init__(self)
+        self.name = "Sonic Force"
+        self.color = Tags.Lightning.color
+        self.damage = spell.get_stat("minion_damage")
+        self.radius = spell.get_stat("radius")
+        self.phase = spell.get_stat("phase")
+        self.act_chance = spell.get_stat("act_chance")
+        self.owner_triggers[EventOnDamaged] = self.on_damaged
+    
+    def on_damaged(self, evt):
+        if random.random() < self.act_chance/200:
+            self.owner.level.queue_spell(self.boom())
+    
+    def boom(self):
+        for stage in Burst(self.owner.level, self.owner, self.radius, ignore_walls=self.phase):
+            for p in stage:
+                unit = self.owner.level.get_unit_at(p.x, p.y)
+                if not unit or not are_hostile(unit, self.owner):
+                    self.owner.level.show_effect(p.x, p.y, Tags.Lightning)
+                else:
+                    unit.deal_damage(self.damage, Tags.Lightning, self)
+            yield
+    
+    def get_tooltip(self):
+        return "Whenever this unit acts, it has a %i%% chance to act again, taking 1 physical damage when doing so. When damaged, has a %i%% chance to deal %i lightning damage to enemies in a %i tile burst%s." % (self.act_chance, self.act_chance//2, self.damage, self.radius, ", which ignores walls" if self.phase else "")
+
+class BlueSpikeBeast(Unit):
+
+    def __init__(self, spell):
+        Unit.__init__(self)
+        self.name = "Blue Spike Beast"
+        self.asset = ["MissingSynergies", "Units", "blue_spike_beast"]
+        self.max_hp = spell.get_stat("minion_health")
+        self.tags = [Tags.Living, Tags.Nature, Tags.Lightning]
+        self.resists[Tags.Lightning] = 100
+        self.buff = BlueSpikeBeastBuff(spell)
+        self.buffs = [self.buff, Thorns(3, Tags.Lightning)]
+        if spell.get_stat("gold"):
+            self.tags.extend([Tags.Metallic, Tags.Holy])
+            self.resists[Tags.Holy] = 100
+        leap = LeapAttack(damage=spell.get_stat("minion_damage"), damage_type=Tags.Lightning, is_ghost=spell.get_stat("phase"), range=RANGE_GLOBAL)
+        leap.name = "Sonic Roll"
+        self.spells = [leap, SimpleMeleeAttack(damage=spell.get_stat("minion_damage"), damage_type=Tags.Lightning)]
+        if spell.get_stat("shadow"):
+            mirror = PainMirrorSpell()
+            mirror.statholder = spell.caster
+            mirror.max_charges = 0
+            mirror.cur_charges = 0
+            mirror.cool_down = 20
+            mirror.get_description = lambda: ""
+            self.spells.insert(0, mirror)
+    
+    def advance(self):
+        if not self.is_alive():
+            return True
+        can_act = True
+        for b in self.buffs:
+            if not b.on_attempt_advance():
+                can_act = False
+                break
+        Unit.advance(self)
+        if self.is_alive() and can_act and random.random() < self.buff.act_chance/100:
+            self.level.queue_spell(self.self_damage())
+            return False
+        return True
+
+    def self_damage(self):
+        self.deal_damage(1, Tags.Physical, self.buff)
+        yield
+
+class BlueSpikeBeastSpell(Spell):
+    
+    def on_init(self):
+        self.name = "Blue Spike Beast"
+        self.asset = ["MissingSynergies", "Icons", "blue_spike_beast"]
+        self.tags = [Tags.Lightning, Tags.Nature, Tags.Conjuration]
+        self.level = 5
+        self.max_charges = 4
+        self.must_target_empty = True
+        self.must_target_walkable = True
+
+        self.minion_health = 35
+        self.minion_damage = 8
+        self.act_chance = 60
+        self.radius = 2
+
+        self.upgrades["minion_health"] = (15, 3)
+        self.upgrades["act_chance"] = (20, 5, "Act Chance", "The blue spike beast has 20% additional chance to act again after each action, and 10% additional chance to unleash its retaliatory burst when damaged.")
+        self.upgrades["phase"] = (1, 4, "Quantum Tunneling", "The blue spike beast's leap attack becomes a teleport attack that can pass through walls.\nIts retaliatory burst can now pass through walls as well.")
+        self.upgrades["gold"] = (1, 5, "Golden Force", "The blue spike beast becomes a [metallic] [holy] unit.\nIt gains [100_holy:holy], [100_ice:ice], [50_fire:fire], and [50_physical:physical] resistances.\nNote that [physical] resistance cannot reduce its self-damage below 1 unless it becomes immune to [physical] damage.")
+        self.upgrades["shadow"] = (1, 4, "Shadow Spikes", "The blue spike beast can cast Pain Mirror with a cooldown of [20_turns:duration].\nThis Pain Mirror gains all of your upgrades and bonuses.")
+
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["boom_chance"] = self.get_stat("act_chance")//2
+        return stats
+
+    def get_description(self):
+        return ("Summon a blue spike beast, a [living] [nature] [lightning] minion with [{minion_health}_HP:minion_health] and [lightning] immunity. It can move at supersonic speeds; whenever it acts, it has a [{act_chance}%:strikechance] chance to immediately act again without taking a turn, but then take [1_physical:physical] damage.\n"
+                "Whenever the blue spike beast takes damage, it has a [{boom_chance}%:strikechance] chance to deal [{minion_damage}_lightning:lightning] damage to all enemies in a [{radius}_tile:radius] burst. It will also retaliate for [3_lightning:lightning] damage if attacked in melee.\n"
+                "The blue spike beast has a leap attack with unlimited range that deals [{minion_damage}_lightning:lightning] damage.").format(**self.fmt_dict())
+
+    def get_impacted_tiles(self, x, y):
+        return [Point(x, y)]
+
+    def cast_instant(self, x, y):
+        self.summon(BlueSpikeBeast(self), target=Point(x, y))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison])
