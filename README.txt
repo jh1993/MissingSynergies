@@ -79,6 +79,7 @@ Level 5:
 + Mask of Troubles (Arcane/Translocation/Conjuration/Enchantment)
 + Mass of Curses (Dark/Enchantment/Conjuration)
 + Morbid Sphere (Dark/Orb/Conjuration)
++ Nova Juggernaut (Arcane/Metallic/Conjuration)
 + Orb of Mirrors (Metallic/Eye/Orb/Conjuration)
 + Static Field (Lightning/Enchantment)
 + Warp-Lens Golem (Arcane/Translocation/Eye/Conjuration)

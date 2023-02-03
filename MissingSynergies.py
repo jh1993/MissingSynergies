@@ -11202,5 +11202,109 @@ class BlueSpikeBeastSpell(Spell):
             return
         self.summon(BlueSpikeBeast(self), target=Point(x, y))
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell])
+class NovaJuggernautBuff(Buff):
+
+    def __init__(self, spell):
+        Buff.__init__(self)
+        self.damage = spell.get_stat("minion_damage")
+        self.name = "Nova Spikes"
+        self.color = Tags.Arcane.color
+        self.description = "Whenever this unit moves, it deals %i arcane damage to all adjacent enemies. Whenever an enemy moves to a tile adjacent to this unit, it takes %i arcane damage." % (self.damage, self.damage)
+        self.wall = spell.get_stat("wall")
+        self.global_triggers[EventOnMoved] = self.on_moved
+    
+    def on_moved(self, evt):
+        if evt.unit is self.owner:
+            for p in self.owner.level.get_adjacent_points(Point(self.owner.x, self.owner.y), filter_walkable=False):
+                unit = self.owner.level.get_unit_at(p.x, p.y)
+                if not unit or not are_hostile(unit, self.owner):
+                    self.owner.level.show_effect(p.x, p.y, Tags.Arcane)
+                else:
+                    unit.deal_damage(self.damage, Tags.Arcane, self)
+                if self.wall and self.owner.level.tiles[p.x][p.y].is_wall():
+                    self.owner.level.make_floor(p.x, p.y)
+        elif are_hostile(evt.unit, self.owner) and distance(evt.unit, self.owner, diag=True) <= 1.5:
+            evt.unit.deal_damage(self.damage, Tags.Arcane, self)
+
+class BomberDriftSpell(LeapAttack):
+
+    def __init__(self, spell):
+        self.spell = spell
+        LeapAttack.__init__(self, damage=spell.get_stat("minion_damage"), range=RANGE_GLOBAL, damage_type=Tags.Arcane, is_leap=False)
+        self.name = "Bomber Drift"
+        self.description = "Charge attack. Leaves a trail of flying void bombers."
+        self.cool_down = 6
+    
+    def cast(self, x, y):
+
+        leap_dest = self.get_leap_dest(x, y)
+        if not leap_dest:
+            return
+        self.caster.invisible = True
+        path = self.caster.level.get_points_in_line(Point(self.caster.x, self.caster.y), Point(leap_dest.x, leap_dest.y), find_clear=not self.is_ghost)
+        self.caster.level.act_move(self.caster, leap_dest.x, leap_dest.y, teleport=True)
+        
+        for point in path:
+            dtype = random.choice(self.damage_type) if isinstance(self.damage_type, list) else self.damage_type
+            self.caster.level.leap_effect(point.x, point.y, dtype.color, self.caster)
+            unit = VoidBomber()
+            unit.spells[0].damage = self.damage
+            unit.flying = True
+            self.spell.summon(unit, target=point, radius=0)
+            yield
+        
+        self.caster.invisible = False
+        charge_bonus = self.charge_bonus * (len(path) - 2)
+        self.caster.level.deal_damage(x, y, self.get_stat("damage") + charge_bonus, random.choice(self.damage_type) if isinstance(self.damage_type, list) else self.damage_type, self)
+
+class NovaJuggernautSpell(Spell):
+    
+    def on_init(self):
+        self.name = "Nova Juggernaut"
+        self.asset = ["MissingSynergies", "Icons", "nova_juggernaut"]
+        self.tags = [Tags.Arcane, Tags.Metallic, Tags.Conjuration]
+        self.level = 5
+        self.max_charges = 3
+        self.minion_health = 60
+        self.minion_damage = 9
+        self.must_target_empty = True
+
+        self.upgrades["wall"] = (1, 3, "Wall Trample", "Whenever the nova juggernaut moves, it melts all walls adjacent to itself.")
+        self.upgrades["bomber"] = (1, 6, "Bomber Drift", "The nova juggernaut gains a charge attack with unlimited range that deals [{minion_damage}_arcane:arcane] damage and has a cooldown of [6_turns:duration].\nThe charge attack leaves behind a trail of flying void bombers, which have suicidal attacks that deal the same damage to all adjacent units and melt walls.")
+        self.upgrades["eyes"] = (1, 4, "Three Eyes", "The nova juggernaut gains three passive [eye] buffs, each dealing [arcane] damage equal to 1/3 of the [minion_damage:minion_damage] of this spell to a random enemy in line of sight every [3_turns:duration].\nThis [shot_cooldown:shot_cooldown] is fixed and does not benefit from bonuses.\nDamage dealt by these [eye] buffs counts as damage dealt by this spell itself.")
+        self.upgrades["gold"] = (1, 3, "Celestial Juggernaut", "The nova juggernaut becomes a [holy] unit, and gains [50_holy:holy] and [50_dark:dark] resistances.")
+    
+    def get_description(self):
+        return ("Summon a nova juggernaut, a flying [arcane] [metallic] [construct] minion with [{minion_health}_HP:minion_health]. When attacked in melee, it retaliates for [6_arcane:arcane] damage.\n"
+                "Whenever the nova juggernaut moves, it deals [{minion_damage}_arcane:arcane] damage to all adjacent enemies. Whenever an enemy moves to a tile adjacent to the nova juggernaut, it takes [{minion_damage}_arcane:arcane] damage.\n"
+                "The nova juggernaut has a melee attack that deals [{minion_damage}_arcane:arcane] damage and tramples the target, pushing it to a random adjacent tile while the nova juggernaut moves into the target tile.").format(**self.fmt_dict())
+
+    def cast_instant(self, x, y):
+        unit = Unit()
+        unit.asset = ["MissingSynergies", "Units", "nova_juggernaut"]
+        unit.name = "Nova Juggernaut"
+        unit.flying = True
+        unit.max_hp = self.get_stat("minion_health")
+        unit.tags = [Tags.Arcane, Tags.Metallic, Tags.Construct]
+        unit.resists[Tags.Arcane] = 100
+        if self.get_stat("gold"):
+            unit.tags.append(Tags.Holy)
+            unit.resists[Tags.Holy] = 50
+            unit.resists[Tags.Dark] = 50
+        damage = self.get_stat("minion_damage")
+        melee = SimpleMeleeAttack(damage=damage, damage_type=Tags.Arcane, trample=True)
+        melee.name = "Hug"
+        unit.spells = [melee]
+        if self.get_stat("bomber"):
+            unit.spells.insert(0, BomberDriftSpell(self))
+        unit.buffs = [NovaJuggernautBuff(self), Thorns(6, Tags.Arcane)]
+        if self.get_stat("eyes"):
+            for _ in range(3):
+                eye = Spells.ElementalEyeBuff(element=Tags.Arcane, damage=damage//3, freq=3, spell=self)
+                eye.stack_type = STACK_INTENSITY
+                eye.description = ""
+                unit.buffs.append(eye)
+        self.summon(unit, target=Point(x, y))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison])
