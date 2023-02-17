@@ -11313,15 +11313,15 @@ class DisintegrateSpell(Spell):
         self.asset = ["MissingSynergies", "Icons", "disintegrate"]
         self.tags = [Tags.Arcane, Tags.Metallic, Tags.Sorcery]
         self.level = 5
-        self.max_charges = 8
+        self.max_charges = 12
         self.range = 9
         self.requires_los = False
-        self.radius = 2
+        self.radius = 3
         self.damage = 20
 
-        self.upgrades["max_charges"] = (8, 4)
-        self.upgrades["damage"] = (15, 3)
-        self.upgrades["radius"] = (1, 3)
+        self.upgrades["max_charges"] = (8, 3)
+        self.upgrades["damage"] = (15, 2)
+        self.upgrades["radius"] = (2, 4)
         self.upgrades["wild"] = (1, 5, "Wild Entropy", "Each hit of Disintegrate has a 1% chance to instead deal damage equal to its [damage] stat.")
     
     def get_description(self):
