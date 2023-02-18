@@ -2017,7 +2017,7 @@ class CopperFurnaceSpell(Spell):
     
     def fmt_dict(self):
         stats = Spell.fmt_dict(self)
-        stats["furnace_hp"] = self.get_stat("minion_health")*10
+        stats["furnace_hp"] = self.get_stat("minion_health", base=150)
         return stats
     
     def get_impacted_tiles(self, x, y):
@@ -2026,7 +2026,6 @@ class CopperFurnaceSpell(Spell):
     def get_description(self):
         return ("Summon the Copper Furnace, which has [{furnace_hp}_HP:minion_health], an aura that deals [1_fire:fire] damage to enemies in a [{radius}_tile:radius] radius, and a beam attack with [{minion_range}_range:minion_range] that deals [{minion_damage}_lightning:lightning] damage.\n"
                 "Each turn, the Copper Furnace has a [{summon_chance}%_chance:conjuration] to summon a copper spider or copper mantis, and a [{summon_chance}%_chance:conjuration] to summon a furnace spider or furnace mantis.\n"
-                "This spell is treated as if it has a base minion health stat of [12:minion_health]. The Copper Furnace benefits 10 times from bonuses to it.\n"
                 "Casting this spell again while the Copper Furnace is already summoned will instead cause it to immediately trigger its passive summoning abilities.").format(**self.fmt_dict())
     
     def get_ally(self, is_copper, is_fiend=0):
@@ -2097,7 +2096,7 @@ class CopperFurnaceSpell(Spell):
         unit.unique = True
         unit.name = "Copper Furnace"
         unit.asset = ["MissingSynergies", "Units", "copper_furnace"]
-        unit.max_hp = self.get_stat("minion_health")*10
+        unit.max_hp = self.get_stat("minion_health", base=150)
         unit.tags = [Tags.Fire, Tags.Lightning, Tags.Metallic, Tags.Construct]
         unit.resists[Tags.Ice] = -100
 
