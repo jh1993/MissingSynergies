@@ -11349,5 +11349,112 @@ class DisintegrateSpell(Spell):
                 continue
             self.hit(unit, damage, unit.x == x and unit.y == y, wild)
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell])
+class RoyalHarem(Upgrade):
+
+    def on_init(self):
+        self.name = "Royal Harem"
+        self.level = 5
+        self.description = "Whenever this spell summons a unit, it has a 5% chance to also summon a mind maggot queen or mind maggot king."
+        self.global_triggers[EventOnUnitAdded] = self.on_unit_added
+    
+    def on_unit_added(self, evt):
+        if evt.unit.source is not self.prereq or random.random() >= 0.05:
+            return
+        if random.choice([True, False]):
+            unit = self.prereq.get_maggot(queen=False)
+        else:
+            unit = self.prereq.get_maggot(king=False)
+        apply_minion_bonuses(self.prereq, unit)
+        self.prereq.summon(unit, target=evt.unit, radius=5)
+
+class MindMonarchSpell(Spell):
+
+    def on_init(self):
+        self.name = "Mind Monarch"
+        self.asset = ["MissingSynergies", "Icons", "mind_monarch"]
+        self.tags = [Tags.Arcane, Tags.Conjuration]
+        self.level = 5
+        self.max_charges = 3
+        self.must_target_empty = True
+        self.must_target_walkable = True
+        self.minion_health = 5
+        self.minion_damage = 3
+
+        self.upgrades["minion_damage"] = (3, 3)
+        self.upgrades["shields"] = (2, 2)
+        self.upgrades["flying"] = (1, 4, "Winged Drones", "The monarch will instead summon mind maggot drones, which are flying and have dive attacks with a range of [{minion_range}_tiles:minion_range].\nThese dive attacks cannot trigger the cooldown-increasing effect of their melee attacks, but mind maggots will prioritize their melee attacks whenever possible.")
+        self.add_upgrade(RoyalHarem())
+
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["minion_range"] = self.get_stat("minion_range", base=4)
+        stats["queen_health"] = self.get_stat("minion_health", base=90)
+        stats["queen_damage"] = self.get_stat("minion_damage", base=9)
+        return stats
+    
+    def get_maggot(self, king=True, queen=True):
+
+        unit = Unit()
+        unit.shields = self.get_stat("shields")
+        unit.tags = [Tags.Living, Tags.Arcane]
+        melee = SimpleMeleeAttack(damage=self.minion_damage, damage_type=Tags.Arcane)
+        melee.name = "Brain Bite"
+        if queen:
+            melee.damage += 6
+        def increase_cooldown(caster, target):
+            spells = [s for s in target.spells if s.cool_down and target.cool_downs.get(s, 0) < s.cool_down]
+            if target.gets_clarity:
+                spells = []
+            if not spells:
+                target.deal_damage(melee.get_stat("damage"), melee.damage_type, melee)
+                return
+            spell = random.choice(spells)
+            cooldown = target.cool_downs.get(spell, 0)
+            target.cool_downs[spell] = cooldown + 1
+        melee.onhit = increase_cooldown
+        melee.description = "On hit, increase a random ability cooldown by 1 turn if possible; otherwise deal damage again."
+        unit.spells = [melee]
+
+        if queen:
+            unit.max_hp = 90
+        elif king:
+            unit.max_hp = 38
+        else:
+            unit.max_hp = self.minion_health
+
+        if queen:
+            unit.buffs.append(GeneratorBuff(spawn_func=lambda: self.get_maggot(king=False, queen=False), spawn_chance=.1))
+        if king:
+            unit.spells.insert(0, KingSpell(lambda: self.get_maggot(king=False, queen=False)))
+
+        if king and queen:
+            unit.name = "Mind Monarch"
+            unit.asset = ["MissingSynergies", "Units", "mind_monarch"]
+        elif queen:
+            unit.name = "Mind Maggot Queen"
+        elif king:
+            unit.name = "Mind Maggot King"
+        else:
+            unit.name = "Mind Maggot"
+            if self.get_stat("flying"):
+                unit.name = "Mind Maggot Drone"
+                unit.asset_name = "mind_maggot_winged"
+                dive = LeapAttack(damage=self.minion_damage, range=4, damage_type=Tags.Arcane)
+                dive.name = "Dive Attack"
+                unit.spells.append(dive)
+                unit.flying = True
+        
+        return unit
+
+    def get_description(self):
+        return ("Summon a mind monarch, a mind maggot that's both a king and a queen. Every [10_turns:cooldown] it summons 2 mind maggot gates, and each turn it has a 10% chance to summon a mind maggot.\n"
+                "Mind maggots are [living] [arcane] minions with [{minion_health}_HP:minion_health] and melee attacks that deal [{minion_damage}_arcane:arcane] damage. On hit, they increase the cooldown of a random one of the target's abilities by [1_turn:cooldown] if possible (does not work on units that can gain clarity); otherwise the target takes the same damage again.\n"
+                "The mind monarch can do the same, but has [{queen_health}_HP:minion_health] and deals [{queen_damage}_damage:minion_damage].").format(**self.fmt_dict())
+
+    def cast_instant(self, x, y):
+        unit = self.get_maggot()
+        apply_minion_bonuses(self, unit)
+        self.summon(unit, target=Point(x, y))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison])

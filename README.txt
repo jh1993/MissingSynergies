@@ -79,6 +79,7 @@ Level 5:
 + Mad Werewolf (Dark/Nature/Arcane/Translocation/Conjuration)
 + Mask of Troubles (Arcane/Translocation/Conjuration/Enchantment)
 + Mass of Curses (Dark/Enchantment/Conjuration)
++ Mind Monarch (Arcane/Conjuration)
 + Morbid Sphere (Dark/Orb/Conjuration)
 + Nova Juggernaut (Arcane/Metallic/Conjuration)
 + Orb of Mirrors (Metallic/Eye/Orb/Conjuration)
