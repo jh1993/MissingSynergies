@@ -8768,6 +8768,8 @@ class ElectricNetSpell(Spell):
             yield
 
     def extra_action(self, unit):
+        if not unit.is_alive():
+            return
         unit.advance()
         yield
 
@@ -8979,6 +8981,8 @@ class SpeedOfLight(Upgrade):
         self.owner.level.queue_spell(self.extra_action(evt.unit))
 
     def extra_action(self, unit):
+        if not unit.is_alive():
+            return
         unit.advance()
         yield
 
@@ -11197,7 +11201,8 @@ class BlueSpikeBeastSpell(Spell):
                 break
         if existing:
             existing.deal_damage(-existing.max_hp, Tags.Heal, self)
-            existing.advance()
+            if existing.is_alive():
+                existing.advance()
             return
         self.summon(BlueSpikeBeast(self), target=Point(x, y))
 
