@@ -8166,7 +8166,7 @@ class FadingBuff(Buff):
             owner.level.show_effect(owner.x, owner.y, Tags.Translocation)
             owner.kill()
             return False
-        return True
+        return self.damage > 0
 
     def on_applied(self, owner):
         self.owner.turns_to_death = math.ceil(self.owner.max_hp/self.damage)
