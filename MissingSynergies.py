@@ -5611,8 +5611,8 @@ class AfterlifeEchoesBuff(Buff):
                     shard.resists[tag] = 0
                 shard.flying = True
                 shard.stationary = True
-                shard.buffs = [SoulShardBuff(), TeleportyBuff()]
-                self.spell.summon(shard, target=point, radius=5, sort_dist=False)
+                shard.buffs = [SoulShardBuff(), TeleportyBuff(radius=RANGE_GLOBAL, chance=1)]
+                self.spell.summon(shard, radius=RANGE_GLOBAL, sort_dist=False)
 
         yield
 
@@ -5655,7 +5655,7 @@ class AfterlifeEchoesSpell(Spell):
         self.upgrades["life"] = (1, 5, "Life Echoes", "When you summon a [living] or [nature] minion, that minion's death explosion will [poison] enemies for a number of turns equal to 50% of its max HP.\nIf an enemy is already [poisoned], any excess duration will be dealt as [poison] damage.", "echo")
         self.upgrades["spirit"] = (1, 5, "Spirit Echoes", "When you summon a [holy], [demon], or [undead] minion, that minion's death explosion will summon an Afterlife Shade with the same max HP.\nThe Afterlife Shade has an attack with [{minion_range}_range:minion_range] that deals [holy] and [dark] damage equal to [{minion_damage}:minion_damage] plus 10% of its max HP.", "echo")
         self.upgrades["elemental"] = (1, 5, "Elemental Echoes", "When you summon a [fire], [lightning], or [ice] minion, that minion's death explosion has a chance to cast Fireball, Lightning Bolt, or Icicle respectively at valid enemy targets. A minion with multiple tags will cast one of the spells at random.\nThe chance to cast is the minion's max HP divided by 20, with an extra guaranteed cast per 20 HP the minion has.\nThese spells gain all of your upgrades and bonuses.", "echo")
-        self.upgrades["shattering"] = (1, 5, "Shattering Echoes", "When you summon an [arcane], [metallic], or [glass] minion, that minion's death explosion will summon a Soul Shard for every 20 HP and [2_SH:shields] the minion has, rounded up.\nSoul Shards have fixed 1 HP and [1_SH:shields]. They deal [2_physical:physical] or [2_arcane:arcane] damage to enemies that hit them.", "echo")
+        self.upgrades["shattering"] = (1, 5, "Shattering Echoes", "When you summon an [arcane], [metallic], or [glass] minion, that minion's death explosion will summon a Soul Shard on a random tile for every 20 HP and [2_SH:shields] the minion has, rounded up.\nSoul Shards have fixed 1 HP and [1_SH:shields], and teleport to random tiles each turn. They deal [2_physical:physical] or [2_arcane:arcane] damage to enemies that hit them.", "echo")
 
     def fmt_dict(self):
         stats = Spell.fmt_dict(self)
