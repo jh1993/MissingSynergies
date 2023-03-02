@@ -171,5 +171,5 @@ Level 7:
 
 ---
 
-Credit to Bord Listian for the Golden Trickster sprite.
+Credit to Bord Listian for the Golden Trickster sprite, and Anti-Tank Guided Missile for the crab sprite.
 The sprite for Ataraxia is an adaptation of the icon of its namesake from Nova Drift, made by its dev Chimeric himself and edited by me.
