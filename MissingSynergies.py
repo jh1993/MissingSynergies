@@ -4980,14 +4980,24 @@ class LivingLabyrinthSpell(Spell):
         self.summon(unit, target=Point(x, y))
 
 class AgonizingPowerBuff(Buff):
+
     def on_init(self):
         self.name = "Agonizing Power"
         self.color = Tags.Dark.color
         self.spell_bonuses[AgonizingStormSpell]["radius"] = 1
         self.stack_type = STACK_INTENSITY
+        self.passed = True
+        self.owner_triggers[EventOnPass] = self.on_pass
+
+    def on_pre_advance(self):
+        self.passed = False
+
     def on_advance(self):
-        if not self.owner.has_buff(ChannelBuff):
+        if not self.passed:
             self.owner.remove_buff(self)
+
+    def on_pass(self, evt):
+        self.passed = True
 
 class AgonizingStormSpell(Spell):
 
@@ -11469,5 +11479,136 @@ class MindMonarchSpell(Spell):
         apply_minion_bonuses(self, unit)
         self.summon(unit, target=Point(x, y))
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell])
+class CrabRaveSpell(Spell):
+
+    def __init__(self, damage, radius):
+        Spell.__init__(self)
+        self.name = "Crab Rave"
+        self.damage = damage
+        self.radius = radius
+        self.cool_down = 6
+        self.range = 0
+        self.can_target_self = True
+        self.self_target = True
+        self.description = "Deals damage of a random type to each enemy in radius and LOS."
+    
+    def get_targets(self):
+        return [u for u in self.caster.level.get_units_in_ball(self.caster, self.get_stat("radius")) if self.caster.level.can_see(u.x, u.y, self.caster.x, self.caster.y) and are_hostile(u, self.caster)]
+
+    def can_cast(self, x, y):
+        if not Spell.can_cast(self, x, y):
+            return False
+        return bool(self.get_targets())
+    
+    def cast(self, x, y):
+        targets = self.get_targets()
+        if not targets:
+            return
+        random.shuffle(targets)
+        damage = self.get_stat("damage")
+        for target in targets:
+            dtype = random.choice([Tags.Fire, Tags.Ice, Tags.Lightning, Tags.Physical, Tags.Holy, Tags.Dark, Tags.Arcane, Tags.Poison])
+            for p in Bolt(self.caster.level, self.caster, target):
+                self.caster.level.show_effect(p.x, p.y, dtype, minor=True)
+                yield
+            target.deal_damage(damage, dtype, self)
+
+class CarcinizationPassive(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+    
+    def on_init(self):
+        self.buff_type = BUFF_TYPE_PASSIVE
+        self.color = Tags.Nature.color
+        self.description = "On death, evolve into a crab."
+        self.owner_triggers[EventOnDeath] = self.on_death
+    
+    def on_death(self, evt):
+        self.owner.level.queue_spell(self.evolve())
+    
+    def evolve(self):
+
+        unit = Unit()
+        unit.name = "Crab"
+        unit.asset = ["MissingSynergies", "Units", "crab"]
+        unit.max_hp = self.owner.max_hp
+        unit.resists[Tags.Physical] = 50
+        unit.resists[Tags.Ice] = 50
+        unit.tags = [Tags.Living, Tags.Nature, Tags.Ice]
+        
+        melee = SimpleMeleeAttack(damage=self.spell.get_stat("minion_damage") + unit.max_hp//10, attacks=2)
+        melee.name = "Pincers"
+        melee.description = "Attacks twice."
+        unit.spells = [melee]
+
+        if self.spell.get_stat("samurai"):
+            def massive_damage(caster, target):
+                if random.random() < 0.1:
+                    target.deal_damage(melee.get_stat("damage")*5, melee.damage_type, melee)
+            melee.onhit = massive_damage
+            melee.name = "Katana Pincers"
+            melee.description += " Each attack has a 10% chance to hit again for 500% damage."
+            charge = LeapAttack(damage=self.spell.get_stat("minion_damage") + unit.max_hp//5, range=self.spell.get_stat("minion_range", base=6), is_leap=False)
+            charge.name = "Iai Charge"
+            unit.spells.append(charge)
+        
+        if self.spell.get_stat("spider"):
+            unit.tags.append(Tags.Spider)
+            unit.buffs = [SpiderBuff()]
+
+        if self.spell.get_stat("rave"):
+            unit.spells.insert(0, CrabRaveSpell(damage=self.spell.get_stat("minion_damage") + unit.max_hp//5, radius=self.spell.get_stat("radius", base=6)))
+
+        self.spell.summon(unit, target=self.owner, radius=5)
+        yield
+
+class CarcinizationBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+    
+    def on_init(self):
+        self.name = "Carcinization"
+        self.color = Tags.Nature.color
+        self.global_triggers[EventOnUnitAdded] = self.on_unit_added
+    
+    def on_unit_added(self, evt):
+        if are_hostile(evt.unit, self.owner) or evt.unit.turns_to_death is None:
+            return
+        evt.unit.apply_buff(CarcinizationPassive(self.spell))
+
+class CarcinizationSpell(Spell):
+
+    def on_init(self):
+        self.name = "Carcinization"
+        self.asset = ["MissingSynergies", "Icons", "carcinization"]
+        self.tags = [Tags.Nature, Tags.Ice, Tags.Enchantment, Tags.Conjuration]
+        self.level = 5
+        self.max_charges = 2
+        self.range = 0
+        self.duration = 20
+        self.minion_damage = 1
+
+        self.upgrades["duration"] = (20, 2)
+        self.upgrades["spider"] = (1, 2, "Spider Crab", "The crab becomes a [spider] unit, which weaves webs around itself each turn that [stun] non-spider units.")
+        self.upgrades["samurai"] = (1, 6, "Samurai Crab", "The crab can now attack enemies' weak points for massive damage. Each of its two melee attacks has a 10% chance to hit again for 500% damage.\nThe crab also gains a charge attack with a range of [{minion_range}_tiles:minion_range], dealing [physical] damage equal to [{minion_damage}:minion_damage] plus 20% of the crab's initial max HP.")
+        self.upgrades["rave"] = (1, 4, "Crab Rave", "The crab can now rave every [6_turns:cooldown], which deals damage of a random type equal to [{minion_damage}:minion_damage] plus 20% of the crab's initial max HP to every enemy in line of sight within [{radius}_tiles:radius] of the crab.")
+
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["minion_range"] = self.get_stat("minion_range", base=6)
+        stats["radius"] = self.get_stat("radius", base=6)
+        return stats
+    
+    def get_description(self):
+        return ("For [{duration}_turns:duration], whenever you summon a temporary minion, it gains the ability to evolve into a crab with the same max HP on death.\n"
+                "The crab is a [living] [nature] [ice] minion with [50_physical:physical] and [50_ice:ice] resistance. It has a melee attack that attacks twice, each dealing [physical] damage equal to [{minion_damage}:minion_damage] plus 10% of the crab's initial max HP").format(**self.fmt_dict())
+
+    def cast_instant(self, x, y):
+        self.caster.apply_buff(CarcinizationBuff(self), self.get_stat("duration"))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison])

@@ -60,6 +60,7 @@ Level 5:
 + Blue Spike Beast (Lightning/Nature/Orb/Conjuration)
 + Bolt Jump (Lightning/Translocation/Sorcery)
 + Box of Woe (Dark/Lightning/Ice/Conjuration)
++ Carcinization (Nature/Ice/Enchantment/Conjuration)
 + Crystal Hammer (Ice/Metallic/Sorcery)
 + Chaos Hail (Ice/Chaos/Enchantment)
 + Chaos Theory (Chaos/Ice/Arcane/Conjuration)
