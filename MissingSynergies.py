@@ -2113,138 +2113,62 @@ class CopperFurnaceSpell(Spell):
         
         self.summon(unit, target=Point(x, y))
 
-class MicrocosmBuff(Buff):
+class TransienceBuff(Buff):
 
-    def __init__(self, spell):
-        self.spell = spell
+    def __init__(self, chance):
+        self.chance = chance
         Buff.__init__(self)
     
     def on_init(self):
-        self.name = "Microcosm"
-        self.global_triggers[EventOnDamaged] = self.on_damaged
         self.color = Tags.Chaos.color
-        if self.spell.get_stat("volatile"):
-            self.owner_triggers[EventOnDeath] = lambda evt: self.death_boom()
+        self.description = "Immune to debuffs, but has a %i%% chance to die after each turn." % self.chance
     
-    def on_applied(self, owner):
-        self.original_max_hp = self.owner.max_hp
-        self.description = "When spell damage is dealt within %i tiles of this unit, lose 1 HP and randomly deal %i%% of that damage as fire, lightning, physical, or holy damage to all enemies in a %i tile burst from that tile. The damage cannot exceed %i." % (self.spell.get_stat("radius"), self.spell.get_stat("redeal_percentage"), self.spell.get_stat("blast_radius"), self.original_max_hp)
-        if self.spell.get_stat("volatile"):
-            self.description += "\nOn death, randomly deal %i fire, lightning, physical, or holy damage to all enemies in a %i radius." % (self.original_max_hp, self.spell.get_stat("radius"))
-    
-    def on_damaged(self, evt):
-        if not isinstance(evt.source, Spell) or evt.source is self.spell:
-            return
-        if distance(evt.unit, self.owner) <= self.spell.get_stat("radius"):
-            self.owner.level.queue_spell(self.boom(Point(evt.unit.x, evt.unit.y), min(evt.damage*self.spell.get_stat("redeal_percentage")//100, self.original_max_hp)))
-    
-    def boom(self, origin, damage):
-        for stage in Burst(self.owner.level, origin, self.spell.get_stat("blast_radius")):
-            for point in stage:
-                self.hit(point.x, point.y, damage)
-            yield
-        if self.owner.cur_hp <= 1:
+    def on_advance(self):
+        if random.random() < self.chance/100:
             self.owner.kill()
-        else:
-            self.owner.cur_hp -= 1
-
-    def hit(self, x, y, damage):
-        dtype = random.choice([Tags.Fire, Tags.Lightning, Tags.Physical, Tags.Holy])
-        unit = self.owner.level.get_unit_at(x, y)
-        if unit and not are_hostile(unit, self.owner):
-            self.owner.level.show_effect(x, y, dtype)
-        else:
-            self.owner.level.deal_damage(x, y, damage, dtype, self)
-    
-    def death_boom(self):
-        for point in self.owner.level.get_points_in_ball(self.owner.x, self.owner.y, self.spell.get_stat("radius")):
-            self.hit(point.x, point.y, self.original_max_hp)
 
 class GenesisSpell(Spell):
 
     def on_init(self):
         self.name = "Genesis"
         self.asset = ["MissingSynergies", "Icons", "genesis"]
-        self.level = 7
         self.tags = [Tags.Holy, Tags.Chaos, Tags.Conjuration]
-        self.max_charges = 1
-
-        self.requires_los = 0
+        self.level = 7
+        self.max_charges = 2
         self.range = RANGE_GLOBAL
+        self.requires_los = False
+        
+        self.minion_health = 182
+        self.minion_damage = 32
+        self.num_summons = 2
+        self.death_chance = 100
 
-        self.minion_health = 20
-        self.radius = 8
-        self.blast_radius = 2
-        self.redeal_percentage = 50
-
-        self.upgrades["minion_health"] = (10, 3)
-        self.upgrades["radius"] = (4, 3)
-        self.upgrades["blast_radius"] = (1, 4, "Blast Radius", "The explosions caused by the Microcosm gain [1_radius:radius].")
-        self.upgrades["volatile"] = (1, 3, "Volatile Cosmos", "When the Microcosm expires, it randomly deals [fire], [lightning], [physical], or [holy] damage equal to its original max HP to all enemies in its radius.\nCasting this spell again while you already have a Microcosm will now trigger this effect at the Microcosm's original location and teleport it to the target location.")
-        self.upgrades["redeal_percentage"] = (25, 4, "Greater Genesis", "The explosions now deal damage equal to [75%:damage] of the triggering damage.")
+        self.upgrades["num_summons"] = (1, 4)
+        self.upgrades["death_chance"] = (-50, 6, "Lasting Presence", "Each unit summoned by Genesis now has a 50% chance to not die each turn.")
+        self.upgrades["greater"] = (1, 7, "Greater Gods", "Each unit summoned by Genesis now has a 10% chance to instead be Odin, Aesir Immortal or Chronos, Titan Immortal.")
     
-    def get_existing(self):
-        for unit in self.caster.level.units:
-            if unit.name == "Microcosm":
-                return unit
-        return None
-
-    def can_cast(self, x, y):
-        if not Spell.can_cast(self, x, y):
-            return False
-        if self.caster.level.tiles[x][y].is_wall():
-            return False
-        existing = self.get_existing()
-        unit = self.caster.level.get_unit_at(x, y)
-        if unit:
-            return unit is existing
-        else:
-            if existing:
-                return bool(self.get_stat("volatile"))
-            else:
-                return True
-
-    def get_impacted_tiles(self, x, y):
-        existing = self.get_existing()
-        if not existing:
-            return list(self.caster.level.get_points_in_ball(x, y, self.get_stat("radius")))
-        else:
-            if not self.get_stat("volatile"):
-                return [Point(x, y)]
-            else:
-                return list(self.caster.level.get_points_in_ball(x, y, self.get_stat("radius"))) + list(self.caster.level.get_points_in_ball(existing.x, existing.y, self.get_stat("radius")))
-
     def get_description(self):
-        return ("Create a Microcosm, which has [{minion_health}_HP:minion_health], and 200% resistance to all damage and healing.\n"
-                "Whenever spell or minion attack damage is done within [{radius}_tiles:radius] of the Microcosm, an explosion occurs on that tile, dealing [fire], [lightning], [physical], or [holy] damage to all enemies in a [{blast_radius}_tile:radius] burst. The damage is equal to [{redeal_percentage}%:damage] of the triggering damage but cannot exceed the Microcosm's original max HP. The Microcosm then loses 1 HP.\n"
-                "Casting this spell again while you already have a Microcosm will instead restore it to full HP.").format(**self.fmt_dict())
-    
-    def cast_instant(self, x, y):
-        existing = self.get_existing()
-        if existing:
-            if self.get_stat("volatile"):
-                buff = existing.get_buff(MicrocosmBuff)
-                if buff:
-                    buff.death_boom()
-                if x != existing.x or y != existing.y:
-                    if self.caster.level.can_move(existing, x, y, teleport=True):
-                        self.caster.level.show_effect(existing.x, existing.y, Tags.Translocation)
-                        self.caster.level.act_move(existing, x, y, teleport=True)
-                        self.caster.level.show_effect(existing.x, existing.y, Tags.Translocation)
-            existing.cur_hp = existing.max_hp
-        else:
-            unit = Unit()
-            unit.unique = True
-            unit.max_hp = self.get_stat("minion_health")
-            unit.name = "Microcosm"
-            unit.tags = [Tags.Holy, Tags.Chaos]
-            unit.asset = ["MissingSynergies", "Units", "microcosm"]
-            for tag in [Tags.Fire, Tags.Ice, Tags.Lightning, Tags.Poison, Tags.Holy, Tags.Dark, Tags.Arcane, Tags.Physical, Tags.Heal]:
-                unit.resists[tag] = 200
-            unit.buffs.append(MicrocosmBuff(self))
-            unit.stationary = True
-            unit.flying = True
-            self.summon(unit, Point(x, y))
+        return ("Channel to summon [{num_summons}:num_summons] lesser gods near the target tile each turn, each of which may be an Aesir or a Titan, chosen at random.\n"
+                "Aesirs are [lightning] units, while Titans are [fire] units; both are [living] and [holy].\n"
+                "Aesirs and Titans have very high HP and powerful attacks, but their presences are transient. They are immune to debuffs, but have a [{death_chance}%_chance:chaos] to die after each turn.").format(**self.fmt_dict())
+
+    def cast(self, x, y, channel_cast=False):
+
+        if not channel_cast:
+            self.caster.apply_buff(ChannelBuff(self.cast, Point(x, y)))
+            return
+        
+        greater = self.get_stat("greater")
+        chance = self.get_stat("death_chance")
+        for _ in range(self.get_stat("num_summons")):
+            unit = random.choice([Aesir, Titan])()
+            if greater and random.random() < 0.1:
+                unit = random.choice([AesirLord, TitanLord])()
+            apply_minion_bonuses(self, unit)
+            unit.buffs.append(TransienceBuff(chance))
+            unit.debuff_immune = True
+            self.summon(unit, target=Point(x, y), radius=5, sort_dist=False)
+        yield
 
 class OrbOfFleshBuff(Buff):
 
