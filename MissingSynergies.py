@@ -8111,9 +8111,6 @@ class FadingBuff(Buff):
             self.owner.level.event_manager.raise_event(EventOnPreDamaged(self.owner, self.damage, Tags.Arcane, self.spell), self.owner)
             self.owner.level.event_manager.raise_event(EventOnDamaged(self.owner, self.damage, Tags.Arcane, self.spell), self.owner)
 
-    def on_unapplied(self):
-        self.owner.turns_to_death = None
-
 class StolenEssenceBuff(Buff):
     
     def on_init(self):
@@ -11534,18 +11531,18 @@ class CarcinizationSpell(Spell):
     def cast_instant(self, x, y):
         self.caster.apply_buff(CarcinizationBuff(self), self.get_stat("duration"))
 
-class BurnoutReactorBuff(Buff):
+class BurnoutReactorBuff(DamageAuraBuff):
 
     def __init__(self, spell):
         self.spell = spell
-        Buff.__init__(self)
+        DamageAuraBuff.__init__(self, damage=1, damage_type=Tags.Fire, radius=spell.get_stat("radius"))
+        self.source = spell
+        self.name = "Burnout Reactor"
     
     def on_init(self):
-        self.name = "Burnout Reactor"
-        self.color = Tags.Fire.color
         self.asset = ["MissingSynergies", "Statuses", "burnout_reactor"]
-        self.radius = self.spell.get_stat("radius")
         self.damage = self.spell.get_stat("damage")
+        self.aura = self.spell.get_stat("aura")
         self.resists[Tags.Fire] = 100
         self.global_bonuses["damage"] = self.damage//2 + self.spell.get_stat("minion_damage")
         self.owner_triggers[EventOnDeath] = self.on_death
@@ -11556,37 +11553,26 @@ class BurnoutReactorBuff(Buff):
             self.owner.tags.append(Tags.Fire)
         self.owner.turns_to_death = self.spell.get_stat("minion_duration")
         self.owner.level.event_manager.raise_event(EventOnUnitAdded(self.owner), self.owner)
-        if self.spell.get_stat("rebirth"):
-            existing = self.owner.get_buff(ReincarnationBuff)
-            if existing:
-                existing.buff_type = BUFF_TYPE_PASSIVE
-                existing.turns_left = 0
-                existing.lives += 1
-                existing.turns_to_death = None
-            else:
-                buff = ReincarnationBuff()
-                buff.buff_type = BUFF_TYPE_PASSIVE
-                self.owner.apply_buff(buff)
-                buff.turns_to_death = None
-        self.owner.level.queue_spell(self.boom())
+        self.boom()
 
     def on_unapplied(self):
-        self.owner.turns_to_death = None
         if not self.originally_fire and Tags.Fire in self.owner.tags:
             self.owner.tags.remove(Tags.Fire)
 
+    def on_advance(self):
+        if self.aura:
+            DamageAuraBuff.on_advance(self)
+
     def on_death(self, evt):
-        self.owner.level.queue_spell(self.boom())
+        self.boom()
 
     def boom(self):
-        for stage in Burst(self.owner.level, self.owner, self.radius):
-            for p in stage:
-                unit = self.owner.level.get_unit_at(p.x, p.y)
-                if not unit or not are_hostile(unit, self.owner):
-                    self.owner.level.show_effect(p.x, p.y, Tags.Fire)
-                else:
-                    unit.deal_damage(self.damage, Tags.Fire, self.spell)
-            yield
+        for p in self.owner.level.get_points_in_ball(self.owner.x, self.owner.y, self.radius):
+            unit = self.owner.level.get_unit_at(p.x, p.y)
+            if not unit or not are_hostile(unit, self.owner):
+                self.owner.level.show_effect(p.x, p.y, Tags.Fire)
+            else:
+                unit.deal_damage(self.damage, Tags.Fire, self.spell)
 
 class BurnoutReactorSpell(Spell):
 
@@ -11608,13 +11594,10 @@ class BurnoutReactorSpell(Spell):
         self.upgrades["damage"] = (8, 3)
         self.upgrades["radius"] = (3, 3)
         self.upgrades["minion_duration"] = (8, 4)
-        self.upgrades["rebirth"] = (1, 4, "Blazing Rebirth", "The target minion also permanently gains 1 additional passive reincarnation, which is permanent and cannot be dispelled.\nIf it already has non-passive reincarnations, those will become passive as well.")
-
-    def get_impacted_tiles(self, x, y):
-        return [p for stage in Burst(self.caster.level, Point(x, y), self.get_stat('radius')) for p in stage]
+        self.upgrades["aura"] = (1, 5, "Burnout Aura", "The target minion also deals [1_fire:fire] damage to all enemies in its explosion radius each turn.\nThis damage is fixed, and cannot be increased using shrines, skills, or buffs.")
 
     def get_description(self):
-        return ("The target permanent minion becomes temporary and dies after [{minion_duration}_turns:minion_duration], but becomes a [fire] unit and gains [100_fire:fire] resistance.\n"
+        return ("The target minion becomes temporary and dies after [{minion_duration}_turns:minion_duration], but becomes a [fire] unit and gains [100_fire:fire] resistance.\n"
                 "When this effect is applied, and also when the minion dies, it explodes; all enemies in a [{radius}_tile:radius] radius take [{damage}_fire:fire] damage from this spell.\n"
                 "The target minion also gains a bonus to all attack damage equal to [{minion_damage}:minion_damage] plus half of the explosion damage.\n"
                 "Any on-summon effects you have will be triggered again when this effect is applied.").format(**self.fmt_dict())
@@ -11623,7 +11606,7 @@ class BurnoutReactorSpell(Spell):
         if not Spell.can_cast(self, x, y):
             return False
         unit = self.caster.level.get_unit_at(x, y)
-        return unit and not are_hostile(unit, self.caster) and unit.turns_to_death is None
+        return unit and not are_hostile(unit, self.caster)
     
     def cast_instant(self, x, y):
         unit = self.caster.level.get_unit_at(x, y)
