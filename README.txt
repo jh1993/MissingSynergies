@@ -40,6 +40,7 @@ Level 4:
 + Afterlife Echoes (Holy/Dark/Enchantment)
 + Ashen Avatar (Fire/Dark/Nature/Enchantment/Conjuration)
 + Brimstone Cluster (Fire/Dark/Nature/Enchantment)
++ Burnout Reactor (Fire/Dark/Enchantment)
 + Chaos Concoction (Chaos/Sorcery)
 + Divine Gaze (Holy/Eye/Sorcery)
 + Electric Net (Nature/Lightning/Sorcery)

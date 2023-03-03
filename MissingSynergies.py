@@ -11610,5 +11610,101 @@ class CarcinizationSpell(Spell):
     def cast_instant(self, x, y):
         self.caster.apply_buff(CarcinizationBuff(self), self.get_stat("duration"))
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell])
+class BurnoutReactorBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+    
+    def on_init(self):
+        self.name = "Burnout Reactor"
+        self.color = Tags.Fire.color
+        self.asset = ["MissingSynergies", "Statuses", "burnout_reactor"]
+        self.radius = self.spell.get_stat("radius")
+        self.damage = self.spell.get_stat("damage")
+        self.resists[Tags.Fire] = 100
+        self.global_bonuses["damage"] = self.damage//2 + self.spell.get_stat("minion_damage")
+        self.owner_triggers[EventOnDeath] = self.on_death
+    
+    def on_applied(self, owner):
+        self.originally_fire = Tags.Fire in self.owner.tags
+        if not self.originally_fire:
+            self.owner.tags.append(Tags.Fire)
+        self.owner.turns_to_death = self.spell.get_stat("minion_duration")
+        self.owner.level.event_manager.raise_event(EventOnUnitAdded(self.owner), self.owner)
+        if self.spell.get_stat("rebirth"):
+            existing = self.owner.get_buff(ReincarnationBuff)
+            if existing:
+                existing.buff_type = BUFF_TYPE_PASSIVE
+                existing.turns_left = 0
+                existing.lives += 1
+                existing.turns_to_death = None
+            else:
+                buff = ReincarnationBuff()
+                buff.buff_type = BUFF_TYPE_PASSIVE
+                self.owner.apply_buff(buff)
+                buff.turns_to_death = None
+        self.owner.level.queue_spell(self.boom())
+
+    def on_unapplied(self):
+        self.owner.turns_to_death = None
+        if not self.originally_fire and Tags.Fire in self.owner.tags:
+            self.owner.tags.remove(Tags.Fire)
+
+    def on_death(self, evt):
+        self.owner.level.queue_spell(self.boom())
+
+    def boom(self):
+        for stage in Burst(self.owner.level, self.owner, self.radius):
+            for p in stage:
+                unit = self.owner.level.get_unit_at(p.x, p.y)
+                if not unit or not are_hostile(unit, self.owner):
+                    self.owner.level.show_effect(p.x, p.y, Tags.Fire)
+                else:
+                    unit.deal_damage(self.damage, Tags.Fire, self.spell)
+            yield
+
+class BurnoutReactorSpell(Spell):
+
+    def on_init(self):
+        self.name = "Burnout Reactor"
+        self.asset = ["MissingSynergies", "Icons", "burnout_reactor"]
+        self.level = 4
+        self.tags = [Tags.Fire, Tags.Dark, Tags.Enchantment]
+        self.max_charges = 9
+        self.range = RANGE_GLOBAL
+        self.requires_los = False
+        self.can_target_empty = False
+
+        self.minion_duration = 8
+        self.minion_damage = 1
+        self.damage = 14
+        self.radius = 5
+
+        self.upgrades["damage"] = (8, 3)
+        self.upgrades["radius"] = (3, 3)
+        self.upgrades["minion_duration"] = (8, 4)
+        self.upgrades["rebirth"] = (1, 4, "Blazing Rebirth", "The target minion also permanently gains 1 additional passive reincarnation, which is permanent and cannot be dispelled.\nIf it already has non-passive reincarnations, those will become passive as well.")
+
+    def get_impacted_tiles(self, x, y):
+        return [p for stage in Burst(self.caster.level, Point(x, y), self.get_stat('radius')) for p in stage]
+
+    def get_description(self):
+        return ("The target permanent minion becomes temporary and dies after [{minion_duration}_turns:minion_duration], but becomes a [fire] unit and gains [100_fire:fire] resistance.\n"
+                "When this effect is applied, and also when the minion dies, it explodes; all enemies in a [{radius}_tile:radius] radius take [{damage}_fire:fire] damage from this spell.\n"
+                "The target minion also gains a bonus to all attack damage equal to [{minion_damage}:minion_damage] plus half of the explosion damage.\n"
+                "Any on-summon effects you have will be triggered again when this effect is applied.").format(**self.fmt_dict())
+
+    def can_cast(self, x, y):
+        if not Spell.can_cast(self, x, y):
+            return False
+        unit = self.caster.level.get_unit_at(x, y)
+        return unit and not are_hostile(unit, self.caster) and unit.turns_to_death is None
+    
+    def cast_instant(self, x, y):
+        unit = self.caster.level.get_unit_at(x, y)
+        if unit:
+            unit.apply_buff(BurnoutReactorBuff(self))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison])
