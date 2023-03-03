@@ -10349,7 +10349,7 @@ class GeneHarvestBuff(DamageAuraBuff):
         else:
             target = random.choice(random.choice([allies, enemies]))
         
-        has_ranged = bool([spell for spell in target.spells if spell.range >= 2])
+        ranged_spells = [spell for spell in target.spells if spell.range >= 2]
         is_enemy = are_hostile(target, self.owner)
         
         health_mutation = HealthMutation(BUFF_TYPE_CURSE if is_enemy else BUFF_TYPE_BLESS)
@@ -10367,7 +10367,7 @@ class GeneHarvestBuff(DamageAuraBuff):
         range_mutation.stack_type = STACK_INTENSITY
 
         choices = [health_mutation, damage_mutation]
-        if has_ranged:
+        if ranged_spells:
             choices.append(range_mutation)
         target.apply_buff(random.choice(choices))
 
@@ -10387,7 +10387,7 @@ class GeneHarvestBuff(DamageAuraBuff):
                 aura.stack_type = STACK_INTENSITY
                 target.apply_buff(aura)
             if self.hunt:
-                if not has_ranged:
+                if not [spell for spell in ranged_spells if spell.cool_down <= 0]:
                     target.apply_buff(random.choice([LeapMutation, TentacleMutation])(self.source.get_stat("minion_damage", base=5), self.source.get_stat("minion_range", base=5)))
                 else:
                     buff = Thorns(damage=self.source.get_stat("minion_damage", base=5), dtype=random.choice([Tags.Fire, Tags.Lightning]))
@@ -10412,7 +10412,7 @@ class GeneHarvestSpell(Spell):
         self.upgrades["breakdown"] = (1, 3, "Genetic Breakdown", "When mutating an enemy, that enemy also gains a stack of Genetic Breakdown, which deals [{damage}_poison:poison] damage per turn, and inflicts the same duration of [poison] that stacks in duration with the target's existing [poison].\nThis counts as damage dealt by Gene Harvest, but not as damage dealt by the aura itself.")
         self.upgrades["flux"] = (1, 5, "Chaotic Flux", "When mutating an enemy, that enemy also gains a stack of Chaotic Flux, which redeals 25% of all damage dealt to that enemy by sources other than Gene Harvest as [fire], [lightning], or [physical] damage, before counting resistances.\nThis counts as damage dealt by Gene Harvest, but not as damage dealt by the aura itself.")
         self.upgrades["virulent"] = (1, 4, "Virulent Life", "When mutating a minion, that minion also gains regeneration that heals for [{damage}_HP:heal] each turn, and an aura that deals [1_poison:poison] damage per turn to enemies in a radius equal to half of this spell's radius, rounded down.\nMultiple instances of these buffs can be gained per minion.")
-        self.upgrades["hunt"] = (1, 4, "Hunter and the Hunted", "When mutating a minion, if that minion has no ranged attacks, it gains a leap attack or a pulling tentacle attack that deals [{minion_damage}_physical:physical] damage with a range of [{minion_range}_tiles:minion_range].\nOtherwise, the minion gains the ability to retaliate for [{minion_damage}_fire:fire] or [{minion_damage}_lightning:lightning] damage when attacked in melee; multiple instances of this buff can be gained per minion.")
+        self.upgrades["hunt"] = (1, 4, "Hunter and the Hunted", "When mutating a minion, if that minion doesn't have any ranged attacks that have no cooldown, it gains a leap attack or a pulling tentacle attack that deals [{minion_damage}_physical:physical] damage with a range of [{minion_range}_tiles:minion_range].\nOtherwise, the minion gains the ability to retaliate for [{minion_damage}_fire:fire] or [{minion_damage}_lightning:lightning] damage when attacked in melee; multiple instances of this buff can be gained per minion.")
 
     def fmt_dict(self):
         stats = Spell.fmt_dict(self)
