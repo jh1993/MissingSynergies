@@ -6,3 +6,28 @@ Main icon opacities are 39%, 71%, 100%, 100%, 100%, 100%, 100%, 72% for the 8 fr
 
 
 
+    def on_applied(self, owner):
+        self.galvanize = self.spell.get_stat("galvanize")
+        self.originally_lightning = True
+        self.damage = self.spell.get_stat("damage", base=12)
+        if not self.galvanize:
+            return
+        if self.buff_type == BUFF_TYPE_BLESS:
+            self.resists[Tags.Lightning] = 100
+            if Tags.Lightning not in self.owner.tags:
+                self.owner.tags.append(Tags.Lightning)
+                self.originally_lightning = False
+            self.global_triggers[EventOnPreDamaged] = lambda evt: on_pre_damaged(self, evt)
+        else:
+            self.resists[Tags.Lightning] = -100
+
+    def on_pre_damaged(self, evt):
+        if evt.damage <= 0 or not are_hostile(evt.unit, self.spell.caster):
+            return
+        if not evt.source or not isinstance(evt.source, Spell) or evt.source.caster is not self.owner:
+            return
+        evt.unit.deal_damage(self.damage//2, Tags.Lightning, self.spell)
+
+    def on_unapplied(self):
+        if not self.originally_lightning and Tags.Lightning in self.owner.tags:
+            self.owner.tags.remove(Tags.Lightning)

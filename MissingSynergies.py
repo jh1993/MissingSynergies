@@ -1658,14 +1658,17 @@ class BreathOfAnnihilation(Upgrade):
         return False
 
 class TwistedRemainsBuff(Buff):
+
     def __init__(self, spell):
         self.spell = spell
         Buff.__init__(self)
+
     def on_init(self):
         self.buff_type = BUFF_TYPE_PASSIVE
         self.owner_triggers[EventOnDeath] = self.on_death
         self.description = "On death, splits into giant spiders, green slimes, and toxic worm balls based on max HP."
         self.color = Tags.Slime.color
+
     def on_death(self, evt):
         total = self.owner.max_hp
         radius = self.spell.get_stat("radius", base=3)
@@ -1684,6 +1687,7 @@ class TwistedRemainsBuff(Buff):
             self.spell.summon(unit, target=self.owner, radius=5)
 
 class ChaosAdaptationBuff(Buff):
+
     def on_init(self):
         self.buff_type = BUFF_TYPE_PASSIVE
         self.resists[Tags.Fire] = 50
@@ -1692,6 +1696,7 @@ class ChaosAdaptationBuff(Buff):
         self.owner_triggers[EventOnDamaged] = self.on_damaged
         self.description = "When damaged, adapts to that element."
         self.color = Tags.Chaos.color
+
     def on_damaged(self, evt):
         other_element = random.choice([tag for tag in self.owner.resists.keys() if self.owner.resists[tag] > 0])
         adapt_amount = random.randint(0, self.owner.resists[other_element])
@@ -9159,17 +9164,18 @@ class FleshLoan(Upgrade):
         self.asset = ["MissingSynergies", "Icons", "flesh_loan"]
         self.tags = [Tags.Dark, Tags.Nature]
         self.level = 4
-        self.description = "Whenever you summon a minion, you take [dark] damage equal to 5% of the minion's max HP, rounded up. If the damage taken is not 0, that minion becomes [living] and gains max and current HP equal to 5 times the damage dealt. This effect triggers before most other effects that trigger when minions are summoned.\nAt the beginning of each of your turns, if a minion is no longer alive, or if there are no enemies in the realm, you heal for the same damage that you took when summoning it, once per minion."
+        self.description = "Whenever you summon a minion, you take [dark] damage equal to 5% of the minion's max HP, rounded up. If the damage taken is not 0, that minion becomes [living] and gains max and current HP equal to 5 times the damage dealt. This effect triggers before most other effects that trigger when minions are summoned.\nEach minion can only benefit from this upgrade once.\nAt the beginning of each of your turns, if a minion is no longer alive, or if there are no enemies in the realm, you heal for the same damage that you took when summoning it, once per minion."
         self.hp_loaned = {}
         self.global_triggers[EventOnUnitPreAdded] = self.on_unit_pre_added
     
     def on_unit_pre_added(self, evt):
-        if are_hostile(evt.unit, self.owner) or evt.unit.is_player_controlled:
+        if are_hostile(evt.unit, self.owner) or evt.unit.is_player_controlled or hasattr(evt.unit, "flesh_loaned"):
             return
         dealt = self.owner.deal_damage(math.ceil(evt.unit.max_hp/20), Tags.Dark, self)
         if not dealt:
             return
         evt.unit.max_hp += dealt*5
+        evt.unit.flesh_loaned = True
         self.hp_loaned[evt.unit] = dealt
         if Tags.Living not in evt.unit.tags:
             evt.unit.tags.append(Tags.Living)
@@ -11552,6 +11558,7 @@ class BurnoutReactorBuff(DamageAuraBuff):
         if not self.originally_fire:
             self.owner.tags.append(Tags.Fire)
         self.owner.turns_to_death = self.spell.get_stat("minion_duration")
+        self.owner.level.event_manager.raise_event(EventOnUnitPreAdded(self.owner), self.owner)
         self.owner.level.event_manager.raise_event(EventOnUnitAdded(self.owner), self.owner)
         self.boom()
 
