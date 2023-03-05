@@ -11620,5 +11620,272 @@ class BurnoutReactorSpell(Spell):
         if unit:
             unit.apply_buff(BurnoutReactorBuff(self))
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell])
+class LiquidLightningBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+    
+    def on_init(self):
+        self.name = "Liquid Lightning"
+        self.asset = ["MissingSynergies", "Statuses", "liquid_lightning"]
+        self.color = Tags.Lightning.color
+        self.resists[Tags.Lightning] = 100
+        self.damage = self.spell.get_stat("damage")
+        self.radius = self.spell.get_stat("radius")
+        self.phase = self.spell.get_stat("phase")
+        self.owner_triggers[EventOnSpellCast] = lambda evt: self.send_bolt()
+        self.owner_triggers[EventOnMoved] = lambda evt: self.send_bolt()
+        self.owner_triggers[EventOnPass] = lambda evt: self.send_bolt()
+        if self.spell.get_stat("charged"):
+            self.global_triggers[EventOnPreDamaged] = self.on_pre_damaged
+
+    def on_applied(self, owner):
+        if Tags.Lightning not in self.owner.tags:
+            self.owner.tags.append(Tags.Lightning)
+            self.originally_lightning = False
+        else:
+            self.originally_lightning = True
+        if self.owner.stationary:
+            self.flip = True
+            self.owner.stationary = not self.owner.stationary
+        else:
+            self.flip = False
+        self.owner.level.event_manager.raise_event(EventOnUnitPreAdded(self.owner), self.owner)
+        self.owner.level.event_manager.raise_event(EventOnUnitAdded(self.owner), self.owner)
+
+    def on_unapplied(self):
+        if not self.originally_lightning and Tags.Lightning in self.owner.tags:
+            self.owner.tags.remove(Tags.Lightning)
+        if self.flip:
+            self.owner.stationary = not self.owner.stationary
+
+    def on_pre_damaged(self, evt):
+        if evt.damage <= 0 or not are_hostile(evt.unit, self.spell.caster):
+            return
+        if not evt.source or not isinstance(evt.source, Spell) or evt.source.caster is not self.owner:
+            return
+        evt.unit.deal_damage(self.damage//2, Tags.Lightning, self.spell)
+
+    def send_bolt(self):
+        targets = [u for u in self.owner.level.get_units_in_ball(self.owner, self.radius) if are_hostile(u, self.owner) and distance(u, self.owner) <= self.radius]
+        if not self.phase:
+            targets = [u for u in targets if self.owner.level.can_see(u.x, u.y, self.owner.x, self.owner.y)]
+        if not targets:
+            return
+        self.owner.level.queue_spell(self.bolt(random.choice(targets)))
+
+    def bolt(self, target):
+        for p in Bolt(self.owner.level, self.owner, target):
+            self.owner.level.show_effect(p.x, p.y, Tags.Lightning, minor=True)
+            yield
+        target.deal_damage(self.damage, Tags.Lightning, self.spell)
+
+class LiquidLightningSpell(Spell):
+
+    def on_init(self):
+        self.name = "Liquid Lightning"
+        self.asset = ["MissingSynergies", "Icons", "liquid_lightning"]
+        self.tags = [Tags.Lightning, Tags.Enchantment]
+        self.level = 5
+        self.max_charges = 9
+        self.range = RANGE_GLOBAL
+        self.requires_los = False
+        self.can_target_empty = False
+        self.damage = 12
+        self.radius = 8
+
+        self.upgrades["max_charges"] = (6, 3)
+        self.upgrades["damage"] = (8, 3)
+        self.upgrades["radius"] = (4, 2)
+        self.upgrades["phase"] = (1, 4, "Phase Bolts", "The bolts shot by Liquid Lightning now ignore line of sight.")
+        self.upgrades["charged"] = (1, 5, "Charged Power", "Whenever a minion affected by Liquid Lightning tries to damage an enemy with an attack, that enemy takes [lightning] damage from this spell equal to half of this spell's damage.")
+
+    def get_description(self):
+        return ("The target unit gains [100_lightning:lightning] resistance and becomes a [lightning] unit. If it was immobile, it gains the ability to move.\n"
+                "Whenever that unit moves, attacks, or passes its turn, it shoots a bolt at a random enemy in line of sight within [{radius}_tiles:radius], dealing [{damage}_lightning:lightning] damage.\n"
+                "Any on-summon effects you have will be triggered again when this effect is applied.").format(**self.fmt_dict())
+
+    def can_cast(self, x, y):
+        if not Spell.can_cast(self, x, y):
+            return False
+        unit = self.caster.level.get_unit_at(x, y)
+        return unit and not are_hostile(unit, self.caster)
+    
+    def cast_instant(self, x, y):
+        unit = self.caster.level.get_unit_at(x, y)
+        if unit:
+            unit.apply_buff(LiquidLightningBuff(self))
+
+class HeartOfWinterBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+    
+    def on_init(self):
+        self.name = "Heart of Winter"
+        self.asset = ["MissingSynergies", "Statuses", "heart_of_winter"]
+        self.color = Tags.Ice.color
+        self.resists[Tags.Ice] = 100
+        if self.spell.get_stat("thorns"):
+            self.owner_triggers[EventOnDamaged] = self.on_damaged
+
+    def on_applied(self, owner):
+        if not self.owner.has_buff(OrbBuff):
+            self.owner.turns_to_death = None
+        self.hp = self.spell.get_stat("damage")*5
+        self.owner.max_hp += self.hp
+        self.owner.deal_damage(-self.hp, Tags.Heal, self.spell)
+        if Tags.Ice not in self.owner.tags:
+            self.owner.tags.append(Tags.Ice)
+            self.originally_ice = False
+        else:
+            self.originally_ice = True
+        self.owner.level.event_manager.raise_event(EventOnUnitPreAdded(self.owner), self.owner)
+        self.owner.level.event_manager.raise_event(EventOnUnitAdded(self.owner), self.owner)
+
+    def on_unapplied(self):
+        drain_max_hp(self.owner, self.hp)
+        if not self.originally_ice and Tags.Ice in self.owner.tags:
+            self.owner.tags.remove(Tags.Ice)
+
+    def on_damaged(self, evt):
+        if not evt.source or not are_hostile(evt.source.owner, self.owner):
+            return
+        self.owner.level.queue_spell(self.bolt(evt.source.owner))
+
+    def bolt(self, target):
+        for p in Bolt(self.owner.level, self.owner, target):
+            self.owner.level.show_effect(p.x, p.y, Tags.Ice, minor=True)
+            yield
+        target.deal_damage(self.owner.max_hp//10, Tags.Ice, self.spell)
+
+class HeartOfWinterSpell(Spell):
+
+    def on_init(self):
+        self.name = "Heart of Winter"
+        self.asset = ["MissingSynergies", "Icons", "heart_of_winter"]
+        self.tags = [Tags.Ice, Tags.Enchantment]
+        self.level = 3
+        self.max_charges = 9
+        self.range = RANGE_GLOBAL
+        self.requires_los = False
+        self.can_target_empty = False
+        self.damage = 8
+
+        self.upgrades["max_charges"] = (6, 3)
+        self.upgrades["damage"] = (8, 3, "HP Bonus", "The target gains 40 additional HP.")
+        self.upgrades["thorns"] = (1, 4, "Thorns of Winter", "Whenever an enemy damages a minion with Heart of Winter, it takes [ice] damage from this spell equals to 10% of that minion's max HP.")
+
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["hp_bonus"] = self.get_stat("damage")*5
+        return stats
+
+    def get_description(self):
+        return ("The target unit gains [100_ice:ice] resistance and becomes an [ice] unit. If it was a temporary minion and not an [orb], it becomes permanent.\n"
+                "It also gains [{hp_bonus}:ice] max and current HP. This bonus is equal to 5 times the [damage] stat of this spell.\n"
+                "Any on-summon effects you have will be triggered again when this effect is applied.").format(**self.fmt_dict())
+
+    def can_cast(self, x, y):
+        if not Spell.can_cast(self, x, y):
+            return False
+        unit = self.caster.level.get_unit_at(x, y)
+        return unit and not are_hostile(unit, self.caster)
+    
+    def cast_instant(self, x, y):
+        unit = self.caster.level.get_unit_at(x, y)
+        if unit:
+            unit.apply_buff(HeartOfWinterBuff(self))
+
+class NonlocalityBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+    
+    def on_init(self):
+        self.name = "Nonlocality"
+        self.asset = ["MissingSynergies", "Statuses", "nonlocality"]
+        self.color = Tags.Arcane.color
+        self.resists[Tags.Arcane] = 100
+        self.damage = self.spell.get_stat("damage")
+        self.global_triggers[EventOnDamaged] = self.on_damaged
+        self.shield = self.spell.get_stat("shield")
+
+    def on_applied(self, owner):
+        if Tags.Arcane not in self.owner.tags:
+            self.owner.tags.append(Tags.Arcane)
+            self.originally_arcane = False
+        else:
+            self.originally_arcane = True
+        if not self.owner.stationary:
+            self.flip = True
+            self.owner.stationary = not self.owner.stationary
+        else:
+            self.flip = False
+        self.owner.level.event_manager.raise_event(EventOnUnitPreAdded(self.owner), self.owner)
+        self.owner.level.event_manager.raise_event(EventOnUnitAdded(self.owner), self.owner)
+
+    def on_unapplied(self):
+        if not self.originally_arcane and Tags.Arcane in self.owner.tags:
+            self.owner.tags.remove(Tags.Arcane)
+        if self.flip:
+            self.owner.stationary = not self.owner.stationary
+
+    def on_damaged(self, evt):
+        if are_hostile(evt.unit, self.owner) and evt.source and evt.source.owner is self.owner:
+            evt.unit.cur_hp = max(0, evt.unit.cur_hp - self.damage)
+            if evt.unit.cur_hp <= 0:
+                evt.unit.kill()
+        elif evt.unit is self.owner and self.shield and self.owner.shields <= 0:
+            self.owner.add_shields(1)
+
+    def on_pre_advance(self):
+        units = [u for u in self.owner.level.units if are_hostile(self.owner, u) and self.owner.can_harm(u)]
+        if not units:
+            return
+        random.shuffle(units)
+        for u in units:
+            p = self.owner.level.get_summon_point(u.x, u.y, radius_limit=1, flying=self.owner.flying, diag=True)
+            if p:
+                self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
+                self.owner.level.act_move(self.owner, p.x, p.y, teleport=True)
+                self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
+
+class NonlocalitySpell(Spell):
+
+    def on_init(self):
+        self.name = "Nonlocality"
+        self.asset = ["MissingSynergies", "Icons", "nonlocality"]
+        self.tags = [Tags.Arcane, Tags.Translocation, Tags.Enchantment]
+        self.level = 4
+        self.max_charges = 9
+        self.range = RANGE_GLOBAL
+        self.requires_los = False
+        self.can_target_empty = False
+        self.damage = 16
+
+        self.upgrades["max_charges"] = (6, 3)
+        self.upgrades["damage"] = (12, 3)
+        self.upgrades["shield"] = (1, 4, "Phase Shield", "Whenever a unit with Nonlocality takes damage, and isn't already shielded, it gains [1_SH:shields].")
+
+    def get_description(self):
+        return ("The target unit gains [100_arcane:arcane] resistance and becomes an [arcane] unit. It becomes immobile, but will now automatically teleport each turn to a random enemy it's capable of harming before it acts, if possible.\n"
+                "Whenever it deals damage to an enemy, that enemy loses [{damage}_HP:damage]. This is not considered dealing damage, but benefits from this spell's [damage] bonuses.\n"
+                "Any on-summon effects you have will be triggered again when this effect is applied.").format(**self.fmt_dict())
+
+    def can_cast(self, x, y):
+        if not Spell.can_cast(self, x, y):
+            return False
+        unit = self.caster.level.get_unit_at(x, y)
+        return unit and not are_hostile(unit, self.caster)
+    
+    def cast_instant(self, x, y):
+        unit = self.caster.level.get_unit_at(x, y)
+        if unit:
+            unit.apply_buff(NonlocalityBuff(self))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison])
