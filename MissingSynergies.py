@@ -11666,7 +11666,7 @@ class LiquidLightningBuff(Buff):
     def on_pre_damaged(self, evt):
         if evt.damage <= 0 or not are_hostile(evt.unit, self.spell.caster):
             return
-        if not evt.source or not isinstance(evt.source, Spell) or evt.source.caster is not self.owner:
+        if not isinstance(evt.source, Spell) or evt.source.caster is not self.owner:
             return
         evt.unit.deal_damage(self.damage//2, Tags.Lightning, self.spell)
 
@@ -11838,7 +11838,7 @@ class NonlocalityBuff(Buff):
             self.owner.stationary = not self.owner.stationary
 
     def on_damaged(self, evt):
-        if are_hostile(evt.unit, self.owner) and evt.source and evt.source.owner is self.owner:
+        if are_hostile(evt.unit, self.owner) and isinstance(evt.source, Spell) and evt.source.caster is self.owner:
             evt.unit.cur_hp = max(0, evt.unit.cur_hp - self.damage)
             if evt.unit.cur_hp <= 0:
                 evt.unit.kill()
