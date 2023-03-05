@@ -1760,6 +1760,7 @@ class TwistedMutationSpell(Spell):
         if self.get_stat("adapt"):
             slime.buffs.append(ChaosAdaptationBuff())
 
+        slime.source = self
         return slime
     
     def cast_instant(self, x, y):
