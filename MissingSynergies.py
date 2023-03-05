@@ -961,7 +961,9 @@ class PrismShellSpell(Spell):
         self.tags = [Tags.Enchantment, Tags.Ice, Tags.Holy]
         self.level = 4
         self.max_charges = 5
-        self.range = 5
+        self.range = RANGE_GLOBAL
+        self.requires_los = False
+        
         self.duration = 10
         self.radius = 5
         self.num_targets = 2
@@ -1711,7 +1713,8 @@ class TwistedMutationSpell(Spell):
         self.asset = ["MissingSynergies", "Icons", "twisted_mutation"]
         self.level = 6
         self.tags = [Tags.Nature, Tags.Chaos, Tags.Enchantment, Tags.Conjuration]
-        self.range = 8
+        self.range = RANGE_GLOBAL
+        self.requires_los = False
         self.max_charges = 2
         self.minion_damage = 3
         self.radius = 4
