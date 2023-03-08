@@ -3937,90 +3937,88 @@ class HighSorcerySpell(Spell):
                 self.hit(point.x, point.y, damage, anathema)
             yield
 
-class MassOfCursesBuff(Buff):
+class MassEnchantmentBuff(Buff):
 
     def __init__(self, spell):
         self.spell = spell
-        self.radius = spell.get_stat("radius")
-        self.phase = spell.get_stat("phase")
-        self.agony = spell.get_stat("agony")
         Buff.__init__(self)
     
     def on_init(self):
-        self.global_triggers[EventOnSpellCast] = self.on_spell_cast
+        self.name = "Mass Enchantment"
         self.color = Tags.Enchantment.color
-        self.description = "When the wizard casts a single-target enchantment spell on this unit, cast a copy of that spell on each valid enemy target within %i tiles." % self.radius
-        if not self.phase:
-            self.description += " Can only affect enemies in line of sight."
+        self.stack_type = STACK_DURATION
+        self.radius = self.spell.get_stat("radius")
+        self.owner_triggers[EventOnSpellCast] = self.on_spell_cast
+        self.copied = False
+        if self.spell.get_stat("wide"):
+            self.tag_bonuses[Tags.Enchantment]["range"] = 5
+            self.tag_bonuses[Tags.Enchantment]["requires_los"] = -1
     
+    def on_pre_advance(self):
+        self.copied = False
+
     def on_spell_cast(self, evt):
-        if not evt.caster.is_player_controlled or Tags.Enchantment not in evt.spell.tags:
+
+        if self.copied or Tags.Enchantment not in evt.spell.tags:
             return
-        if evt.spell.get_impacted_tiles(evt.x, evt.y) != [Point(self.owner.x, self.owner.y)]:
+        aoe = evt.spell.get_impacted_tiles(evt.x, evt.y)
+        if len(aoe) != 1 or aoe[0] != Point(evt.x, evt.y):
             return
+        original = self.owner.level.get_unit_at(evt.x, evt.y)
+        if not original or original is self.owner:
+            return
+        
         spell_copy = type(evt.spell)()
         spell_copy.max_charges = 0
         spell_copy.cur_charges = 0
-        spell_copy.owner = evt.caster
-        spell_copy.caster = evt.caster
+        spell_copy.owner = self.owner
+        spell_copy.caster = self.owner
         spell_copy.requires_los = 0
         spell_copy.range = RANGE_GLOBAL
-        targets = [unit for unit in self.owner.level.get_units_in_ball(self.owner, self.radius) if are_hostile(unit, evt.caster) and spell_copy.can_cast(unit.x, unit.y)]
-        if not self.phase:
-            targets = [target for target in targets if self.owner.level.can_see(self.owner.x, self.owner.y, target.x, target.y)]
-        duration = spell_copy.get_stat("duration")
+        
+        if are_hostile(original, self.owner):
+            func = lambda u: are_hostile(u, self.owner)
+            dtype = Tags.Dark
+        else:
+            func = lambda u: not are_hostile(u, self.owner)
+            dtype = Tags.Holy
+        targets = [unit for unit in self.owner.level.get_units_in_ball(evt, self.radius) if unit is not original and unit is not self.owner and func(unit) and spell_copy.can_cast(unit.x, unit.y)]
+        if not targets:
+            return
+        
+        self.copied = True
+        random.shuffle(targets)
         for target in targets:
-            self.owner.level.queue_spell(spell_copy.cast(target.x, target.y))
-            if self.agony and duration:
-                self.owner.level.queue_spell(self.do_damage(target, duration))
-        self.owner.kill()
+            self.owner.level.act_cast(self.owner, spell_copy, target.x, target.y, pay_costs=False)
+            self.owner.deal_damage(1, dtype, self.spell)
 
-    def do_damage(self, target, duration):
-        target.deal_damage(duration*2, Tags.Dark, self.spell)
-        yield
+class MassEnchantmentSpell(Spell):
 
-class PhaseCurses(Upgrade):
     def on_init(self):
-        self.name = "Phase Curses"
-        self.level = 4
-        self.spell_bonuses[MassOfCursesSpell]["requires_los"] = -1
-        self.spell_bonuses[MassOfCursesSpell]["phase"] = 1
-        self.description = "Mass of Curses can be cast without line of sight.\nThe mass of curses now ignores line of sight when copying spells."
-
-class MassOfCursesSpell(Spell):
-    
-    def on_init(self):
-        self.name = "Mass of Curses"
-        self.asset = ["MissingSynergies", "Icons", "mass_of_curses"]
-        self.tags = [Tags.Dark, Tags.Enchantment, Tags.Conjuration]
-        self.level = 5
-        self.max_charges = 2
+        self.name = "Mass Enchantment"
+        self.asset = ["MissingSynergies", "Icons", "mass_enchantment"]
+        self.tags = [Tags.Holy, Tags.Dark, Tags.Enchantment]
+        self.level = 7
+        self.max_charges = 3
+        self.range = 0
         self.radius = 2
-        self.must_target_empty = True
+        self.duration = 3
 
-        self.upgrades["range"] = (5, 2)
-        self.upgrades["radius"] = (1, 4)
-        self.upgrades["agony"] = (1, 3, "Agonizing Curses", "The mass of curses now also deals [dark] damage to each affected enemy equal to twice the [duration] stat of the copied spell.")
-        self.add_upgrade(PhaseCurses())
+        self.upgrades["duration"] = (4, 3)
+        self.upgrades["radius"] = (2, 5)
+        self.upgrades["wide"] = (1, 5, "Wide Reach", "While active, your [enchantment] spells gain [5_range:range] and no longer require line of sight.")
+
+    def get_impacted_tiles(self, x, y):
+        return [Point(x, y)]
 
     def get_description(self):
-        return ("Summon a mass of curses, a stationary flying unit with fixed 1 HP, 200% resistance to all damage, and immunity to buffs and debuffs.\n"
-                "When you cast a single-target [enchantment] spell targeting the mass of curses, the mass of curses is sacrificed to copy that spell onto every valid enemy target in line of sight within [{radius}_tiles:radius] of itself.").format(**self.fmt_dict())
+        return ("The first time each turn you cast a single-target [enchantment] spell on an enemy, you cast a copy of it on every other valid enemy target within [{radius}_tiles:radius] of the original target, but take [1_dark:dark] damage per enemy targeted this way.\n"
+                "If the spell targets a minion, you instead cast a copy of it on every other valid minion target in the area, and take [1_holy:holy] damage per minion.\n"
+                "The effect refreshes before the beginning of your turn.\n"
+                "Lasts [{duration}_turns:duration].").format(**self.fmt_dict())
 
     def cast_instant(self, x, y):
-        unit = Unit()
-        unit.name = "Mass of Curses"
-        unit.asset = ["MissingSynergies", "Units", "mass_of_curses"]
-        unit.tags = [Tags.Undead, Tags.Enchantment]
-        unit.max_hp = 1
-        for tag in [Tags.Fire, Tags.Ice, Tags.Lightning, Tags.Poison, Tags.Holy, Tags.Dark, Tags.Arcane, Tags.Physical]:
-            unit.resists[tag] = 200
-        unit.buff_immune = True
-        unit.debuff_immune = True
-        unit.stationary = True
-        unit.flying = True
-        unit.buffs = [MassOfCursesBuff(self)]
-        self.summon(unit, Point(x, y))
+        self.caster.apply_buff(MassEnchantmentBuff(self), self.get_stat("duration") + 1)
 
 class SingularEye(Upgrade):
 
@@ -11891,5 +11889,5 @@ class NonlocalitySpell(Spell):
         if unit:
             unit.apply_buff(NonlocalityBuff(self))
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassOfCursesSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell])
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison])
