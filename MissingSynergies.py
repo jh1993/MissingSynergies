@@ -4141,8 +4141,18 @@ class BrimstoneClusterSpell(Spell):
 
 class ScapegoatBuff(Buff):
 
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+
     def on_init(self):
+        self.swift = self.spell.get_stat("swift")
+        self.endless = self.spell.get_stat("endless")
         self.description = "Cannot move or act.\n\nAutomatically disappears if there are no enemies in this level that are not scapegoats."
+        if self.swift:
+            self.description += "\n\nTakes dark damage equal to this unit's max HP each turn."
+        elif self.endless:
+            self.description += "\n\nRegenerates HP equal to this unit's max HP each turn."
     
     def on_attempt_advance(self):
         return False
@@ -4151,6 +4161,10 @@ class ScapegoatBuff(Buff):
         if all(u.team == TEAM_PLAYER for u in self.owner.level.units if u.name != "Scapegoat"):
             self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
             self.owner.kill(trigger_death_event=False)
+        if self.swift:
+            self.owner.deal_damage(self.owner.max_hp, Tags.Dark, self.spell)
+        elif self.endless:
+            self.owner.deal_damage(-self.owner.max_hp, Tags.Heal, self.spell)
 
 class CallScapegoatSpell(Spell):
 
@@ -4167,24 +4181,8 @@ class CallScapegoatSpell(Spell):
         self.upgrades["max_charges"] = (6, 2)
         self.upgrades["minion_health"] = (20, 3)
         self.upgrades["num_summons"] = (2, 3)
-        self.upgrades["regen"] = (1, 2, "Unending Penance", "Scapegoats regenerate [10_HP:heal] per turn.")
-        self.upgrades["death"] = (1, 3, "Grim Sacrifice", "If targeting yourself, this spell will now instead cost no charge and deal [dark] damage to each scapegoat equal to its current HP.\nThis can be done even if the spell has no charges left, but only if there are scapegoats in the realm.")
-
-    def can_pay_costs(self):
-        if self.get_stat("death") and self.cur_charges <= 0:
-            return any([unit.name == "Scapegoat" for unit in self.caster.level.units])
-        return Spell.can_pay_costs(self)
-    
-    def pay_costs(self):
-        if self.cur_charges > 0:
-            Spell.pay_costs(self)
-
-    def can_cast(self, x, y):
-        if not Spell.can_cast(self, x, y):
-            return False
-        if self.get_stat("death") and self.cur_charges <= 0:
-            return x == self.caster.x and y == self.caster.y
-        return True
+        self.upgrades["endless"] = (1, 3, "Endless Penance", "Scapegoats regenerate HP each turn equal to their max HP.", "penance")
+        self.upgrades["swift"] = (1, 3, "Swift Penance", "Scapegoats take [dark] damage each turn equal to their max HP.", "penance")
 
     def get_description(self):
         return ("Summon [{num_summons}:num_summons] scapegoats.\n"
@@ -4192,16 +4190,7 @@ class CallScapegoatSpell(Spell):
                 "Scapegoats disappear automatically if there are no other enemies in the level.").format(**self.fmt_dict())
 
     def cast_instant(self, x, y):
-
-        if self.get_stat("death") and x == self.caster.x and y == self.caster.y:
-            for unit in list(self.caster.level.units):
-                if unit.name != "Scapegoat":
-                    continue
-                unit.deal_damage(unit.cur_hp, Tags.Dark, self)
-            return
-        
         health = self.get_stat("minion_health")
-        regen = self.get_stat("regen")
         for _ in range(self.get_stat("num_summons")):
             unit = Unit()
             unit.name = "Scapegoat"
@@ -4210,9 +4199,7 @@ class CallScapegoatSpell(Spell):
             unit.max_hp = health
             unit.flying = True
             unit.buff_immune = True
-            if regen:
-                unit.buffs.append(RegenBuff(10))
-            unit.buffs.append(ScapegoatBuff())
+            unit.buffs.append(ScapegoatBuff(self))
             self.summon(unit, Point(x, y), radius=5, team=TEAM_ENEMY, sort_dist=False)
 
 class FrigidFamineBuff(Buff):
