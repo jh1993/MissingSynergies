@@ -7846,7 +7846,10 @@ class EmpyrealFormBuff(Buff):
         self.owner.deal_damage(-self.max_hp, Tags.Heal, self.spell)
 
     def on_unapplied(self):
-        drain_max_hp(self.owner, self.max_hp)
+        self.owner.max_hp = max(0, self.owner.max_hp - self.max_hp)
+        self.owner.cur_hp = min(self.owner.cur_hp, self.owner.max_hp)
+        if self.owner.max_hp <= 0:
+            self.owner.kill()
 
     def on_advance(self):
         self.owner.level.queue_spell(self.spell.boom())
@@ -8795,12 +8798,12 @@ class CantripAdept(Upgrade):
         self.asset = ["MissingSynergies", "Icons", "cantrip_adept"]
         self.tags = [Tags.Sorcery]
         self.level = 4
-        self.description = "The first time each turn you damage an enemy with a level 1 [sorcery] spell, deal additional damage of the same type equal to the combined level of all of your spells, spell upgrades, and skills.\nThis refreshes before the beginning of your turn."
+        self.description = "The first time each turn you damage an enemy with a level 1 [sorcery] spell, deal additional damage of the same type equal to your unspent SP plus the combined level of all of your spells, spell upgrades, and skills.\nThis refreshes before the beginning of your turn."
         self.global_triggers[EventOnDamaged] = self.on_damaged
         self.active = True
     
     def get_damage(self):
-        total = 0
+        total = self.owner.xp
         for spell in self.owner.spells:
             total += spell.level
         for buff in self.owner.buffs:
@@ -11876,5 +11879,45 @@ class NonlocalitySpell(Spell):
         if unit:
             unit.apply_buff(NonlocalityBuff(self))
 
+class OutrageBuff(Buff):
+
+    def on_init(self):
+        self.name = "Outrage"
+        self.color = COLOR_DAMAGE
+        self.stack_type = STACK_DURATION
+
+    def on_advance(self):
+        spells = [s for s in self.owner.spells if Tags.Sorcery in s.tags and s.level == 1]
+        if not spells:
+            return
+        while self.turns_left >= 25:
+            random.shuffle(spells)
+            spell = None
+            target = None
+            for s in spells:
+                target = s.get_ai_target()
+                if target:
+                    spell = s
+                    break
+            if not target:
+                break
+            self.owner.level.act_cast(self.owner, spell, target.x, target.y, pay_costs=False)
+            self.turns_left -= 25
+        if self.turns_left <= 0:
+            self.owner.remove_buff(self)
+
+class OutrageRune(Upgrade):
+
+    def on_init(self):
+        self.name = "Outrage Rune"
+        self.asset = ["MissingSynergies", "Icons", "outrage_rune"]
+        self.tags = [Tags.Fire, Tags.Sorcery]
+        self.level = 5
+        self.description = "Whenever you take damage, you gain stacking duration of outrage equal to the damage taken.\nEach turn, for every [25_turns:duration] of outrage you have, you cast a random level 1 [sorcery] spell you know at a random valid enemy target if possible, consuming that much outrage duration instead of spell charges."
+        self.owner_triggers[EventOnDamaged] = self.on_damaged
+    
+    def on_damaged(self, evt):
+        self.owner.apply_buff(OutrageBuff(), evt.damage)
+
 all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell])
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune])

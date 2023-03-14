@@ -148,6 +148,7 @@ Level 5:
 + Halogenesis (Holy/Nature)
 + Inexorable Decay (Dark)
 + Orb Substitution (Orb/Translocation)
++ Outrage Rune (Fire/Sorcery)
 + Reflex Arc (Nature/Lightning/Sorcery)
 + Shock Troops (Fire/Lightning)
 + Soul Dregs (Holy/Dark)
