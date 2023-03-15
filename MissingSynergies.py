@@ -2134,6 +2134,7 @@ class TransienceBuff(Buff):
     
     def on_advance(self):
         if random.random() < self.chance/100:
+            self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
             self.owner.kill()
 
 class GenesisSpell(Spell):
@@ -8418,14 +8419,15 @@ class Ataraxia(Upgrade):
         self.tags = [Tags.Sorcery, Tags.Enchantment, Tags.Conjuration]
         self.level = 7
         self.description = "For every 2 unspent SP you have, all spells and skills gain [1_damage:damage], [1_minion_health:minion_health], and [1_breath_damage:breath_damage].\nFor every 4 unspent SP you have, all spells and skills gain [1_range:range], [1_duration:duration], [1_minion_damage:minion_damage], [1_minion_duration:minion_duration], and [1_cascade_range:cascade_range].\nFor every 8 unspent SP you have, all spells and skills gain [1_max_charges:max_charges], [1_num_targets:num_targets], [1_minion_range:minion_range], and [1_num_summons:num_summons].\nAll spells and skills gain bonus [radius] equal to the square root of 1/8 of your unspent SP, rounded down."
-        # Don't use self.global_bonuses, otherwise the description becomes too long
-        self.bonuses = defaultdict(lambda: 0)
         self.owner_triggers[EventOnBuffApply] = self.on_buff_apply
+        self.no_display_stats = True
 
     def update_stat(self, stat, value):
-        self.owner.global_bonuses[stat] -= self.bonuses[stat]
-        self.bonuses[stat] = value
-        self.owner.global_bonuses[stat] += value
+        if self.applied:
+            self.owner.global_bonuses[stat] -= self.global_bonuses[stat]
+        self.global_bonuses[stat] = value
+        if self.applied:
+            self.owner.global_bonuses[stat] += value
 
     def on_advance(self):
         for stat in ["damage", "minion_health", "breath_damage"]:
@@ -11919,5 +11921,46 @@ class OutrageRune(Upgrade):
     def on_damaged(self, evt):
         self.owner.apply_buff(OutrageBuff(), evt.damage)
 
+class BloodMitosis(Upgrade):
+
+    def on_init(self):
+        self.name = "Blood Mitosis"
+        self.asset = ["MissingSynergies", "Icons", "blood_mitosis"]
+        self.tags = [Tags.Dark]
+        self.level = 5
+        self.minion_damage = 3
+        self.duration = 10
+        self.damage_taken = 0
+        self.owner_triggers[EventOnDamaged] = self.on_damaged
+    
+    def get_description(self):
+        return ("At the beginning of each turn, you summon a blood slime with max HP equal to the total damage you took in your previous turn.\n"
+                "Blood slimes are [demon] [slime] minions with melee attacks dealing [{minion_damage}_dark:dark] damage. On hit, they gain bloodrage for [{duration}_turns:duration], which increases their damage by 1.").format(**self.fmt_dict())
+
+    def make_slime(self, hp):
+        unit = Unit()
+        unit.name = "Blood Slime"
+        unit.asset = ["MissingSynergies", "Units", "blood_slime"]
+        unit.max_hp = hp
+        unit.tags = [Tags.Dark, Tags.Demon, Tags.Slime]
+        unit.resists[Tags.Physical] = 50
+        unit.resists[Tags.Poison] = 100
+        melee = SimpleMeleeAttack(damage=self.get_stat("minion_damage"), damage_type=Tags.Dark)
+        melee.name = "Frenzy Strike"
+        melee.onhit = lambda caster, target: caster.apply_buff(BloodrageBuff(1), caster.get_stat(self.get_stat("duration"), melee, "duration"))
+        melee.description = ""
+        melee.get_description = lambda: "Gain +1 damage for %i turns with each attack" % unit.get_stat(self.get_stat("duration"), melee, "duration")
+        unit.spells = [melee]
+        unit.buffs = [SlimeBuff(lambda: self.make_slime(hp))]
+        return unit
+    
+    def on_pre_advance(self):
+        if self.damage_taken:
+            self.summon(self.make_slime(self.damage_taken), radius=5)
+        self.damage_taken = 0
+    
+    def on_damaged(self, evt):
+        self.damage_taken += evt.damage
+
 all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell])
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis])

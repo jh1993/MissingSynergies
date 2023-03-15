@@ -139,6 +139,7 @@ Level 4:
 + Unnatural Vitality (Dark/Nature)
 
 Level 5:
++ Blood Mitosis (Dark)
 + Bombastic Arrival (Fire/Translocation)
 + Chaos Cloning (Chaos)
 + Draconian Brutality (Dragon/Nature/Translocation)
