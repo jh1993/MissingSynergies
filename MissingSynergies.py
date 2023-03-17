@@ -11541,10 +11541,10 @@ class BurnoutReactorBuff(DamageAuraBuff):
     
     def on_init(self):
         self.asset = ["MissingSynergies", "Statuses", "burnout_reactor"]
-        self.damage = self.spell.get_stat("damage")
+        self.blast_damage = self.spell.get_stat("damage")
         self.aura = self.spell.get_stat("aura")
         self.resists[Tags.Fire] = 100
-        self.global_bonuses["damage"] = self.damage//2 + self.spell.get_stat("minion_damage")
+        self.global_bonuses["damage"] = self.blast_damage//2 + self.spell.get_stat("minion_damage")
         self.owner_triggers[EventOnDeath] = self.on_death
     
     def on_applied(self, owner):
@@ -11573,7 +11573,7 @@ class BurnoutReactorBuff(DamageAuraBuff):
             if not unit or not are_hostile(unit, self.owner):
                 self.owner.level.show_effect(p.x, p.y, Tags.Fire)
             else:
-                unit.deal_damage(self.damage, Tags.Fire, self.spell)
+                unit.deal_damage(self.blast_damage, Tags.Fire, self.spell)
 
 class BurnoutReactorSpell(Spell):
 
