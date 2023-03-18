@@ -6330,6 +6330,7 @@ class GrudgeReaperBuff(Soulbound):
     def on_pre_advance(self):
         if not self.guardian.is_alive():
             self.owner.kill(trigger_death_event=False)
+            return
         if not self.relentless:
             return
         target = self.guardian
