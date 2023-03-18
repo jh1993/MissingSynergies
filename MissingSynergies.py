@@ -11962,5 +11962,43 @@ class BloodMitosis(Upgrade):
     def on_damaged(self, evt):
         self.damage_taken += evt.damage
 
+class ScrapBurst(Upgrade):
+    
+    def on_init(self):
+        self.name = "Scrap Burst"
+        self.asset = ["MissingSynergies", "Icons", "scrap_burst"]
+        self.tags = [Tags.Metallic]
+        self.level = 5
+        self.radius = 6
+        self.damage = 5
+        self.global_triggers[EventOnDeath] = self.on_death
+
+    def get_description(self):
+        return ("Whenever one of your [metallic] minions dies, it explodes into a number of scrap pieces equal to 10% of its max HP, rounded up, each targeting a random enemy or another [metallic] minion in a [{radius}_tile:radius] burst.\n"
+                "If targeting an enemy, that enemy takes [{damage}_physical:physical] damage.\n"
+                "If targeting a [metallic] minion, that minion gains [{damage}:heal] current and max HP.").format(**self.fmt_dict())
+
+    def on_death(self, evt):
+        if are_hostile(evt.unit, self.owner) or Tags.Metallic not in evt.unit.tags:
+            return
+        targets = [u for u in self.owner.level.get_units_in_ball(evt.unit, self.get_stat("radius")) if are_hostile(u, self.owner) or Tags.Metallic in u.tags]
+        targets = [u for u in targets if u is not evt.unit and self.owner.level.can_see(u.x, u.y, evt.unit.x, evt.unit.y)]
+        if not targets:
+            return
+        damage = self.get_stat("damage")
+        for _ in range(math.ceil(evt.unit.max_hp/10)):
+            target = random.choice(targets)
+            self.owner.level.queue_spell(self.bolt(evt.unit, target, damage))
+
+    def bolt(self, origin, target, damage):
+        for p in Bolt(self.owner.level, origin, target):
+            self.owner.level.show_effect(p.x, p.y, Tags.Physical, minor=True)
+            yield
+        if are_hostile(target, self.owner):
+            target.deal_damage(damage, Tags.Physical, self)
+        else:
+            target.max_hp += damage
+            target.deal_damage(-damage, Tags.Heal, self)
+
 all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell])
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst])

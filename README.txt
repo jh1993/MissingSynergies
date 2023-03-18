@@ -151,6 +151,7 @@ Level 5:
 + Orb Substitution (Orb/Translocation)
 + Outrage Rune (Fire/Sorcery)
 + Reflex Arc (Nature/Lightning/Sorcery)
++ Scrap Burst (Metallic)
 + Shock Troops (Fire/Lightning)
 + Soul Dregs (Holy/Dark)
 + Speed of Light (Holy/Translocation)
