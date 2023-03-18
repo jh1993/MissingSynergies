@@ -76,6 +76,7 @@ Level 5:
 + Fleshburst Zombie (Dark/Nature/Conjuration)
 + Gathering Storm (Lightning/Ice/Conjuration)
 + Golden Trickster (Holy/Arcane/Metallic/Chaos/Conjuration)
++ Heat Trick (Ice/Fire/Sorcery)
 + Irradiate (Arcane/Nature/Enchantment)
 + Liquid Lightning (Lightning/Enchantment)
 + Liquid Metal (Lightning/Ice/Metallic/Conjuration)

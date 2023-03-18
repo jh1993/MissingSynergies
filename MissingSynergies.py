@@ -12001,5 +12001,59 @@ class ScrapBurst(Upgrade):
             target.max_hp += damage
             target.deal_damage(-damage, Tags.Heal, self)
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell])
+class HeatTrickSpell(Spell):
+
+    def on_init(self):
+        self.name = "Heat Trick"
+        self.asset = ["MissingSynergies", "Icons", "heat_trick"]
+        self.tags = [Tags.Ice, Tags.Fire, Tags.Sorcery]
+        self.level = 5
+        self.max_charges = 12
+
+        self.range = 9
+        self.damage = 50
+        self.duration = 5
+        self.radius = 2
+
+        self.upgrades["damage"] = (30, 2)
+        self.upgrades["duration"] = (3, 2)
+        self.upgrades["radius"] = (1, 3)
+        self.upgrades["storm"] = (1, 3, "Storm Trick", "Heat Trick also pretends to deal [ice] and [lightning] damage.")
+
+    def get_impacted_tiles(self, x, y):
+            return [p for stage in Burst(self.caster.level, Point(x, y), self.get_stat('radius')) for p in stage]
+
+    def get_description(self):
+        return ("Pretend to [freeze], deal [{damage}_fire:fire] damage to, and unfreeze every enemy in a [{radius}_tile:radius] burst. This triggers all effects that are normally triggered by these effects.\n"
+                "The fake [freeze] behaves as if it lasts [{duration}_turns:duration] and is unfrozen by [fire] damage.").format(**self.fmt_dict())
+
+    def hit(self, x, y, damage, duration, storm):
+        self.caster.level.show_effect(x, y, Tags.Ice)
+        self.caster.level.show_effect(x, y, Tags.Fire)
+        unit = self.caster.level.get_unit_at(x, y)
+        if not unit or not are_hostile(unit, self.caster):
+            return
+        dtypes = [Tags.Fire]
+        if storm:
+            dtypes.extend([Tags.Ice, Tags.Lightning])
+        freeze = FrozenBuff()
+        freeze.turns_left = duration
+        freeze.break_dtype = Tags.Fire
+        self.caster.level.event_manager.raise_event(EventOnBuffApply(freeze, unit), unit)
+        for dtype in dtypes:
+            self.caster.level.event_manager.raise_event(EventOnPreDamaged(unit, damage, dtype, self), unit)
+            self.caster.level.event_manager.raise_event(EventOnDamaged(unit, damage, dtype, self), unit)
+        self.caster.level.event_manager.raise_event(EventOnUnfrozen(unit, Tags.Fire), unit)
+        self.caster.level.event_manager.raise_event(EventOnBuffRemove(freeze, unit), unit)
+        
+    def cast(self, x, y):
+        damage = self.get_stat("damage")
+        duration = self.get_stat("duration")
+        storm = self.get_stat("storm")
+        for stage in Burst(self.caster.level, Point(x, y), self.get_stat("radius")):
+            for p in stage:
+                self.hit(p.x, p.y, damage, duration, storm)
+            yield
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst])
