@@ -2926,11 +2926,11 @@ class GoldenTricksterSpell(Spell):
         self.upgrades["shields"] = (5, 5)
         self.upgrades["phase"] = (1, 5, "Phase Shot", "The Golden Trickster's trick shot no longer requires line of sight.")
         self.upgrades["bravado"] = (1, 3, "Fool's Bravado", "The Golden Trickster's trick shot now pretends to deal an additional [30_fire:fire], [30_lightning:lightning], and [30_physical:physical] damage, but all of this extra damage behaves as if it is fully resisted by the target, only triggering effects that are triggered by raw incoming damage before resistances.")
-        self.upgrades["mage"] = (1, 6, "Trickster Mage", "The Golden Trickster can cast Chaos Shuffle with a 3 turn cooldown.\nThis Chaos Shuffle gains all of your upgrades and bonuses.")
+        self.upgrades["mage"] = (1, 6, "Trickster Mage", "The Golden Trickster can cast Chaos Shuffle with a [3_turns:cooldown] cooldown.\nThis Chaos Shuffle gains all of your upgrades and bonuses.")
     
     def get_description(self):
         return ("Summon a Golden Trickster, a flying, randomly teleporting minion with many resistances, [{minion_health}_HP:minion_health], and [{shields}_SH:shields].\n"
-                "It has a trick shot with [{minion_range}_range:minion_range], which hits 3 times. Each hit inflicts no damage but triggers on-damage effects as if [{minion_damage}_fire:fire], [{minion_damage}_lightning:lightning], or [{minion_damage}_physical:physical] damage has been done to the target. The target is also teleported up to [3_tiles:range] away.\n"
+                "It has a trick shot with [{minion_range}_range:minion_range], which hits 3 times. Each hit inflicts no damage but ignores immunities and triggers on-damage effects as if [{minion_damage}_fire:fire], [{minion_damage}_lightning:lightning], or [{minion_damage}_physical:physical] damage has been done to the target. The target is also teleported up to [3_tiles:range] away.\n"
                 "Each turn, for each enemy within [{radius}_tiles:radius], it triggers on-damage effects as if it has taken [1_dark:dark] damage from that enemy. It gains [1_SH:shields] whenever it takes damage, up to a max of [{shields}_SH:shields].").format(**self.fmt_dict())
 
     def cast_instant(self, x, y):
@@ -8144,7 +8144,7 @@ class EssenceLeechSpell(Spell):
         self.upgrades["max_charges"] = (7, 4)
         self.upgrades["requires_los"] = (-1, 2, "Blindcasting", "Essence Leech can be cast without line of sight.")
         self.upgrades["radius"] = (2, 3)
-        self.upgrades["agony"] = (1, 3, "Fading Agony", "Fading enemies behave as if they have taken [arcane] damage each turn equal to this spell's [damage] stat, triggering all effects that are normally triggered when enemies are damaged.")
+        self.upgrades["agony"] = (1, 3, "Fading Agony", "Fading enemies behave as if they have taken [arcane] damage each turn equal to this spell's [damage] stat, ignoring immunity and triggering all effects that are normally triggered when enemies are damaged.")
 
     def get_description(self):
         return ("Drain essence from enemies in a [{radius}_tile:radius] radius, causing them to begin fading, automatically dying after a number of turns equal to their max HP divided [{damage}:arcane], rounded up, as if they are temporarily summoned units. This number benefits from this spell's bonuses to [damage].\n"
@@ -12024,7 +12024,7 @@ class HeatTrickSpell(Spell):
             return [p for stage in Burst(self.caster.level, Point(x, y), self.get_stat('radius')) for p in stage]
 
     def get_description(self):
-        return ("Pretend to [freeze], deal [{damage}_fire:fire] damage to, and unfreeze every enemy in a [{radius}_tile:radius] burst. This triggers all effects that are normally triggered by these effects.\n"
+        return ("Pretend to [freeze], deal [{damage}_fire:fire] damage to, and unfreeze every enemy in a [{radius}_tile:radius] burst. This ignores immunities and triggers all effects that are normally triggered by these effects.\n"
                 "The fake [freeze] behaves as if it lasts [{duration}_turns:duration] and is unfrozen by [fire] damage.").format(**self.fmt_dict())
 
     def hit(self, x, y, damage, duration, storm):
