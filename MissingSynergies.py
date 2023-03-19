@@ -6320,20 +6320,17 @@ class GrudgeReaperBuff(Soulbound):
         self.spell = spell
         Soulbound.__init__(self, target)
         self.color = Tags.Demon.color
-    
-    def on_init(self):
-        Soulbound.on_init(self)
         self.description = "Cannot be killed when the target of its grudge is alive. Vanishes when the target dies."
-        self.global_triggers[EventOnDeath] = self.on_death
 
     def on_death(self, evt):
-        if evt.unit is not self.guardian:
+        if evt.unit is not self.guardian or self.reincarnation:
             return
         if self.insatiable and Point(evt.unit.x, evt.unit.y) not in self.owner.level.get_adjacent_points(Point(self.owner.x, self.owner.y), filter_walkable=False):
             units = [unit for unit in self.owner.level.units if are_hostile(unit, self.spell.caster)]
             if units:
                 self.guardian = random.choice(units)
                 return
+        self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
         self.owner.kill(trigger_death_event=False)
 
     def on_pre_advance(self):
