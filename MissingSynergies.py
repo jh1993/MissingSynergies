@@ -10637,7 +10637,7 @@ class SuddenDeath(Upgrade):
         self.name = "Sudden Death"
         self.asset = ["MissingSynergies", "Icons", "sudden_death"]
         self.tags = [Tags.Dark]
-        self.level = 7
+        self.level = 5
         self.damage = 200
         self.global_triggers[EventOnDamaged] = self.on_damaged
     
@@ -10655,7 +10655,7 @@ class DivineRetribution(Upgrade):
         self.name = "Divine Retribution"
         self.asset = ["MissingSynergies", "Icons", "divine_retribution"]
         self.tags = [Tags.Holy]
-        self.level = 7
+        self.level = 5
         self.global_triggers[EventOnDamaged] = self.on_damaged
         self.max_damage = 0
     

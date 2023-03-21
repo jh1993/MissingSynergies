@@ -143,6 +143,7 @@ Level 5:
 + Blood Mitosis (Dark)
 + Bombastic Arrival (Fire/Translocation)
 + Chaos Cloning (Chaos)
++ Divine Retribution (Holy)
 + Draconian Brutality (Dragon/Nature/Translocation)
 + Electrolysis (Lightning/Nature)
 + Forceful Channeling (Sorcery/Conjuration)
@@ -156,6 +157,7 @@ Level 5:
 + Shock Troops (Fire/Lightning)
 + Soul Dregs (Holy/Dark)
 + Speed of Light (Holy/Translocation)
++ Sudden Death (Dark)
 + Tele-Frag (Metallic/Translocation)
 
 Level 6:
@@ -171,10 +173,8 @@ Level 7:
 + Ataraxia (Sorcery/Enchantment/Conjuration)
 + Breath of Annihilation (Dragon/Chaos)
 + Dying Star (Fire)
-+ Divine Retribution (Holy)
 + Luminous Muse (Holy/Arcane/Conjuration)
 + Redheart Spider (Holy/Nature/Dark/Conjuration)
-+ Sudden Death (Dark)
 + Whispers of Oblivion (Dark/Chaos)
 
 ---
