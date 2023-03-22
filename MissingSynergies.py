@@ -1027,7 +1027,7 @@ class CrystalHammerSpell(Spell):
         self.upgrades["extra_damage"] = (5, 3, "Extra Damage", "+5 extra damage per turn of [freeze] and [glassify].")
         self.upgrades["stun"] = (1, 3, "Stunning Blow", "The target is also [stunned] for a duration equal to the total duration of [freeze] and [glassify] on the target.")
         self.upgrades["combo"] = (1, 4, "Hammer Combo", "If you know the Freeze spell, you will also cast it on the same target when you cast Frozen Hammer, before the hammer hits, if possible.\nIf you know the Petrify spell with the Glassify upgrade, you will also cast it on the same target when you cast Frozen Hammer, before the hammer hits, if possible.")
-        self.upgrades["shatter"] = (1, 7, "Shatter", "On hit, Frozen Hammer will also release a number of shards equal to the total duration of [frozen] and [glassify] on the target. If the target is killed, increase the number of shards by 1 per 20 max HP the target had, rounded up.\nEach shard targets a random enemy in a [{radius}_tile:radius] burst and deals [physical] damage equal to this spell's extra damage.\nThe same enemy can be hit more than once, and the original target can also be hit.")
+        self.upgrades["shatter"] = (1, 7, "Shatter", "On hit, Frozen Hammer will also release a number of shards equal to the total duration of [frozen] and [glassify] on the target. If the target is killed, increase the number of shards by 1 per 20 max HP the target had, rounded up.\nEach shard targets a random enemy in a [{radius}_tile:radius] burst and deals [physical] damage equal to this spell's extra damage.\nThe same enemy can be hit more than once, and the original target can also be hit.\nThis occurs after [freeze] and [glassify] are removed from the original target.")
     
     def get_description(self):
         return ("Deal [{damage}_physical:physical] damage to the target. For every turn of [freeze] and [glassify] on the target, the damage is increased by [{extra_damage}:physical].\n"
@@ -1079,6 +1079,13 @@ class CrystalHammerSpell(Spell):
         extra_damage = self.get_stat("extra_damage")
         unit.deal_damage(self.get_stat("damage") + total_duration*extra_damage, Tags.Physical, self)
         
+        if glassify:
+            unit.remove_buff(glassify)
+        if freeze:
+            unit.remove_buff(freeze)
+        if self.get_stat("stun") and total_duration:
+            unit.apply_buff(Stun(), total_duration)
+
         if self.get_stat("shatter"):
             radius = self.get_stat("radius", base=6)
             for _ in range(total_duration + (math.ceil(unit.max_hp/20) if not unit.is_alive() else 0)):
@@ -1087,13 +1094,6 @@ class CrystalHammerSpell(Spell):
                 if not targets:
                     return
                 self.caster.level.queue_spell(self.bolt(unit, random.choice(targets), extra_damage))
-
-        if glassify:
-            unit.remove_buff(glassify)
-        if freeze:
-            unit.remove_buff(freeze)
-        if self.get_stat("stun") and total_duration:
-            unit.apply_buff(Stun(), total_duration)
 
     def bolt(self, origin, target, damage):
         for p in Bolt(self.caster.level, origin, target):
