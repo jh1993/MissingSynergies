@@ -10686,14 +10686,14 @@ class SuddenDeath(Upgrade):
         self.asset = ["MissingSynergies", "Icons", "sudden_death"]
         self.tags = [Tags.Dark]
         self.level = 5
-        self.damage = 200
+        self.damage = 100
         self.global_triggers[EventOnDamaged] = self.on_damaged
     
     def get_description(self):
-        return ("Whenever an enemy takes damage, it has a 1% chance to take [{damage}_dark:dark] damage.\nThis effect can trigger itself.").format(**self.fmt_dict())
+        return ("Whenever an enemy takes damage, it has a 2% chance to take [{damage}_dark:dark] damage.\nThis effect can trigger itself.").format(**self.fmt_dict())
 
     def on_damaged(self, evt):
-        if not are_hostile(evt.unit, self.owner) or random.random() >= 0.01:
+        if not are_hostile(evt.unit, self.owner) or random.random() >= 0.02:
             return
         evt.unit.deal_damage(self.get_stat("damage"), Tags.Dark, self)
 
