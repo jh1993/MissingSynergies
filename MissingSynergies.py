@@ -79,7 +79,7 @@ class WormwoodSpell(Spell):
         self.duration = 6
         self.can_target_self = True
 
-        self.max_charges = 1
+        self.max_charges = 2
 
         self.tags = [Tags.Holy, Tags.Nature, Tags.Sorcery, Tags.Enchantment]
         self.level = 7
@@ -88,21 +88,28 @@ class WormwoodSpell(Spell):
         self.upgrades["duration"] = (3, 3)
         self.upgrades["damage"] = (33, 3)
         self.upgrades["max_charges"] = (1, 2)
+        self.upgrades["judgment"] = (1, 5, "Bitter Judgment", "When affecting a target already afflicted with Bitter Curse, the target takes additional [poison] damage equals to 5 times the remainiing duration of Bitter Curse.")
 
     def get_description(self):
         return ("Call down a bitter star. All enemies in a [{radius}_tile:radius] radius are afflicted with Bitter Curse for [{duration}_turns:duration], then dealt [{damage}_poison:poison] damage.\n"
-                "[Poison] damage dealt to a unit with Bitter Curse is redealt as [holy] damage, and inflicts [poison] for that many turns, before counting resistances; this stacks with any pre-existing [poison] they have.").format(**self.fmt_dict())
+                "[Poison] damage dealt to a unit with Bitter Curse is redealt as [holy] damage, and inflicts [poison] for that many turns, before counting resistances; this stacks in duration with any pre-existing [poison] they have.").format(**self.fmt_dict())
     
     def cast_instant(self, x, y):
         duration = self.get_stat("duration")
         damage = self.get_stat("damage")
+        judgment = self.get_stat("judgment")
         for p in self.caster.level.get_points_in_ball(x, y, self.get_stat("radius")):
             self.caster.level.show_effect(p.x, p.y, Tags.Holy)
             self.caster.level.show_effect(p.x, p.y, Tags.Poison)
             unit = self.caster.level.get_unit_at(p.x, p.y)
             if unit and are_hostile(unit, self.caster):
+                bonus = 0
+                if judgment:
+                    existing = unit.get_buff(BitterCurse)
+                    if existing:
+                        bonus = 5*existing.turns_left
                 unit.apply_buff(BitterCurse(self), duration)
-                unit.deal_damage(damage, Tags.Poison, self)
+                unit.deal_damage(damage + bonus, Tags.Poison, self)
 
 class IrradiateBuff(Buff):
     def __init__(self, spell):
@@ -177,14 +184,16 @@ class IrradiateSpell(Spell):
         self.level = 5
         self.max_charges = 7
         self.can_target_self = True
+        self.requires_los = False
 
-        self.radius = 4
+        self.radius = 5
         self.range = 9
-        self.duration = 4
+        self.duration = 6
 
         self.upgrades['radius'] = (3, 2)
         self.upgrades['duration'] = (6, 3)
         self.upgrades['fallout'] = (1, 5, "Radioactive Fallout", "When an Irradiated enemy dies, its remaining poison duration is distributed evenly among all enemies in its radiation aura radius, stacking in duration with any pre-existing poisons they have.")
+        self.upgrades["burst"] = (1, 5, "Radioactive Burst", "When affecting an already Irradiated enemy, that enemy's Irradiate per-turn effect will now immediately be triggered a number of times equal to its remaining duration.")
 
     def get_description(self):
         return ("Irradiates enemies in a [{radius}_tile:radius] radius for [{duration}_turns:duration].\n"
@@ -192,10 +201,18 @@ class IrradiateSpell(Spell):
                 "This damage is fixed, and cannot be increased using shrines, skills, or buffs.").format(**self.fmt_dict())
 
     def cast_instant(self, x, y):
+        duration = self.get_stat('duration')
+        burst = self.get_stat("burst")
         for p in self.owner.level.get_points_in_ball(x, y, self.get_stat('radius')):
             u = self.owner.level.get_unit_at(p.x, p.y)
             if u and are_hostile(u, self.caster):
-                u.apply_buff(IrradiateBuff(self), self.get_stat('duration'))
+                if burst:
+                    existing = u.get_buff(IrradiateBuff)
+                    if existing:
+                        for _ in range(existing.turns_left):
+                            existing.on_pre_advance()
+                            existing.on_advance()
+                u.apply_buff(IrradiateBuff(self), duration)
 
 class ShiveringVenomBuff(Buff):
 
