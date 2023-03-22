@@ -11302,7 +11302,7 @@ class DisintegrationDebuff(Buff):
         damage = self.spell.get_stat("damage")
         old_amount = self.amount
         for _ in range(old_amount):
-            self.owner.deal_damage(damage if wild and random.random() < 0.01 else 1, random.choice([Tags.Arcane, Tags.Physical]), self.spell)
+            self.owner.deal_damage(damage if wild and random.random() < 0.02 else 1, random.choice([Tags.Arcane, Tags.Physical]), self.spell)
             if random.random() >= 0.5:
                 self.amount -= 1
         if self.amount <= 0:
@@ -11326,7 +11326,7 @@ class DisintegrateSpell(Spell):
         self.upgrades["max_charges"] = (8, 3)
         self.upgrades["damage"] = (15, 2)
         self.upgrades["radius"] = (2, 4)
-        self.upgrades["wild"] = (1, 5, "Wild Entropy", "Each point of disintegration has a 1% chance to instead deal damage equal to this spell's [damage] stat.")
+        self.upgrades["wild"] = (1, 4, "Wild Entropy", "Each point of disintegration has a 2% chance to instead deal damage equal to this spell's [damage] stat.")
     
     def get_description(self):
         return ("All enemies in a [{radius}_tile:radius] radius are randomly inflicted with 1 to [{damage}:damage] points of disintegration, which stack; each point deals [1_arcane:arcane] or [1_physical:physical] damage per turn then has a 50% chance to be removed. This damage is fixed, and cannot be increased using shrines, skills, or buffs.\n"
