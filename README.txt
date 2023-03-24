@@ -163,6 +163,7 @@ Level 5:
 Level 6:
 + Abyssal Insight (Dark/Eye)
 + Dragon Archmage (Dragon/Sorcery)
++ Gate Master (Conjuration)
 + Heavy Elements (Fire/Lightning/Ice/Arcane)
 + Locus of Energy (Arcane/Lightning)
 + Scarlet Bison (Fire/Nature)
