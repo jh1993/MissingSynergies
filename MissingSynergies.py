@@ -1343,23 +1343,22 @@ class WordOfUpheavalSpell(Spell):
 
 class RaiseDracolichBreath(BreathWeapon):
 
-    def __init__(self, damage, range, legacy):
+    def __init__(self, damage, range, legacy, ghost):
         self.legacy = legacy
+        self.ghost = ghost
         BreathWeapon.__init__(self)
         self.damage = damage
         self.range = range
         self.damage_type = Tags.Dark
-
-    def on_init(self):
         self.name = "Dark Breath"
-        self.description = "Deals Dark damage%s in a cone. Reanimates slain living units as skeletons." % ((" and half %s damage" % self.legacy.name) if self.legacy else "")
+        self.description = "Deals Dark damage in a cone. Reanimates slain living units as skeletons."
 
     def can_redeal(self, target, already_checked):
         return self.legacy and not is_immune(target, self, self.legacy, already_checked)
 
     def cast(self, x, y):
         if self.legacy:
-            # Make Scalespinner count the legacy element too
+            # Make Scalespinner count the legacy element too.
             dummy_breath = BreathWeapon()
             dummy_breath.damage_type = self.legacy
             dummy_breath.range = self.range
@@ -1370,18 +1369,29 @@ class RaiseDracolichBreath(BreathWeapon):
         yield
 
     def per_square_effect(self, x, y):
+
         unit = self.caster.level.get_unit_at(x, y)
-        
         self.caster.level.deal_damage(x, y, self.get_stat("damage"), Tags.Dark, self)
         if self.legacy:
             self.caster.level.deal_damage(x, y, self.get_stat("damage")//2, self.legacy, self)
 
+        if self.ghost:
+            ghost = Ghost()
+            apply_minion_bonuses(self.caster.source, ghost)
+            if not unit:
+                ghost.resists[Tags.Dark] = 100
+                summoned = self.caster.source.summon(ghost, target=Point(x, y))
+                if summoned and self.legacy:
+                    ghost.apply_buff(TouchedBySorcery(self.legacy, self.caster.source))
+            elif unit and unit.is_alive():
+                unit.deal_damage(ghost.spells[0].damage, Tags.Dark, self)
+        
         if unit and not unit.is_alive():
             skeleton = mods.Bugfixes.Bugfixes.raise_skeleton(self.caster, unit, source=self.caster.source, summon=False)
             if not skeleton:
                 return
             skeleton.spells[0].damage = self.caster.source.get_stat("minion_damage", base=skeleton.spells[0].damage)
-            summoned = self.caster.source.summon(skeleton, target=unit, radius=0)
+            summoned = self.caster.source.summon(skeleton, target=unit)
             if summoned and self.legacy:
                 skeleton.apply_buff(TouchedBySorcery(self.legacy, self.caster.source))
 
@@ -1405,6 +1415,21 @@ class RaiseDracolichSoulJar(LichSealSoulSpell):
             if self.legacy:
                 phylactery.apply_buff(TouchedBySorcery(self.legacy, self.caster.source))
 
+class InstantRaising(Upgrade):
+
+    def on_init(self):
+        self.name = "Instant Raising"
+        self.level = 3
+        self.description = "Whenever you summon a [dragon] minion from a spell other than this spell, you immediately cast Raise Dracolich on it if possible."
+        self.global_triggers[EventOnUnitAdded] = self.on_unit_added
+    
+    def on_unit_added(self, evt):
+        if Tags.Dragon not in evt.unit.tags or are_hostile(evt.unit, self.owner) or evt.unit.source is self.prereq or not isinstance(evt.unit.source, Spell):
+            return
+        if not self.prereq.can_pay_costs() or not self.prereq.can_cast(evt.unit.x, evt.unit.y):
+            return
+        self.owner.level.act_cast(self.owner, self.prereq, evt.unit.x, evt.unit.y)
+
 class RaiseDracolichSpell(Spell):
 
     def on_init(self):
@@ -1413,78 +1438,71 @@ class RaiseDracolichSpell(Spell):
         
         self.tags = [Tags.Dark, Tags.Dragon, Tags.Enchantment, Tags.Conjuration]
         self.level = 6
-        self.max_charges = 2
-        self.range = 8
+        self.max_charges = 10
+        self.range = RANGE_GLOBAL
         self.requires_los = 0
 
-        self.upgrades["legacy"] = (1, 7, "Elemental Legacy", "The dracolich gains [100:damage] resistance of the same element as the breath weapon of dragon it was created from, and its breath weapon redeals half of its damage as that element.\nSkeletons raised by this breath, and the dracolich's soul jar, gain [100:damage] resistance to that element and a ranged attack of that element.")
-        self.upgrades["dragon_mage"] = (1, 5, "Dragon Mage", "The dracolich can cast Touch of Death with a 3 turn cooldown.\nThis Touch of Death gains all of your upgrades and bonuses.")
-        self.upgrades["forced"] = (1, 4, "Forced Conversion", "Can now target enemy dragons, dealing [{damage}_dark:dark] damage instead of instantly killing.\nIf this kills the target, raise it as a dracolich.")
+        self.upgrades["legacy"] = (1, 7, "Elemental Legacy", "The dracolich gains [100:damage] resistance of the same element as the breath weapon of the dragon it was created from, and its breath weapon redeals half of its damage as that element.\nUnits summoned by the dracolich gain [100:damage] resistance to that element and a ranged attack of that element.")
+        self.upgrades["dragon_mage"] = (1, 5, "Dragon Mage", "The dracolich can cast Death Bolt with a 3 turn cooldown.\nThis Death Bolt gains all of your upgrades and bonuses.")
+        self.upgrades["ghost"] = (1, 5, "Spectral Breath", "The dracolich's breath summons ghosts with [dark] immunity in empty tiles.\nOccupied tiles are dealt [dark] damage equal to the melee damage of the ghosts.")
+        self.add_upgrade(InstantRaising())
     
     def get_description(self):
-        return ("Kill target dragon minion and resurrect it as a dracolich with the same max HP, melee damage, breath damage, and breath range.\n"
-                "The dracolich can create a soul jar that makes itself immortal as long as the jar exists, and its [dark] breath raises slain [living] enemies as friendly skeletons.\n"
-                "Bonuses to [minion_health:minion_health] benefit the soul jar, and [minion_damage:minion_damage] benefit the skeletons.").format(**self.fmt_dict())
-    
-    def fmt_dict(self):
-        stats = Spell.fmt_dict(self)
-        stats["damage"] = self.get_stat("damage", base=100)
-        return stats
+        return ("Kill target [dragon] minion and resurrect it as a dracolich with the same max HP, melee damage, breath damage, and breath range.\n"
+                "The dracolich can create a soul jar that makes itself immortal as long as the jar exists, and its [dark] breath raises slain [living] enemies as friendly skeletons with the same max HP.").format(**self.fmt_dict())
 
     def can_cast(self, x, y):
         if not Spell.can_cast(self, x, y):
             return False
         unit = self.caster.level.get_unit_at(x, y)
-        if unit and Tags.Dragon in unit.tags:
-            if not are_hostile(unit, self.caster):
-                return True
-            elif self.get_stat("forced"):
-                return True
-        return False
+        return unit and Tags.Dragon in unit.tags and not are_hostile(unit, self.caster)
 
-    def cast_instant(self, x, y):		
+    def cast_instant(self, x, y):
+
         unit = self.caster.level.get_unit_at(x, y)
-        if unit and Tags.Dragon in unit.tags:
-            self.caster.level.queue_spell(self.try_raise(unit))
-            if not are_hostile(unit, self.caster):
-                unit.kill()
-            elif self.get_stat("forced"):
-                unit.deal_damage(self.get_stat("damage", base=100), Tags.Dark, self)
-    
-    def try_raise(self, unit):
+        if not unit:
+            return
+        unit.kill()
 
-        if unit and not unit.is_alive() and not self.caster.level.get_unit_at(unit.x, unit.y):
+        unit.has_been_raised = True
+        legacy = None
+        dracolich = Dracolich()
+        dracolich.max_hp = unit.max_hp
+        has_breath = False
+        has_melee = False
 
-            unit.has_been_raised = True
-            legacy = None
-            dracolich = Dracolich()
-            dracolich.max_hp = unit.max_hp
-
-            for spell in unit.spells:
-                if isinstance(spell, BreathWeapon):
-                    if self.get_stat("legacy"):
-                        legacy = spell.damage_type
-                    breath = RaiseDracolichBreath(spell.damage, spell.range, legacy)
-                    dracolich.spells[1] = breath
-                elif spell.melee:
-                    dracolich.spells[2].damage = spell.damage
-            
-            dracolich.spells[0] = RaiseDracolichSoulJar(legacy)
-
-            if self.get_stat('dragon_mage'):
-                touch = TouchOfDeath()
-                touch.statholder = self.caster
-                touch.max_charges = 0
-                touch.cur_charges = 0
-                touch.cool_down = 3
-                dracolich.spells.insert(1, touch)
-            
-            self.summon(dracolich, target=unit)
-            
-            if legacy:
-                dracolich.resists[legacy] += 100
+        for spell in unit.spells:
+            if isinstance(spell, BreathWeapon):
+                if self.get_stat("legacy"):
+                    legacy = spell.damage_type
+                dracolich.spells[1] = RaiseDracolichBreath(spell.damage, spell.range, legacy, self.get_stat("ghost"))
+                has_breath = True
+            elif spell.melee:
+                dracolich.spells[2].damage = spell.damage
+                has_melee = True
         
-        yield
+        breath = dracolich.spells[1]
+        melee = dracolich.spells[2]
+        if not has_breath:
+            dracolich.spells.remove(breath)
+        if not has_melee:
+            dracolich.spells.remove(melee)
+
+        dracolich.spells[0] = RaiseDracolichSoulJar(legacy)
+        
+        if legacy:
+            dracolich.resists[legacy] += 100
+
+        if self.get_stat('dragon_mage'):
+            bolt = DeathBolt()
+            bolt.statholder = self.caster
+            bolt.max_charges = 0
+            bolt.cur_charges = 0
+            bolt.cool_down = 3
+            bolt.get_description = lambda: ""
+            dracolich.spells.insert(1, bolt)
+        
+        self.summon(dracolich, target=unit)
 
 class DragonFearBuff(Buff):
 
@@ -1624,20 +1642,16 @@ class DraconianBrutality(Upgrade):
                 melee_damage = spell.damage
             elif isinstance(spell, BreathWeapon):
                 breath_range = spell.range
-        
-        if melee_damage is None:
-            melee_damage = 8
-        if breath_range is None:
-            breath_range = 7
 
+        if melee_index is None:
+            return
         swipe = DragonSwipe(melee_damage)
         swipe.caster = evt.unit
         swipe.owner = evt.unit
-        if melee_index is not None:
-            evt.unit.spells[melee_index] = swipe
-        else:
-            evt.unit.spells.append(swipe)
+        evt.unit.spells[melee_index] = swipe
         
+        if breath_range is None:
+            return
         dive = LeapAttack(melee_damage, breath_range)
         dive.name = "Dive"
         dive.caster = evt.unit
