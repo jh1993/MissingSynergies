@@ -1359,11 +1359,11 @@ class RaiseDracolichBreath(BreathWeapon):
             dummy_breath = BreathWeapon()
             dummy_breath.damage_type = self.legacy
             dummy_breath.range = self.range
-            dummy_breath.damage = 0
+            dummy_breath.damage = self.get_stat("damage")//2
             dummy_breath.caster = self.caster
+            dummy_breath.owner = self.caster
             self.caster.level.event_manager.raise_event(EventOnSpellCast(dummy_breath, self.caster, x, y), self.caster)
-        self.caster.level.queue_spell(BreathWeapon.cast(self, x, y))
-        yield
+        yield from BreathWeapon.cast(self, x, y)
 
     def per_square_effect(self, x, y):
 
@@ -1439,7 +1439,7 @@ class RaiseDracolichSpell(Spell):
         self.range = RANGE_GLOBAL
         self.requires_los = 0
 
-        self.upgrades["legacy"] = (1, 7, "Elemental Legacy", "The dracolich gains [100:damage] resistance of the same element as the breath weapon of the dragon it was created from, and its breath weapon redeals half of its damage as that element.\nUnits summoned by the dracolich gain [100:damage] resistance to that element and a ranged attack of that element.")
+        self.upgrades["legacy"] = (1, 7, "Elemental Legacy", "The dracolich gains [100:damage] resistance of the same element as the breath weapon of the dragon it was created from, and its breath weapon redeals half of its damage as that element; this also counts as using another breath weapon of that element.\nUnits summoned by the dracolich gain [100:damage] resistance to that element and a ranged attack of that element.")
         self.upgrades["dragon_mage"] = (1, 5, "Dragon Mage", "The dracolich can cast Death Bolt with a 3 turn cooldown.\nThis Death Bolt gains all of your upgrades and bonuses.")
         self.upgrades["ghost"] = (1, 5, "Spectral Breath", "The dracolich's breath summons ghosts with [dark] immunity in empty tiles.\nOccupied tiles are dealt [dark] damage equal to the melee damage of the ghosts.")
         self.add_upgrade(InstantRaising())
