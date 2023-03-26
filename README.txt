@@ -16,6 +16,7 @@ Level 1:
 Level 2:
 + Chaotic Spark (Fire/Lightning/Chaos/Sorcery)
 + Kingswater (Holy/Nature/Sorcery)
++ Toxic Orb (Nature/Orb/Conjuration)
 + Volatile Orb (Chaos/Orb/Conjuration/Sorcery)
 
 Level 3:
@@ -50,8 +51,8 @@ Level 4:
 + Iron Turtle (Metallic/Nature/Conjuration)
 + Karmic Loan (Holy/Enchantment)
 + Lucky Gnome (Dark/Nature/Arcane/Conjuration)
++ Malignant Growth (Nature/Enchantment)
 + Nonlocality (Arcane/Translocation/Enchantment)
-+ Orb of Flesh (Nature/Orb/Conjuration)
 + Prism Shell (Holy/Ice/Enchantment)
 + Psychedelic Spores (Arcane/Nature/Sorcery)
 + Returning Arrow (Arcane/Metallic/Sorcery)

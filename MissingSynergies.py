@@ -348,16 +348,13 @@ class Electrolysis(Upgrade):
         if not target.has_buff(Acidified):
             target.apply_buff(Acidified())
         else:
+            excess = 0
             poison = target.get_buff(Poison)
-            if not poison:
-                target.apply_buff(Poison(), duration)
-            else:
-                if poison.turns_left >= duration:
-                    target.deal_damage(duration, Tags.Lightning, self)
-                else:
-                    remainder = duration - poison.turns_left
-                    poison.turns_left = duration
-                    target.deal_damage(remainder, Tags.Lightning, self)
+            if poison:
+                excess = min(poison.turns_left, duration)
+            if excess:
+                target.deal_damage(excess, Tags.Lightning, self)
+            target.apply_buff(Poison(), duration)
 
 class SpaceChillBuff(Buff):
 
@@ -2242,18 +2239,19 @@ class GenesisSpell(Spell):
             self.summon(unit, target=Point(x, y), radius=5, sort_dist=False)
         yield
 
-class OrbOfFleshBuff(Buff):
+class EnfleshedBuff(Buff):
 
     def __init__(self, spell, buff_type):
         self.spell = spell
-        self.hp_threshold = spell.get_stat("minion_health")
+        self.hp = spell.get_stat("damage")*5
         Buff.__init__(self)
         self.buff_type = buff_type
         self.resists[Tags.Poison if self.buff_type == BUFF_TYPE_CURSE else Tags.Heal] = -100
 
     def on_init(self):
         self.color = Tags.Living.color
-        self.name = "Enfleshed (%i HP)" % self.hp_threshold
+        # Cannot use STACK_REPLACE because buffs with different names will not be recognized as the same buff.
+        self.name = "Enfleshed (%i HP)" % self.hp
         self.asset = ["MissingSynergies", "Statuses", "enfleshed"]
         self.nonliving = True
         self.owner_triggers[EventOnDamaged] = lambda evt: self.check_hp()
@@ -2262,38 +2260,38 @@ class OrbOfFleshBuff(Buff):
             self.owner_triggers[EventOnDeath] = lambda evt: self.owner.level.queue_spell(self.boom())
 
     def on_applied(self, owner):
-        self.owner.max_hp += self.hp_threshold
-        self.owner.cur_hp += self.hp_threshold
+        self.owner.max_hp += self.hp
+        self.owner.cur_hp += self.hp
         if Tags.Living not in self.owner.tags:
             self.owner.tags.append(Tags.Living)
         else:
             self.nonliving = False
 
     def check_hp(self):
-        if self.owner.cur_hp <= self.hp_threshold:
+        if self.owner.cur_hp <= self.hp:
             self.owner.kill()
     
     def on_advance(self):
         self.check_hp()
         if are_hostile(self.owner, self.spell.caster):
-            self.owner.deal_damage(self.spell.get_stat("minion_damage"), Tags.Poison, self.spell)
+            self.owner.deal_damage(self.owner.max_hp//20, Tags.Poison, self.spell)
         else:
-            self.owner.deal_damage(-self.spell.get_stat("minion_damage"), Tags.Heal, self.spell)
+            self.owner.deal_damage(-(self.owner.max_hp//20), Tags.Heal, self.spell)
 
     def on_unapplied(self):
-        # Only remove living tag and added max HP after other on-death effects trigger
+        # Only remove living tag and added max HP after other queued spells resolve.
         self.owner.level.queue_spell(self.unmodify_unit())
     
     def unmodify_unit(self):
-        self.owner.cur_hp -= self.hp_threshold
+        self.owner.cur_hp -= self.hp
         self.owner.cur_hp = max(1 if self.owner.is_alive() else 0, self.owner.cur_hp)
-        drain_max_hp(self.owner, self.hp_threshold)
+        drain_max_hp(self.owner, self.hp)
         if self.nonliving and Tags.Living in self.owner.tags:
             self.owner.tags.remove(Tags.Living)
         yield
     
     def boom(self):
-        for stage in Burst(self.owner.level, Point(self.owner.x, self.owner.y), math.ceil(self.spell.get_stat("minion_range")/2)):
+        for stage in Burst(self.owner.level, Point(self.owner.x, self.owner.y), self.spell.get_stat("radius")//2):
             for point in stage:
                 dtype = random.choice([Tags.Physical, Tags.Poison])
                 unit = self.owner.level.get_unit_at(point.x, point.y)
@@ -2306,68 +2304,57 @@ class OrbOfFleshBuff(Buff):
     def on_buff_apply(self, evt):
         if not isinstance(evt.buff, ReincarnationBuff):
             return
-        evt.buff.max_hp -= self.hp_threshold
+        evt.buff.max_hp -= self.hp
 
-class OrbOfFleshSpell(OrbSpell):
+class MalignantGrowthSpell(Spell):
 
     def on_init(self):
-        self.name = "Orb of Flesh"
-        self.asset = ["MissingSynergies", "Icons", "orb_of_flesh"]
-        self.tags = [Tags.Orb, Tags.Nature, Tags.Conjuration]
+        self.name = "Malignant Growth"
+        self.asset = ["MissingSynergies", "Icons", "malignant_growth"]
+        self.tags = [Tags.Nature, Tags.Enchantment]
         self.level = 4
-        self.max_charges = 4
+        self.max_charges = 6
         self.range = 9
+        self.requires_los = False
+        self.radius = 4
+        self.damage = 8
 
-        self.minion_health = 40
-        self.minion_range = 3
-        self.minion_damage = 3
-        self.num_targets = 2
+        self.upgrades["radius"] = (3, 3)
+        self.upgrades["damage"] = (8, 4, "HP Bonus", "Increase the bonus max HP and death threshold of enfleshment by [40:living].")
+        self.upgrades["friendly"] = (1, 3, "Benign Growth", "Now also affects all of your minions in the radius, healing them each turn instead of dealing damage and giving healing bonus instead of [poison] weakness.")
+        self.upgrades["aggressive"] = (1, 3, "Aggressive Tumor", "When affecting an already enfleshed enemy, it will now take [poison] damage equal to 25% of the max HP it gained from this spell.\nIf you have the Benign Growth upgrade, this will instead [heal] affected allies.")
+        self.upgrades["explosion"] = (1, 5, "Gore Explosion", "When an enfleshed unit dies, it will now deal [poison] or [physical] damage equal to 20% of its max HP to all enemies in a burst with radius equal to half of this spell's radius, rounded down.")
 
-        self.upgrades["minion_range"] = (3, 2)
-        self.upgrades["minion_damage"] = (2, 2)
-        self.upgrades["num_targets"] = (2, 4, "Num Targets", "The orb can affect [2:num_targets] more targets.")
-        self.upgrades["symbiosis"] = (1, 2, "Symbiosis", "Can also fuse with your other minions, healing them each turn instead of dealing damage, and giving a healing bonus instead of decreasing [poison] resistance.")
-        self.upgrades["explosion"] = (1, 4, "Gore Explosion", "On death, the affected unit explodes to randomly deal [poison] or [physical] damage equal to 20% of its max HP, to all enemies in a burst with radius equal to half of the orb's minion range, rounded up.")
-    
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["hp_bonus"] = self.get_stat("damage")*5
+        return stats
+
     def get_description(self):
-        return ("Summon a flesh orb with [{minion_health}_HP:minion_health] next to the caster. Each turn a piece of it detaches and fuses with a visible enemy up to [{minion_range}_tiles:minion_range] away, affecting up to [{num_targets}:num_targets] enemies.\n"
-                "Each target becomes [living], loses [100_poison:poison] resistance, and takes [{minion_damage}_poison:poison] damage per turn.\n"
-                "Its max and current HP increases by amounts equal to the orb's max HP, but it will die instantly when its max HP drops to that amount or lower.\n"
-                "The orb has no will of its own, each turn it will float one tile towards the target.\n"
-                "The orb can be destroyed by poison damage.").format(**self.fmt_dict())
+        return ("Enemies in a [{radius}_tile:radius] radius are enfleshed. They become [living], lose [100_poison:poison] resistance, and gain [{hp_bonus}:living] max HP; the HP bonus is equal to 5 times the [damage] of this spell.\n"
+                "Each turn, enfleshed enemies take [poison] damage equal to 5% of their max HP.\n"
+                "If an enfleshed unit's current HP drops to an amount equal to or below the max HP it gained from enfleshment, it dies instantly.").format(**self.fmt_dict())
 
-    def on_make_orb(self, orb):
-        orb.resists[Tags.Poison] = 0
-        orb.asset = ["MissingSynergies", "Units", "orb_of_flesh"]
-        orb.targets_left = self.get_stat("num_targets")
-        buff = orb.get_buff(OrbBuff)
-        if buff:
-            # If the orb is resurrected.
-            buff.owner_triggers[EventOnDeath] = lambda evt: setattr(orb, "targets_left", self.get_stat("num_targets"))
-    
-    def on_orb_collide(self, orb, next_point):
-        orb.level.show_effect(next_point.x, next_point.y, Tags.Tongue)
-        yield
-
-    def detach(self, orb, target):
-        for point in orb.level.get_points_in_line(orb, target):
-            orb.level.show_effect(point.x, point.y, Tags.Tongue)
-            yield
-        target.apply_buff(OrbOfFleshBuff(self, BUFF_TYPE_CURSE if are_hostile(target, self.caster) else BUFF_TYPE_BLESS))
-        orb.targets_left -= 1
-
-    def on_orb_move(self, orb, next_point):
-        if orb.targets_left <= 0:
-            return
-        targets = orb.level.get_units_in_ball(next_point, self.get_stat("minion_range"))
-        targets = [target for target in targets if orb.level.can_see(next_point.x, next_point.y, target.x, target.y) and not target.has_buff(OrbOfFleshBuff)]
-        targets = [target for target in targets if target is not self.caster and not isinstance(target.source, OrbOfFleshSpell)]
-        if not self.get_stat("symbiosis"):
-            targets = [target for target in targets if are_hostile(target, self.caster)]
-        if not targets:
-            return
-        target = random.choice(targets)
-        self.caster.level.queue_spell(self.detach(orb, target))
+    def cast_instant(self, x, y):
+        friendly = self.get_stat("friendly")
+        aggressive = self.get_stat("aggressive")
+        for unit in self.caster.level.get_units_in_ball(Point(x, y), self.get_stat("radius")):
+            if unit is self.caster:
+                continue
+            existing = unit.get_buff(EnfleshedBuff)
+            if existing:
+                if aggressive:
+                    if existing.buff_type == BUFF_TYPE_CURSE:
+                        unit.deal_damage(existing.hp//4, Tags.Poison, self)
+                    else:
+                        unit.deal_damage(-(existing.hp//4), Tags.Heal, self)
+                unit.remove_buff(existing)
+            if are_hostile(unit, self.caster):
+                unit.apply_buff(EnfleshedBuff(self, BUFF_TYPE_CURSE))
+            else:
+                if not friendly:
+                    continue
+                unit.apply_buff(EnfleshedBuff(self, BUFF_TYPE_BLESS))
 
 class ChaosEyeBuff(Spells.ElementalEyeBuff):
     def __init__(self, spell):
@@ -4319,7 +4306,7 @@ class FrigidFamineBuff(Buff):
             return
         random.shuffle(targets)
         num_targets = random.choice(range(1, len(targets) + 1))
-        damage = -evt.damage//num_targets
+        damage = -(evt.damage//num_targets)
         for target in targets[:num_targets]:
             target.deal_damage(damage, random.choice([Tags.Dark, Tags.Ice]), self.spell, penetration=target.resists[Tags.Heal] if self.starvation and are_hostile(target, self.owner) and target.resists[Tags.Heal] > 0 else 0)
 
@@ -5561,16 +5548,13 @@ class AfterlifeEchoesBuff(Buff):
                     target.deal_damage(damage, Tags.Dark, self.spell)
                     target.deal_damage(damage, Tags.Holy, self.spell)
                     if life:
+                        excess = 0
                         poison = target.get_buff(Poison)
                         if poison:
-                            if poison.turns_left < damage:
-                                poison_damage = damage - poison.turns_left
-                                poison.turns_left = damage
-                            else:
-                                poison_damage = damage
-                            target.deal_damage(poison_damage, Tags.Poison, self.spell)
-                        else:
-                            target.apply_buff(Poison(), damage)
+                            excess = min(damage, poison.turns_left)
+                        if excess:
+                            target.deal_damage(excess, Tags.Poison, self.spell)
+                        target.apply_buff(Poison(), damage)
             yield
         
         self.owner.level.queue_spell(self.kill_unit(unit))
@@ -6348,6 +6332,7 @@ class ParlorTrickSpell(Spell):
         self.upgrades["max_charges"] = (15, 2)
         self.upgrades["range"] = (5, 2)
         self.upgrades["endless"] = (1, 4, "Endless Trick", "Each cast of Parlor Trick has a 75% chance to cast itself again, as long as it has enough charges.\nThis upgrade cannot copy Parlor Trick more times in a turn than the spell has max charges. This resets before the beginning of your turn.")
+        self.upgrades["destroy"] = (1, 7, "Utterly Destroy", "If your max HP is higher than the target enemy's, Parlor Trick now has a chance to instantly erase the target from existence, equal to the difference in max HP divided by your max HP.\nThis will suppress all effects that normally trigger when the target dies, including reincarnation.\nHowever, if the target has reincarnation, your max HP will be compared with the target's initial max HP remembered by reincarnation, which remains even if the target's real max HP is reduced.")
 
     def get_description(self):
         return ("Pretend to cast a [fire] spell, an [ice] spell, a [lightning] spell, a [nature] spell, an [arcane] spell, a [holy] spell, and a [dark] spell at the target tile in random order, triggering all effects that are normally triggered when casting spells with those tags.\n"
@@ -6366,6 +6351,16 @@ class ParlorTrickSpell(Spell):
             spell.caster = self.caster
             spell.owner = self.caster
             self.caster.level.event_manager.raise_event(EventOnSpellCast(spell, self.caster, x, y), self.caster)
+
+        if self.get_stat("destroy"):
+            unit = self.caster.level.get_unit_at(x, y)
+            if unit and are_hostile(unit, self.caster):
+                hp = unit.max_hp
+                reincarnation = unit.get_buff(ReincarnationBuff)
+                if reincarnation:
+                    hp = reincarnation.max_hp
+                if random.random() < (self.caster.max_hp - hp)/self.caster.max_hp:
+                    unit.kill(trigger_death_event=False)
 
         if self.get_stat("endless") and self.can_cast(x, y) and self.cur_charges > 0 and random.random() < 0.75:
             counter = self.caster.get_buff(ParlorTrickEndlessCounter)
@@ -7916,10 +7911,14 @@ class EmpyrealFormBuff(Buff):
         self.owner.deal_damage(-self.max_hp, Tags.Heal, self.spell)
 
     def on_unapplied(self):
+        self.owner.level.queue_spell(self.unmodify_unit())
+
+    def unmodify_unit(self):
         self.owner.max_hp = max(0, self.owner.max_hp - self.max_hp)
         self.owner.cur_hp = min(self.owner.cur_hp, self.owner.max_hp)
         if self.owner.max_hp <= 0:
             self.owner.kill()
+        yield
 
     def on_advance(self):
         self.owner.level.queue_spell(self.spell.boom())
@@ -8238,7 +8237,7 @@ class BloodyMassBuff(Buff):
         self.owner_triggers[EventOnDamaged] = self.on_damaged
     
     def on_damaged(self, evt):
-        self.owner.source.caster.deal_damage(-evt.damage//2, Tags.Heal, self)
+        self.owner.source.caster.deal_damage(-(evt.damage//2), Tags.Heal, self)
     
     def on_advance(self):
         if self.owner.cur_hp < self.owner.max_hp:
@@ -9276,7 +9275,8 @@ class KarmicLoanBuff(Buff):
             self.do_heal(self.owner.max_hp)
     
     def get_damage(self):
-        return math.ceil(max(0, self.total_healed - self.total_self_damage)*(1 - self.owner.shields/20))
+        shield_mult = max(0, (1 - self.owner.shields/20))
+        return math.ceil(max(0, self.total_healed - self.total_self_damage)*shield_mult)
 
     def on_unapplied(self):
         damage = self.get_damage()
@@ -10040,14 +10040,12 @@ class CoolantSpraySpell(Spell):
                 if poison:
                     existing = unit.get_buff(Poison)
                     amount = duration*5
+                    excess = 0
                     if existing:
-                        if existing.turns_left >= amount:
-                            unit.deal_damage(duration, Tags.Poison, self)
-                        else:
-                            unit.deal_damage(math.ceil((amount - existing.turns_left)/5), Tags.Poison, self)
-                            existing.turns_left = amount
-                    else:
-                        unit.apply_buff(Poison(), amount)
+                        excess = min(amount, existing.turns_left)
+                    if excess:
+                        unit.deal_damage(math.ceil(excess/5), Tags.Poison, self)
+                    unit.apply_buff(Poison(), amount)
                 
                 if spontaneous:
                     existing = unit.get_buff(CoolantBuff)
@@ -10302,10 +10300,14 @@ class HealthMutation(Buff):
             drain_max_hp(self.owner, 30)
     
     def on_unapplied(self):
+        self.owner.level.queue_spell(self.unmodify_unit())
+
+    def unmodify_unit(self):
         if self.buff_type == BUFF_TYPE_BLESS:
             drain_max_hp(self.owner, 30)
         else:
             self.owner.max_hp += 30
+        yield
 
 class LeapMutation(Buff):
     def __init__(self, damage, leap_range):
@@ -11607,6 +11609,7 @@ class BurnoutReactorBuff(DamageAuraBuff):
         DamageAuraBuff.__init__(self, damage=1, damage_type=Tags.Fire, radius=spell.get_stat("radius"))
         self.source = spell
         self.name = "Burnout Reactor"
+        self.stack_type = STACK_REPLACE
     
     def on_init(self):
         self.asset = ["MissingSynergies", "Statuses", "burnout_reactor"]
@@ -11626,8 +11629,12 @@ class BurnoutReactorBuff(DamageAuraBuff):
         self.boom()
 
     def on_unapplied(self):
+        self.owner.level.queue_spell(self.unmodify_unit())
+
+    def unmodify_unit(self):
         if not self.originally_fire and Tags.Fire in self.owner.tags:
             self.owner.tags.remove(Tags.Fire)
+        yield
 
     def on_advance(self):
         if self.aura:
@@ -11670,7 +11677,7 @@ class BurnoutReactorSpell(Spell):
         return ("The target minion becomes temporary and dies after [{minion_duration}_turns:minion_duration], but becomes a [fire] unit and gains [100_fire:fire] resistance.\n"
                 "When this effect is applied, and also when the minion dies, it explodes; all enemies in a [{radius}_tile:radius] radius take [{damage}_fire:fire] damage from this spell.\n"
                 "The target minion also gains a bonus to all attack damage equal to [{minion_damage}:minion_damage] plus half of the explosion damage.\n"
-                "Any on-summon effects you have will be triggered again when this effect is applied.").format(**self.fmt_dict())
+                "Any on-summon effects you have will be triggered again when this effect is applied or reapplied.").format(**self.fmt_dict())
 
     def can_cast(self, x, y):
         if not Spell.can_cast(self, x, y):
@@ -11695,6 +11702,7 @@ class LiquidLightningBuff(Buff):
     def on_init(self):
         self.name = "Liquid Lightning"
         self.asset = ["MissingSynergies", "Statuses", "liquid_lightning"]
+        self.stack_type = STACK_REPLACE
         self.color = Tags.Lightning.color
         self.resists[Tags.Lightning] = 100
         self.damage = self.spell.get_stat("damage")
@@ -11721,10 +11729,14 @@ class LiquidLightningBuff(Buff):
         self.owner.level.event_manager.raise_event(EventOnUnitAdded(self.owner), self.owner)
 
     def on_unapplied(self):
+        self.owner.level.queue_spell(self.unmodify_unit())
+
+    def unmodify_unit(self):
         if not self.originally_lightning and Tags.Lightning in self.owner.tags:
             self.owner.tags.remove(Tags.Lightning)
         if self.flip:
             self.owner.stationary = not self.owner.stationary
+        yield
 
     def on_pre_damaged(self, evt):
         if evt.damage <= 0 or not are_hostile(evt.unit, self.spell.caster):
@@ -11770,7 +11782,7 @@ class LiquidLightningSpell(Spell):
     def get_description(self):
         return ("The target unit gains [100_lightning:lightning] resistance and becomes a [lightning] unit. If it was immobile, it gains the ability to move.\n"
                 "Whenever that unit moves, attacks, or passes its turn, it shoots a bolt at a random enemy in line of sight within [{radius}_tiles:radius], dealing [{damage}_lightning:lightning] damage.\n"
-                "Any on-summon effects you have will be triggered again when this effect is applied.").format(**self.fmt_dict())
+                "Any on-summon effects you have will be triggered again when this effect is applied or reapplied.").format(**self.fmt_dict())
 
     def can_cast(self, x, y):
         if not Spell.can_cast(self, x, y):
@@ -11792,6 +11804,7 @@ class HeartOfWinterBuff(Buff):
     def on_init(self):
         self.name = "Heart of Winter"
         self.asset = ["MissingSynergies", "Statuses", "heart_of_winter"]
+        self.stack_type = STACK_REPLACE
         self.color = Tags.Ice.color
         self.resists[Tags.Ice] = 100
         if self.spell.get_stat("thorns"):
@@ -11812,9 +11825,14 @@ class HeartOfWinterBuff(Buff):
         self.owner.level.event_manager.raise_event(EventOnUnitAdded(self.owner), self.owner)
 
     def on_unapplied(self):
+        # Queue this so currently queued spells resolve before the max HP is reduced.
+        self.owner.level.queue_spell(self.unmodify_unit())
+
+    def unmodify_unit(self):
         drain_max_hp(self.owner, self.hp)
         if not self.originally_ice and Tags.Ice in self.owner.tags:
             self.owner.tags.remove(Tags.Ice)
+        yield
 
     def on_damaged(self, evt):
         if not evt.source or not are_hostile(evt.source.owner, self.owner):
@@ -11852,7 +11870,7 @@ class HeartOfWinterSpell(Spell):
     def get_description(self):
         return ("The target unit gains [100_ice:ice] resistance and becomes an [ice] unit. If it was a temporary minion and not an [orb], it becomes permanent.\n"
                 "It also gains [{hp_bonus}:ice] max and current HP. This bonus is equal to 5 times the [damage] stat of this spell.\n"
-                "Any on-summon effects you have will be triggered again when this effect is applied.").format(**self.fmt_dict())
+                "Any on-summon effects you have will be triggered again when this effect is applied or reapplied.").format(**self.fmt_dict())
 
     def can_cast(self, x, y):
         if not Spell.can_cast(self, x, y):
@@ -11874,6 +11892,7 @@ class NonlocalityBuff(Buff):
     def on_init(self):
         self.name = "Nonlocality"
         self.asset = ["MissingSynergies", "Statuses", "nonlocality"]
+        self.stack_type = STACK_REPLACE
         self.color = Tags.Arcane.color
         self.resists[Tags.Arcane] = 100
         self.damage = self.spell.get_stat("damage")
@@ -11895,10 +11914,14 @@ class NonlocalityBuff(Buff):
         self.owner.level.event_manager.raise_event(EventOnUnitAdded(self.owner), self.owner)
 
     def on_unapplied(self):
+        self.owner.level.queue_spell(self.unmodify_unit())
+
+    def unmodify_unit(self):
         if not self.originally_arcane and Tags.Arcane in self.owner.tags:
             self.owner.tags.remove(Tags.Arcane)
         if self.flip:
             self.owner.stationary = not self.owner.stationary
+        yield
 
     def on_damaged(self, evt):
         if are_hostile(evt.unit, self.owner) and isinstance(evt.source, Spell) and evt.source.caster is self.owner:
@@ -11940,7 +11963,7 @@ class NonlocalitySpell(Spell):
     def get_description(self):
         return ("The target unit gains [100_arcane:arcane] resistance and becomes an [arcane] unit. It becomes immobile, but will now automatically teleport each turn to a random enemy it's capable of harming before it acts, if possible.\n"
                 "Whenever it deals damage to an enemy, that enemy loses [{damage}_HP:damage]. This is not considered dealing damage, but benefits from this spell's [damage] bonuses.\n"
-                "Any on-summon effects you have will be triggered again when this effect is applied.").format(**self.fmt_dict())
+                "Any on-summon effects you have will be triggered again when this effect is applied or reapplied.").format(**self.fmt_dict())
 
     def can_cast(self, x, y):
         if not Spell.can_cast(self, x, y):
@@ -12154,5 +12177,117 @@ class GateMaster(Upgrade):
         gate.summon(unit)
         yield
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, OrbOfFleshSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell])
+class PlagueBearer(Upgrade):
+
+    def on_init(self):
+        self.name = "Plague Bearer"
+        self.level = 4
+        self.description = "Whenever the toxic orb takes [poison] damage, it deals the same damage to all enemies in its radius.\nEach turn, you heal the orb by an amount equal to the duration of [poison] it is suffering from, which ignores 100% healing penalty."
+        self.global_triggers[EventOnDamaged] = self.on_damaged
+    
+    def on_advance(self):
+        for unit in list(self.owner.level.units):
+            if unit.source is not self.prereq:
+                continue
+            poison = unit.get_buff(Poison)
+            if not poison:
+                return
+            unit.deal_damage(-poison.turns_left, Tags.Heal, self.prereq, penetration=100)
+    
+    def on_damaged(self, evt):
+        
+        if evt.damage_type != Tags.Poison or evt.unit.source is not self.prereq:
+            return
+        
+        radius = self.prereq.get_stat("radius")
+        effects_left = 7
+        for unit in self.owner.level.get_units_in_ball(evt.unit, radius):
+            if not are_hostile(unit, self.prereq.caster) or unit.source is self.prereq:
+                continue
+            unit.deal_damage(evt.damage, Tags.Poison, self.prereq)
+            effects_left -= 1
+        
+        if effects_left <= 0:
+            return
+        points = self.owner.level.get_points_in_ball(evt.unit.x, evt.unit.y, radius)
+        points = [p for p in points if not self.owner.level.get_unit_at(p.x, p.y)]
+        random.shuffle(points)
+        for _ in range(effects_left):
+            if not points:
+                break
+            p = points.pop()
+            self.owner.level.show_effect(p.x, p.y, Tags.Poison, minor=True)
+
+class ToxicOrbSpell(OrbSpell):
+
+    def on_init(self):
+        self.name = "Toxic Orb"
+        self.asset = ["MissingSynergies", "Icons", "toxic_orb"]
+        self.tags = [Tags.Orb, Tags.Nature, Tags.Conjuration]
+        self.level = 2
+        self.max_charges = 4
+        self.range = 9
+        self.duration = 10
+        self.radius = 7
+        self.minion_health = 40
+
+        self.upgrades["radius"] = (3, 2)
+        self.upgrades["duration"] = (10, 2)
+        self.upgrades["intense"] = (1, 4, "Intense Toxicity", "When affecting an enemy that is already [poisoned], 10% of the excess [poison] duration the orb tries to inflict will be dealt as [poison] damage, rounded up.")
+        self.add_upgrade(PlagueBearer())
+
+    def on_make_orb(self, orb):
+        orb.resists[Tags.Poison] = 0
+        orb.asset = ["MissingSynergies", "Units", "toxic_orb"]
+
+    def on_orb_move(self, orb, next_point):
+
+        intense = self.get_stat("intense")
+        duration = self.get_stat("duration") + self.get_stat("minion_damage")
+        effects_left = 7
+        radius = self.get_stat("radius")
+        
+        for unit in self.caster.level.get_units_in_ball(next_point, radius):
+            if not are_hostile(unit, self.caster) or unit is orb:
+                continue
+            if intense:
+                existing = unit.get_buff(Poison)
+                excess = 0
+                if existing:
+                    excess = min(duration, existing.turns_left)
+                if excess:
+                    unit.deal_damage(math.ceil(excess/10), Tags.Poison, self)
+            poison = Poison()
+            poison.show_effect = False
+            unit.apply_buff(poison, duration)
+            self.caster.level.show_effect(unit.x, unit.y, Tags.Poison, minor=True)
+            effects_left -= 1
+
+        if effects_left <= 0:
+            return
+        points = self.caster.level.get_points_in_ball(next_point.x, next_point.y, radius)
+        points = [p for p in points if not self.caster.level.get_unit_at(p.x, p.y)]
+        random.shuffle(points)
+        for _ in range(effects_left):
+            if not points:
+                break
+            p = points.pop()
+            self.caster.level.show_effect(p.x, p.y, Tags.Poison, minor=True)
+
+    def on_orb_collide(self, orb, next_point):
+        orb.level.show_effect(next_point.x, next_point.y, Tags.Poison)
+        yield
+
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["total_duration"] = self.get_stat("duration") + self.get_stat("minion_damage")
+        return stats
+
+    def get_description(self):
+        return ("Summon a toxic orb next to the caster.\n"
+                "Each turn, the orb inflicts [{total_duration}_turns:duration] of [poison] on all enemies in a [{radius}_tile:radius] radius. This benefits from bonuses to both [duration] and [minion_damage:minion_damage].\n"
+                "The orb has no will of its own, each turn it will float one tile towards the target.\n"
+                "The orb can be destroyed by poison damage.").format(**self.fmt_dict())
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster])
