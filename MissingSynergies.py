@@ -1417,11 +1417,18 @@ class InstantRaising(Upgrade):
     def on_init(self):
         self.name = "Instant Raising"
         self.level = 3
-        self.description = "Whenever you summon a [dragon] minion from a spell other than this spell, you immediately cast Raise Dracolich on it if possible."
+        self.description = "Whenever you summon a [dragon] minion from a source other than this spell, and that minion has a breath weapon, you immediately cast Raise Dracolich on it if possible."
         self.global_triggers[EventOnUnitAdded] = self.on_unit_added
     
     def on_unit_added(self, evt):
-        if Tags.Dragon not in evt.unit.tags or are_hostile(evt.unit, self.owner) or evt.unit.source is self.prereq or not isinstance(evt.unit.source, Spell):
+        if Tags.Dragon not in evt.unit.tags or are_hostile(evt.unit, self.owner) or evt.unit.source is self.prereq:
+            return
+        has_breath = False
+        for s in evt.unit.spells:
+            if isinstance(s, BreathWeapon):
+                has_breath = True
+                break
+        if not has_breath:
             return
         if not self.prereq.can_pay_costs() or not self.prereq.can_cast(evt.unit.x, evt.unit.y):
             return
