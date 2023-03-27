@@ -3008,178 +3008,6 @@ class GoldenTricksterSpell(Spell):
 
         self.summon(unit, target=Point(x, y))
 
-class RainbowEggBuff(Buff):
-
-    def __init__(self, spell):
-        self.spell = spell
-        Buff.__init__(self)
-    
-    def on_init(self):
-        self.absorbed = defaultdict(lambda : 0)
-        self.global_triggers[EventOnDamaged] = self.on_damaged
-        self.owner_triggers[EventOnDeath] = self.on_death
-        self.weakness = Tags.Physical
-        self.on_advance = self.change_element
-        self.on_applied = lambda owner: self.change_element()
-
-    def change_element(self):
-        self.owner.resists[self.weakness] += 100
-        self.weakness = random.choice([Tags.Fire, Tags.Ice, Tags.Lightning, Tags.Poison, Tags.Holy, Tags.Dark, Tags.Arcane, Tags.Physical])
-        self.owner.resists[self.weakness] -= 100
-    
-    def on_damaged(self, evt):
-        if distance(evt.unit, self.owner) > self.spell.get_stat("radius"):
-            return
-        self.absorbed[evt.damage_type] += evt.damage
-    
-    def on_death(self, evt):
-        self.owner.level.queue_spell(self.hatch())
-
-    def hatch(self):
-        drake = Unit()
-        drake.name = "Rainbow Drake"
-        drake.asset = ["MissingSynergies", "Units", "rainbow_drake"]
-        drake.tags = [Tags.Living, Tags.Dragon]
-        drake.flying = True
-        drake.max_hp = self.spell.get_stat("minion_health")
-        for key in self.absorbed.keys():
-            drake.resists[key] = self.absorbed[key]
-        breath = RainbowBreath(self.spell)
-        drake.spells = [breath, SimpleMeleeAttack(self.spell.get_stat("minion_damage"))]
-        drake.buffs = [RainbowDrakeBuff(breath)]
-        if self.spell.get_stat("dragon_mage"):
-            drake.buffs.append(RainbowDragonMage(self.spell))
-        self.spell.summon(drake, target=self.owner)
-        yield
-
-class RainbowDrakeBuff(Buff):
-
-    def __init__(self, breath):
-        self.breath = breath
-        Buff.__init__(self)
-        self.description = "Each turn, breath weapon changes to a random element this unit resists."
-        self.color = Tags.Dragon.color
-        self.on_advance = self.change_element
-        self.on_applied = lambda owner: self.change_element()
-    
-    def change_element(self):
-        elements = []
-        weights = []
-        for element in list(self.owner.resists.keys()):
-            if element == Tags.Heal:
-                continue
-            if self.owner.resists[element] <= 0:
-                continue
-            elements.append(element)
-            weights.append(self.owner.resists[element])
-        if elements:
-            self.breath.damage_type = random.choices(elements, weights)[0]
-        else:
-            self.breath.damage_type = random.choice([Tags.Fire, Tags.Ice, Tags.Lightning, Tags.Poison, Tags.Holy, Tags.Dark, Tags.Arcane, Tags.Physical])
-
-class RainbowBreath(BreathWeapon):
-
-    def __init__(self, spell):
-        BreathWeapon.__init__(self)
-        self.name = "Rainbow Breath"
-        self.damage_type = Tags.Physical # To be immediately changed
-        self.damage = spell.get_stat("breath_damage")
-        self.range = spell.get_stat("minion_range")
-        self.penetration = spell.get_stat("penetration")
-    
-    def get_description(self):
-        return "Deals damage to enemies in a cone. Penetrates %s resistance by an amount equal to half of the user's own %s resistance%s." % (self.damage_type.name, self.damage_type.name, (" plus %i" % self.penetration) if self.penetration else "")
-
-    def per_square_effect(self, x, y):
-        unit = self.caster.level.get_unit_at(x, y)
-        if unit and are_hostile(self.caster, unit):
-            amount = (self.caster.resists[self.damage_type]//2 if self.caster.resists[self.damage_type] >= 0 else 0) + self.penetration
-            unit.deal_damage(self.get_stat("damage"), self.damage_type, self, penetration=amount)
-        else:
-            self.caster.level.show_effect(x, y, self.damage_type)
-    
-    def can_redeal(self, unit, already_checked):
-        return unit.resists[self.damage_type] - (self.caster.resists[self.damage_type]//2 if self.caster.resists[self.damage_type] >= 0 else 0) - self.penetration < 100
-
-class RainbowDragonMage(Buff):
-
-    def __init__(self, spell):
-        self.spell = spell
-        Buff.__init__(self)
-
-    def on_init(self):
-        self.owner_triggers[EventOnSpellCast] = self.on_spell_cast
-        self.freq = 2 if self.spell.caster.has_buff(DragonArchmage) else 3
-        self.color = Tags.Sorcery.color
-        self.cooldown = self.freq
-        self.update_description()
-    
-    def update_description(self):
-        self.description = "Gains a random damaging sorcery cantrip every %i turns, which can be only used once. Next one gained in %i turns." % (self.freq, self.cooldown)
-
-    def on_applied(self, owner):
-        self.cantrips = [type(spell) for spell in make_player_spells() if spell.level == 1 and Tags.Sorcery in spell.tags and hasattr(spell, "damage")]
-        self.add_cantrip()
-
-    def add_cantrip(self):
-        cantrip = random.choice(self.cantrips)()
-        cantrip.caster = self.owner
-        cantrip.owner = self.owner
-        cantrip.max_charges = 0
-        cantrip.cur_charges = 0
-        cantrip.statholder = self.spell.caster
-        self.owner.spells.insert(1, cantrip)
-
-    def on_advance(self):
-        self.cooldown -= 1
-        if not self.cooldown:
-            if not [spell for spell in self.owner.spells if type(spell) in self.cantrips]:
-                self.add_cantrip()
-                self.cooldown = self.freq
-            else:
-                self.cooldown = 1
-        self.update_description()
-    
-    def on_spell_cast(self, evt):
-        if type(evt.spell) in self.cantrips and evt.spell in self.owner.spells:
-            self.owner.spells.remove(evt.spell)
-
-class RainbowEggSpell(OrbSpell):
-
-    def on_init(self):
-        self.name = "Rainbow Egg"
-        self.asset = ["MissingSynergies", "Icons", "rainbow_egg"]
-        self.tags = [Tags.Dragon, Tags.Orb, Tags.Conjuration]
-        self.level = 6
-        self.max_charges = 2
-        self.range = 9
-        self.radius = 7
-
-        self.minion_health = 45
-        self.minion_damage = 8
-        self.breath_damage = 11
-        self.minion_range = 7
-        self.penetration = 0
-
-        self.upgrades["minion_health"] = (25, 3)
-        self.upgrades["penetration"] = (25, 3, "Resistance Penetration", "The rainbow drake's breath weapon penetrates an additional 25 resistance.")
-        self.upgrades["dragon_mage"] = (1, 3, "Dragon Mage", "The rainbow drake will gain a random damaging [sorcery] cantrip every 3 turns if it does not have any, which can be used once before being removed.\nThese cantrips gain all of your upgrades and bonuses.")
-    
-    def get_description(self):
-        return ("Summon a rainbow egg with [{minion_health}_HP:minion_health] next to the caster, which hatches into a rainbow drake with the same max HP and [{breath_damage}:minion_damage] breath damage upon death.\n"
-                "The rainbow drake gains resistance to each element equal to half of all damage of that type done within [{radius}_tiles:radius] of the egg during its lifetime. Its breath weapon does not harm allies, changes element randomly each turn to an element it resists, and penetrates resistances by half of that amount.\n"
-                "The egg has no will of its own, each turn it will float one tile towards the target.\n"
-                "The egg's elemental weakness changes randomly each turn.").format(**self.fmt_dict())
-
-    def on_make_orb(self, orb):
-        orb.asset = ["MissingSynergies", "Units", "rainbow_egg"]
-        orb.resists[Tags.Physical] = 0 # To be immediately changed
-        orb.buffs.append(RainbowEggBuff(self))
-    
-    def on_orb_collide(self, orb, next_point):
-        orb.level.show_effect(next_point.x, next_point.y, random.choice([Tags.Fire, Tags.Ice, Tags.Lightning, Tags.Poison, Tags.Holy, Tags.Dark, Tags.Arcane, Tags.Physical]))
-        yield
-
 class SpiritBombBuff(Buff):
 
     def __init__(self, spell, charges):
@@ -12289,5 +12117,104 @@ class ToxicOrbSpell(OrbSpell):
                 "The orb has no will of its own, each turn it will float one tile towards the target.\n"
                 "The orb can be destroyed by poison damage.").format(**self.fmt_dict())
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, RainbowEggSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell])
+class StoneEggBreath(BreathWeapon):
+
+    def __init__(self, tag, spell):
+        BreathWeapon.__init__(self)
+        self.spell = spell
+        self.damage_type = tag
+        self.name = "%s Breath" % tag.name
+        self.cool_down = 0
+        self.range = spell.get_stat("minion_range")
+        self.damage = spell.get_stat("breath_damage")
+    
+    def per_square_effect(self, x, y):
+        unit = self.caster.level.get_unit_at(x, y)
+        if not unit or not are_hostile(unit, self.spell.caster):
+            self.caster.level.show_effect(x, y, self.damage_type)
+        else:
+            unit.deal_damage(self.get_stat("damage"), self.damage_type, self)
+
+class StoneEggBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+        self.mage = spell.get_stat("dragon_mage")
+        self.global_triggers[EventOnSpellCast] = self.on_spell_cast
+    
+    def on_spell_cast(self, evt):
+        if Tags.Dragon not in evt.caster.tags or are_hostile(evt.caster, self.spell.caster) or evt.caster.source is self.spell:
+            return
+        spell = None
+        if isinstance(evt.spell, BreathWeapon):
+            spell = StoneEggBreath(evt.spell.damage_type, self.spell)
+        elif Tags.Sorcery in evt.spell.tags and self.mage:
+            spell = type(evt.spell)()
+            spell.statholder = self.spell.caster
+            spell.max_charges = 0
+            spell.cur_charges = 0
+        if not spell:
+            return
+        spell.caster = self.owner
+        spell.owner = self.owner
+        target = spell.get_ai_target()
+        if not target:
+            return
+        self.owner.level.act_cast(self.owner, spell, target.x, target.y)
+
+class StoneEggSpell(OrbSpell):
+
+    def on_init(self):
+        self.name = "Stone Egg"
+        self.asset = ["MissingSynergies", "Icons", "stone_egg"]
+        self.tags = [Tags.Dragon, Tags.Orb, Tags.Conjuration]
+        self.level = 6
+        self.max_charges = 4
+        self.range = 9
+        self.minion_health = 45
+        self.breath_damage = 9
+        self.minion_range = 7
+
+        self.upgrades["minion_range"] = (3, 4)
+        self.upgrades["breath_damage"] = (12, 4)
+        self.upgrades["auto"] = (1, 5, "Automatic Breath", "Each turn, the stone egg will now use a breath weapon of the element it is currently weak to on a random valid enemy target, if possible.")
+        self.upgrades["dragon_mage"] = (1, 6, "Dragon Mage", "Whenever one of your [dragon] minions other than the stone egg casts a [sorcery] spell, the stone egg will cast a copy of that spell on a random valid enemy target, if possible.")
+
+    def get_description(self):
+        return ("Summon an egg-shaped stone effigy next to the caster, which counts as a [dragon].\n"
+                "Whenever one of your [dragon] minions other than the egg uses its breath weapon, the egg will automatically use a breath weapon of the same element on a random valid enemy target, if possible. This breath has [{breath_damage}:damage] damage, a range of [{minion_range}_tiles:minion_range], and does not harm allies.\n"
+                "The egg has no will of its own, each turn it will roll one tile towards the target.\n"
+                "The egg's weakness changes to a random element each turn.").format(**self.fmt_dict())
+
+    def on_make_orb(self, orb):
+        orb.asset = ["MissingSynergies", "Units", "stone_egg"]
+        orb.tags.append(Tags.Dragon)
+        orb.buffs.append(StoneEggBuff(self))
+        orb.weakness = None
+        self.randomize_weakness(orb)
+
+    def randomize_weakness(self, orb):
+        if orb.weakness:
+            orb.resists[orb.weakness] += 100
+        orb.weakness = random.choice([Tags.Fire, Tags.Ice, Tags.Lightning, Tags.Physical, Tags.Arcane, Tags.Poison, Tags.Holy, Tags.Dark])
+        orb.resists[orb.weakness] -= 100
+    
+    def on_orb_move(self, orb, next_point):
+        self.randomize_weakness(orb)
+        if not self.get_stat("auto"):
+            return
+        breath = StoneEggBreath(orb.weakness, self)
+        breath.owner = orb
+        breath.caster = orb
+        target = breath.get_ai_target()
+        if not target:
+            return
+        self.caster.level.act_cast(orb, breath, target.x, target.y)
+
+    def on_orb_collide(self, orb, next_point):
+        orb.level.show_effect(next_point.x, next_point.y, orb.weakness)
+        yield
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster])
