@@ -12165,10 +12165,9 @@ class StoneEggBuff(Buff):
             return
         spell.caster = self.owner
         spell.owner = self.owner
-        target = spell.get_ai_target()
-        if not target:
+        if not spell.can_cast(evt.x, evt.y):
             return
-        self.owner.level.act_cast(self.owner, spell, target.x, target.y)
+        self.owner.level.act_cast(self.owner, spell, evt.x, evt.y)
 
 class StoneEggSpell(OrbSpell):
 
@@ -12186,11 +12185,11 @@ class StoneEggSpell(OrbSpell):
         self.upgrades["minion_range"] = (3, 4)
         self.upgrades["breath_damage"] = (12, 4)
         self.upgrades["auto"] = (1, 5, "Automatic Breath", "Each turn, the stone egg will now use a breath weapon of the element it is currently weak to on a random valid enemy target, if possible.")
-        self.upgrades["dragon_mage"] = (1, 6, "Dragon Mage", "Whenever one of your [dragon] minions other than the stone egg casts a [sorcery] spell, the stone egg will cast a copy of that spell on a random valid enemy target, if possible.")
+        self.upgrades["dragon_mage"] = (1, 6, "Dragon Mage", "Whenever one of your [dragon] minions other than the stone egg casts a [sorcery] spell, the stone egg will cast a copy of that spell on the same target, if possible.")
 
     def get_description(self):
         return ("Summon an egg-shaped stone effigy next to the caster, which counts as a [dragon].\n"
-                "Whenever one of your [dragon] minions other than the egg uses its breath weapon, the egg will automatically use a breath weapon of the same element on a random valid enemy target, if possible. This breath has [{breath_damage}:damage] damage, a range of [{minion_range}_tiles:minion_range], and does not harm allies.\n"
+                "Whenever one of your [dragon] minions other than the egg uses its breath weapon, the egg will automatically use a breath weapon of the same element on the same target, if possible. This breath has [{breath_damage}:damage] damage, a range of [{minion_range}_tiles:minion_range], and does not harm allies.\n"
                 "The egg has no will of its own, each turn it will roll one tile towards the target.\n"
                 "The egg's weakness changes to a random element each turn.").format(**self.fmt_dict())
 
