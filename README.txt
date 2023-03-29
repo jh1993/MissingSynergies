@@ -22,6 +22,7 @@ Level 2:
 Level 3:
 + Blade Rush (Metallic/Translocation/Sorcery)
 + Call Scapegoat (Dark/Nature/Conjuration)
++ Chaos Concoction (Chaos/Sorcery)
 + Chaos Shuffle (Chaos/Translocation/Sorcery)
 + Coolant Spray (Ice/Nature/Enchantment)
 + Cult of Darkness (Dark/Enchantment/Conjuration)
@@ -43,7 +44,6 @@ Level 4:
 + Ashen Avatar (Fire/Dark/Nature/Enchantment/Conjuration)
 + Brimstone Cluster (Fire/Dark/Nature/Enchantment)
 + Burnout Reactor (Fire/Dark/Enchantment)
-+ Chaos Concoction (Chaos/Sorcery)
 + Divine Gaze (Holy/Eye/Sorcery)
 + Electric Net (Nature/Lightning/Sorcery)
 + Essence Leech (Arcane/Dark/Enchantment)
@@ -137,6 +137,7 @@ Level 4:
 + Razor Scales (Dragon/Metallic)
 + Shadow Assassin (Dark/Translocation)
 + Singular Eye (Eye)
++ Slime Instability (Arcane/Chaos)
 + Trick Walk (Translocation)
 + Unnatural Vitality (Dark/Nature)
 
@@ -156,7 +157,6 @@ Level 5:
 + Reflex Arc (Nature/Lightning/Sorcery)
 + Scrap Burst (Metallic)
 + Shock Troops (Fire/Lightning)
-+ Slime Instability (Arcane/Chaos)
 + Soul Dregs (Holy/Dark)
 + Speed of Light (Holy/Translocation)
 + Sudden Death (Dark)

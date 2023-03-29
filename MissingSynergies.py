@@ -3695,7 +3695,7 @@ class ChaosConcoctionSpell(Spell):
         self.name = "Chaos Concoction"
         self.asset = ["MissingSynergies", "Icons", "chaos_concoction"]
         self.tags = [Tags.Chaos, Tags.Sorcery]
-        self.level = 4
+        self.level = 3
         self.max_charges = 8
         self.range = 8
         self.radius = 3
