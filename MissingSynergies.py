@@ -12244,6 +12244,8 @@ class SlimeInstability(Upgrade):
         yield
 
     def on_advance(self):
+        if all([u.team == TEAM_PLAYER for u in self.owner.level.units]):
+            return
         units = [unit for unit in self.owner.level.units if Tags.Slime in unit.tags and not are_hostile(unit, self.owner)]
         if not units:
             return
