@@ -156,6 +156,7 @@ Level 5:
 + Reflex Arc (Nature/Lightning/Sorcery)
 + Scrap Burst (Metallic)
 + Shock Troops (Fire/Lightning)
++ Slime Instability (Arcane/Chaos)
 + Soul Dregs (Holy/Dark)
 + Speed of Light (Holy/Translocation)
 + Sudden Death (Dark)
