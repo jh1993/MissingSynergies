@@ -3696,36 +3696,33 @@ class ChaosConcoctionSpell(Spell):
         self.asset = ["MissingSynergies", "Icons", "chaos_concoction"]
         self.tags = [Tags.Chaos, Tags.Sorcery]
         self.level = 3
-        self.max_charges = 8
+        self.max_charges = 12
         self.range = 8
         self.radius = 3
         self.damage = 7
         self.max_hits = 3
 
-        self.upgrades["max_charges"] = (4, 2)
+        self.upgrades["max_charges"] = (6, 2)
         self.upgrades["radius"] = (1, 3)
-        self.upgrades["max_hits"] = (2, 4, "Max Hits", "Each target can now be hit up to [5:num_targets] times.")
-        self.upgrades["cleanse"] = (1, 3, "Cleansing Acid", "Chaos Concoction no longer damages or acidifies allies.\nEach hit of Chaos Concoction will remove 1 debuff from an ally, and 1 buff from an enemy.")
+        self.upgrades["max_hits"] = (2, 3, "Max Hits", "Each target can now be hit up to [5:num_targets] times.")
         self.upgrades["catalyst"] = (1, 5, "Chaos Catalyst", "Each hit of Chaos Concoction applies a stack of Chaos Catalyst to [slime] allies.\nWhen a [slime] ally dies, it will consume all stacks of Chaos Catalyst to trigger the splash of Chaos Concoction once for every 10 stacks consumed. If there were less than 10 stacks remaining, there is a chance to trigger the splash equal to the number of stacks divided by 10.")
     
     def get_description(self):
         return ("Splash all units in a [{radius}_tile:radius] burst with caustic gel, hitting each unit 1 to [{max_hits}:num_targets] times.\n"
-                "Each hit deals [{damage}_poison:poison], [{damage}_fire:fire], [{damage}_lightning:lightning], or [{damage}_physical:physical] damage, chosen at random, and has a 20% chance to inflict [acidify:poison], causing the target to lose [100_poison:poison] resistance.\n"
-                "If the target is a [slime] ally, each hit will instead increase the target's current and max HP by an amount equal to its damage value, but the amount increased cannot exceed 20% of the target's max HP.").format(**self.fmt_dict())
+                "When affecting an enemy, each hit deals [{damage}_poison:poison], [{damage}_fire:fire], [{damage}_lightning:lightning], or [{damage}_physical:physical] damage, and removes a random buff.\n"
+                "When affecting an ally, each hit removes a random debuff. If the ally is a [slime], each hit will also increase the ally's current and max HP by [{damage}:heal], but the amount increased cannot exceed 20% of the ally's max HP.").format(**self.fmt_dict())
 
-    def hit(self, x, y, damage, cleanse=False, catalyst=False):
+    def hit(self, x, y, damage, catalyst=False):
         tag = random.choice([Tags.Poison, Tags.Fire, Tags.Lightning, Tags.Physical])
         unit = self.caster.level.get_unit_at(x, y)
         if not unit:
             self.caster.level.show_effect(x, y, tag)
             return
-        should_damage = True
         if unit.team == TEAM_PLAYER:
             if Tags.Slime in unit.tags:
                 amount = min(damage, unit.max_hp//5)
                 unit.max_hp += amount
                 unit.deal_damage(-amount, Tags.Heal, self)
-                should_damage = False
                 if catalyst:
                     existing = unit.get_buff(ChaosCatalystBuff)
                     if existing:
@@ -3733,31 +3730,24 @@ class ChaosConcoctionSpell(Spell):
                         existing.update_name()
                     else:
                         unit.apply_buff(ChaosCatalystBuff(self))
-            if cleanse:
-                debuffs = [buff for buff in unit.buffs if buff.buff_type == BUFF_TYPE_CURSE]
-                if debuffs:
-                    unit.remove_buff(random.choice(debuffs))
-                should_damage = False
-        elif cleanse:
+            debuffs = [buff for buff in unit.buffs if buff.buff_type == BUFF_TYPE_CURSE]
+            if debuffs:
+                unit.remove_buff(random.choice(debuffs))
+            self.caster.level.show_effect(x, y, tag)
+        else:
             buffs = [buff for buff in unit.buffs if buff.buff_type == BUFF_TYPE_BLESS]
             if buffs:
                 unit.remove_buff(random.choice(buffs))
-        if should_damage:
-            if random.random() < 0.2:
-                unit.apply_buff(Acidified())
             unit.deal_damage(damage, tag, self)
-        else:
-            self.caster.level.show_effect(x, y, tag)
 
     def cast(self, x, y):
         damage = self.get_stat("damage")
         max_hits = self.get_stat("max_hits")
-        cleanse = self.get_stat("cleanse")
         catalyst = self.get_stat("catalyst")
         for stage in Burst(self.caster.level, Point(x, y), self.get_stat("radius")):
             for point in stage:
                 for _ in range(random.choice(list(range(1, max_hits + 1)))):
-                    self.hit(point.x, point.y, damage, cleanse, catalyst)
+                    self.hit(point.x, point.y, damage, catalyst)
             yield
 
     def get_impacted_tiles(self, x, y):
