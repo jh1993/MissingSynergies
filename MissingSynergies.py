@@ -3710,7 +3710,7 @@ class ChaosConcoctionSpell(Spell):
     def get_description(self):
         return ("Splash all units in a [{radius}_tile:radius] burst with caustic gel, hitting each unit 1 to [{max_hits}:num_targets] times.\n"
                 "When affecting an enemy, each hit deals [{damage}_poison:poison], [{damage}_fire:fire], [{damage}_lightning:lightning], or [{damage}_physical:physical] damage, and removes a random buff.\n"
-                "When affecting an ally, each hit removes a random debuff. If the ally is a [slime], each hit will also increase the ally's current and max HP by [{damage}:heal], but the amount increased cannot exceed 20% of the ally's max HP.").format(**self.fmt_dict())
+                "When affecting an ally, each hit removes a random debuff. If the ally is a [slime], each hit will also increase the ally's current and max HP by [{damage}:heal].").format(**self.fmt_dict())
 
     def hit(self, x, y, damage, catalyst=False):
         tag = random.choice([Tags.Poison, Tags.Fire, Tags.Lightning, Tags.Physical])
@@ -3720,9 +3720,8 @@ class ChaosConcoctionSpell(Spell):
             return
         if unit.team == TEAM_PLAYER:
             if Tags.Slime in unit.tags:
-                amount = min(damage, unit.max_hp//5)
-                unit.max_hp += amount
-                unit.deal_damage(-amount, Tags.Heal, self)
+                unit.max_hp += damage
+                unit.deal_damage(-damage, Tags.Heal, self)
                 if catalyst:
                     existing = unit.get_buff(ChaosCatalystBuff)
                     if existing:
