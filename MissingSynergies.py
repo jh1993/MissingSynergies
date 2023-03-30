@@ -1452,7 +1452,7 @@ class RaiseDracolichSpell(Spell):
         self.add_upgrade(InstantRaising())
     
     def get_description(self):
-        return ("Kill target [dragon] minion and resurrect it as a dracolich with the same max HP, melee damage, breath damage, and breath range.\n"
+        return ("Kill target [dragon] minion and resurrect it as a dracolich with the same max HP, melee damage, breath damage, and breath range. Other abilities will not be retained.\n"
                 "The dracolich can create a soul jar that makes itself immortal as long as the jar exists, and its [dark] breath raises slain [living] enemies as friendly skeletons with the same max HP.").format(**self.fmt_dict())
 
     def can_cast(self, x, y):
@@ -1627,7 +1627,7 @@ class DraconianBrutality(Upgrade):
         self.name = "Draconian Brutality"
         self.level = 5
         self.tags = [Tags.Dragon, Tags.Nature, Tags.Translocation]
-        self.description = ("Each of your [dragon] minions has its basic melee attack replaced by a swipe attack that deals the same damage, but hits in an arc, and does not damage allies.\nIt also gains a dive attack that has the same melee damage, and the same range as its breath weapon.")
+        self.description = ("Each of your [dragon] minions has its basic melee attack replaced by a swipe attack that deals the same damage, but hits in an arc, and does not damage allies.\nIf it has a breath weapon and melee attack, it also gains a dive attack that has the same melee damage, and the same range as its breath weapon.")
         self.global_triggers[EventOnUnitAdded] = self.on_unit_added
         self.asset = ["MissingSynergies", "Icons", "draconian_brutality"]
     
@@ -1662,34 +1662,6 @@ class DraconianBrutality(Upgrade):
         dive.owner = evt.unit
         evt.unit.spells.append(dive)
 
-class RazorScalesBuff(Thorns):
-    def __init__(self):
-        Thorns.__init__(self, 0)
-        self.buff_type = BUFF_TYPE_PASSIVE
-        self.resists[Tags.Physical] = 15
-        self.name = "Razor Scales"
-        self.color = Tags.Metallic.color
-    def on_advance(self):
-        self.damage = self.owner.resists[Tags.Physical]//3
-        self.description = "Deals %d %s damage to melee attackers" % (self.damage, self.dtype.name)
-    def on_applied(self, owner):
-        self.on_advance()
-
-class RazorScales(Upgrade):
-
-    def on_init(self):
-        self.name = "Razor Scales"
-        self.level = 4
-        self.tags = [Tags.Dragon, Tags.Metallic]
-        self.description = ("Your [dragon] minions gain [15_physical:physical] resistance, and melee retaliation dealing [physical] damage equal to 1/3 of their [physical] resistance.")
-        self.global_triggers[EventOnUnitAdded] = self.on_unit_added
-        self.asset = ["MissingSynergies", "Icons", "razor_scales"]
-    
-    def on_unit_added(self, evt):
-        if are_hostile(self.owner, evt.unit) or Tags.Dragon not in evt.unit.tags:
-            return
-        evt.unit.apply_buff(RazorScalesBuff())
-
 class BreathOfAnnihilation(Upgrade):
 
     def on_init(self):
@@ -1698,7 +1670,7 @@ class BreathOfAnnihilation(Upgrade):
         self.tags = [Tags.Dragon, Tags.Chaos]
         self.description = ("The breath weapons of your [dragon] minions deal damage in a 90 degree cone if previously narrower.\nWhen one of your [dragon] minions' breath weapon hits an enemy that is resistant to the breath weapon's element, redeal the resisted damage as a random element chosen from [fire], [lightning], [physical], [arcane], and [dark].")
         self.global_triggers[EventOnPreDamaged] = self.on_pre_damaged
-        self.global_triggers[EventOnUnitAdded] = self.on_unit_added
+        self.global_triggers[EventOnSpellCast] = self.on_spell_cast
         self.asset = ["MissingSynergies", "Icons", "breath_of_annihilation"]
         self.dtypes = [Tags.Fire, Tags.Lightning, Tags.Physical, Tags.Arcane, Tags.Dark]
     
@@ -1708,13 +1680,10 @@ class BreathOfAnnihilation(Upgrade):
         resisted_amount = math.floor(evt.damage*min(100, evt.unit.resists[evt.damage_type])/100)
         evt.unit.deal_damage(resisted_amount//2, random.choice(self.dtypes), self)
     
-    def on_unit_added(self, evt):
-        if are_hostile(evt.unit, self.owner) or Tags.Dragon not in evt.unit.tags:
+    def on_spell_cast(self, evt):
+        if are_hostile(evt.caster, self.owner) or Tags.Dragon not in evt.caster.tags or not isinstance(evt.spell, BreathWeapon):
             return
-        for spell in evt.unit.spells:
-            if not isinstance(spell, BreathWeapon):
-                continue
-            spell.angle = max(spell.angle, math.pi/4)
+        evt.spell.angle = max(evt.spell.angle, math.pi/4)
 
     # For my No More Scams mod
     def can_redeal(self, target, source, damage_type, already_checked):
@@ -12281,5 +12250,38 @@ class OrbPonderance(Upgrade):
             return
         random.choice(units).apply_buff(OrbPonderanceBuff())
 
+class MirrorScales(Upgrade):
+
+    def on_init(self):
+        self.name = "Mirror Scales"
+        self.asset = ["MissingSynergies", "Icons", "mirror_scales"]
+        self.tags = [Tags.Dragon, Tags.Metallic]
+        self.level = 6
+        self.description = "Whenever one of your [dragon] minions takes damage from an enemy, if the dragon has a breath weapon and the enemy is a valid breath target, that enemy will be hit by the breath weapon's per-tile effect.\nYour [dragon] minions also become [metallic], but do not gain the usual resistances of [metallic] units if they do not already have them."
+        self.global_triggers[EventOnUnitPreAdded] = self.on_unit_pre_added
+        self.global_triggers[EventOnDamaged] = self.on_damaged
+    
+    def on_unit_pre_added(self, evt):
+        if Tags.Dragon not in evt.unit.tags or are_hostile(evt.unit, self.owner):
+            return
+        if Tags.Metallic in evt.unit.tags:
+            return
+        evt.unit.tags.append(Tags.Metallic)
+        for tag in [Tags.Lightning, Tags.Ice, Tags.Fire, Tags.Physical]:
+            if tag not in evt.unit.resists:
+                evt.unit.resists[tag] = 0
+
+    def on_damaged(self, evt):
+        if Tags.Dragon not in evt.unit.tags or are_hostile(evt.unit, self.owner) or not evt.source or not evt.source.owner or not are_hostile(evt.source.owner, self.owner):
+            return
+        breath = None
+        for spell in evt.unit.spells:
+            if isinstance(spell, BreathWeapon):
+                breath = spell
+                break
+        if not breath or not breath.can_cast(evt.source.owner.x, evt.source.owner.y):
+            return
+        breath.per_square_effect(evt.source.owner.x, evt.source.owner.y)
+
 all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell])
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales])
