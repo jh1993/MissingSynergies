@@ -4013,18 +4013,18 @@ class BrimstoneClusterSpell(Spell):
             unit.resists[Tags.Dark] -= power
             existing.update_name()
 
-class ScapegoatBuff(Buff):
+class Scapegoat(Unit):
 
-    def on_init(self):
-        self.description = "Cannot move or act.\n\nAutomatically disappears if there are no enemies in this level that are not scapegoats."
+    def advance(self):
+        self.try_dismiss_ally()
+        return True
     
-    def on_attempt_advance(self):
-        return False
-    
-    def on_advance(self):
-        if all(u.team == TEAM_PLAYER for u in self.owner.level.units if u.name != "Scapegoat"):
-            self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
-            self.owner.kill(trigger_death_event=False)
+    def try_dismiss_ally(self):
+        if not self.level.player_unit:
+            return
+        if not any(are_hostile(self.level.player_unit, u) for u in self.level.units if u.name != "Scapegoat"):
+            self.kill(trigger_death_event=False)
+            self.level.show_effect(self.x, self.y, Tags.Translocation)
 
 class CallScapegoatSpell(Spell):
 
@@ -4070,14 +4070,13 @@ class CallScapegoatSpell(Spell):
         health = self.get_stat("minion_health")
         shackle = self.get_stat("shackle")
         for _ in range(self.get_stat("num_summons")):
-            unit = Unit()
+            unit = Scapegoat()
             unit.name = "Scapegoat"
             unit.asset = ["MissingSynergies", "Units", "scapegoat"]
             unit.tags = [Tags.Living]
             unit.max_hp = health
             unit.flying = True
             unit.buff_immune = True
-            unit.buffs.append(ScapegoatBuff())
             if shackle:
                 buff = Soulbound(self.caster)
                 buff.buff_type = BUFF_TYPE_PASSIVE
@@ -12251,5 +12250,36 @@ class SlimeInstability(Upgrade):
             self.owner.level.show_effect(unit.x, unit.y, Tags.Poison)
             unit.kill()
 
+class OrbPonderanceBuff(Buff):
+
+    def on_init(self):
+        self.buff_type = BUFF_TYPE_PASSIVE
+    
+    def on_applied(self, owner):
+        if self.owner.turns_to_death is not None:
+            self.owner.turns_to_death += 1
+    
+    def on_attempt_advance(self):
+        return False
+
+    def on_advance(self):
+        self.owner.remove_buff(self)
+
+class OrbPonderance(Upgrade):
+
+    def on_init(self):
+        self.name = "Orb Ponderance"
+        self.asset = ["MissingSynergies", "Icons", "orb_ponderance"]
+        self.tags = [Tags.Orb]
+        self.level = 4
+        self.description = "Whenever you pass your turn, a random one of your [orb] minions does not move, act, or lose its remaining duration this turn.\nIts per-turn effects still activate as usual."
+        self.owner_triggers[EventOnPass] = self.on_pass
+    
+    def on_pass(self, evt):
+        units = [unit for unit in self.owner.level.units if unit.has_buff(OrbBuff) and not are_hostile(unit, self.owner)]
+        if not units:
+            return
+        random.choice(units).apply_buff(OrbPonderanceBuff())
+
 all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell])
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, RazorScales, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance])

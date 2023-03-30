@@ -134,6 +134,7 @@ Level 4:
 + Flesh Loan (Dark/Nature)
 + Fulgurite Alchemy (Arcane/Lightning)
 + Nuclear Winter (Lightning/Ice/Nature)
++ Orb Ponderance (Orb)
 + Razor Scales (Dragon/Metallic)
 + Shadow Assassin (Dark/Translocation)
 + Singular Eye (Eye)
