@@ -1677,8 +1677,10 @@ class BreathOfAnnihilation(Upgrade):
     def on_pre_damaged(self, evt):
         if evt.damage <= 0 or not are_hostile(self.owner, evt.unit) or not isinstance(evt.source, BreathWeapon) or are_hostile(evt.source.owner, self.owner):
             return
-        resisted_amount = math.floor(evt.damage*min(100, evt.unit.resists[evt.damage_type])/100)
-        evt.unit.deal_damage(resisted_amount//2, random.choice(self.dtypes), self)
+        resisted = max(0, math.floor(evt.damage*min(100, evt.unit.resists[evt.damage_type])/100))
+        if not resisted:
+            return
+        evt.unit.deal_damage(resisted//2, random.choice(self.dtypes), self)
     
     def on_spell_cast(self, evt):
         if are_hostile(evt.caster, self.owner) or Tags.Dragon not in evt.caster.tags or not isinstance(evt.spell, BreathWeapon):
@@ -6686,15 +6688,17 @@ class UnnaturalVitality(Upgrade):
 class CosmicStasisBuff(Buff):
 
     def __init__(self, spell):
-        self.extension_chance = spell.get_stat("extension_chance")
+        self.spell = spell
         Buff.__init__(self)
-        if spell.get_stat("laser"):
-            self.global_triggers[EventOnDamaged] = self.on_damaged
     
     def on_init(self):
         self.name = "Cosmic Stasis"
         self.color = Tags.Ice.color
+        self.stack_type = STACK_REPLACE
+        self.extension_chance = self.spell.get_stat("extension_chance")
         self.global_triggers[EventOnBuffRemove] = self.on_buff_remove
+        if self.spell.get_stat("laser"):
+            self.global_triggers[EventOnPreDamaged] = self.on_pre_damaged
         self.to_refreeze = []
 
     def on_advance(self):
@@ -6706,10 +6710,12 @@ class CosmicStasisBuff(Buff):
                 freeze.turns_left += 1
 
     def on_buff_remove(self, evt):
-        if not isinstance(evt.buff, FrozenBuff) or evt.buff.break_dtype != Tags.Physical:
+        if not isinstance(evt.buff, FrozenBuff) or not evt.buff.turns_left:
             return
         if not are_hostile(evt.unit, self.owner) or not evt.unit.is_alive():
             return
+        if evt.buff.turns_left:
+            evt.unit.deal_damage(evt.buff.turns_left*2, Tags.Arcane, self.spell)
         self.to_refreeze.append(evt.unit)
 
     def on_pre_advance(self):
@@ -6717,11 +6723,17 @@ class CosmicStasisBuff(Buff):
             unit.apply_buff(FrozenBuff(), 1)
         self.to_refreeze = []
 
-    def on_damaged(self, evt):
-        if evt.damage_type != Tags.Arcane or not are_hostile(evt.unit, self.owner):
+    def on_pre_damaged(self, evt):
+        if evt.damage_type != Tags.Ice or evt.damage <= 0 or not are_hostile(evt.unit, self.owner):
             return
-        if random.random() < evt.damage/100:
-            evt.unit.apply_buff(FrozenBuff(), 1)
+        resisted = max(0, math.floor(evt.damage*min(100, evt.unit.resists[Tags.Ice])/100))
+        if not resisted:
+            return
+        self.owner.level.queue_spell(self.deal_damage(evt.unit, resisted))
+
+    def deal_damage(self, unit, damage):
+        unit.deal_damage(math.floor(damage*self.extension_chance/100), Tags.Arcane, self.spell)
+        yield
 
 class CosmicStasisSpell(Spell):
 
@@ -6737,11 +6749,11 @@ class CosmicStasisSpell(Spell):
 
         self.upgrades["duration"] = (5, 3)
         self.upgrades["extension_chance"] = (25, 4, "Extension Chance", "Increase the chance to extend [freeze] duration on enemies by 25%.")
-        self.upgrades["laser"] = (1, 5, "Laser Cooling", "When an enemy takes [arcane] damage, it has a chance of being [frozen] for [1_turn:duration] equal to the damage taken divided by 100, to a maximum of 100%.")
+        self.upgrades["laser"] = (1, 5, "Laser Cooling", "A percentage of all [ice] damage dealt to enemies that is resisted or blocked by [SH:shields] will be redealt as [arcane] damage.\nThe percentage is equal to this spell's chance to extend [freeze] duration per turn.")
     
     def get_description(self):
         return ("Each turn, the [freeze] duration on each enemy has a [{extension_chance}%:freeze] chance to be extended by [1_turn:duration]. Does not work on enemies that can gain clarity.\n"
-                "When an enemy is unfrozen by [physical] damage, that enemy will be [frozen] again before the start of your next turn.\n"
+                "When an enemy is unfrozen before the [freeze] expires naturally, that enemy takes [arcane] damage equal to twice the remaining [freeze] duration, and will be [frozen] again for [1_turn:duration] before the start of your next turn.\n"
                 "Lasts [{duration}_turns:duration].").format(**self.fmt_dict())
 
     def cast_instant(self, x, y):
