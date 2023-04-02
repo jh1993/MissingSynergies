@@ -12198,7 +12198,7 @@ class SlimeInstability(Upgrade):
         self.asset = ["MissingSynergies", "Icons", "slime_instability"]
         self.tags = [Tags.Chaos, Tags.Arcane]
         self.level = 4
-        self.description = "Whenever you summon a [slime] minion, it immediately acts once.\nEach turn, each of your [slime] minions has a 25% chance to merge with another random adjacent slime summoned by the same source, sacrificing itself to add its current and max HP to the other slime.\nThis may cause the other slime to split into more than two slimes on its turn."
+        self.description = "Whenever you summon a [slime] minion, it immediately acts once.\nEach turn, each of your [slime] minions has a 25% chance to merge with another random adjacent slime summoned by the same source, sacrificing itself to add its current and max HP to the other slime.\nThis may cause the other slime to split into more than two slimes on its turn.\nOnly works with slimes that split automatically upon reaching twice their initial max HP."
         self.global_triggers[EventOnUnitAdded] = self.on_unit_added
     
     def on_unit_added(self, evt):
@@ -12215,7 +12215,7 @@ class SlimeInstability(Upgrade):
     def on_advance(self):
         if all([u.team == TEAM_PLAYER for u in self.owner.level.units]):
             return
-        units = [unit for unit in self.owner.level.units if Tags.Slime in unit.tags and not are_hostile(unit, self.owner)]
+        units = [unit for unit in self.owner.level.units if Tags.Slime in unit.tags and unit.has_buff(SlimeBuff) and not are_hostile(unit, self.owner)]
         if not units:
             return
         random.shuffle(units)
