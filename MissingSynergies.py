@@ -11005,16 +11005,21 @@ class NovaJuggernautBuff(Buff):
     
     def on_moved(self, evt):
         if evt.unit is self.owner:
-            for p in self.owner.level.get_adjacent_points(Point(self.owner.x, self.owner.y), filter_walkable=False):
-                unit = self.owner.level.get_unit_at(p.x, p.y)
-                if not unit or not are_hostile(unit, self.owner):
-                    self.owner.level.show_effect(p.x, p.y, Tags.Arcane)
-                else:
-                    unit.deal_damage(self.damage, Tags.Arcane, self)
-                if self.wall and self.owner.level.tiles[p.x][p.y].is_wall():
-                    self.owner.level.make_floor(p.x, p.y)
+            # Queue this to not look weird with leap attacks.
+            self.owner.level.queue_spell(self.spikes())
         elif are_hostile(evt.unit, self.owner) and distance(evt.unit, self.owner, diag=True) <= 1.5:
             evt.unit.deal_damage(self.damage, Tags.Arcane, self)
+
+    def spikes(self):
+        for p in self.owner.level.get_adjacent_points(Point(self.owner.x, self.owner.y), filter_walkable=False):
+            unit = self.owner.level.get_unit_at(p.x, p.y)
+            if not unit or not are_hostile(unit, self.owner):
+                self.owner.level.show_effect(p.x, p.y, Tags.Arcane)
+            else:
+                unit.deal_damage(self.damage, Tags.Arcane, self)
+            if self.wall and self.owner.level.tiles[p.x][p.y].is_wall():
+                self.owner.level.make_floor(p.x, p.y)
+        yield
 
 class BomberDriftSpell(LeapAttack):
 
