@@ -2922,7 +2922,7 @@ class GoldenTricksterShot(Spell):
             self.caster.level.event_manager.raise_event(EventOnDamaged(unit, damage, dtype, self), unit)
         if self.bravado:
             for dtype in [Tags.Fire, Tags.Lightning, Tags.Physical]:
-                self.caster.level.event_manager.raise_event(EventOnPreDamaged(unit, damage*4, dtype, self), unit)
+                self.caster.level.event_manager.raise_event(EventOnPreDamaged(unit, damage*3, dtype, self), unit)
         randomly_teleport(unit, 3)
         if self.shuffle and random.random() < 1/3:
             self.caster.level.act_cast(self.caster, self.shuffle, unit.x, unit.y, pay_costs=False)
@@ -2974,7 +2974,7 @@ class GoldenTricksterSpell(Spell):
         self.upgrades["radius"] = (2, 4)
         self.upgrades["shields"] = (5, 3)
         self.upgrades["phase"] = (1, 4, "Phase Shot", "The Golden Trickster's trick shot no longer requires line of sight.")
-        self.upgrades["bravado"] = (1, 4, "Fool's Bravado", "The Golden Trickster's trick shot now pretends to deal additional [fire], [lightning], and [physical] damage equal to 4 times its usual fake damage.\nAll of this extra damage behaves as if it is fully resisted by the target, only triggering effects that are triggered by raw incoming damage before resistances.")
+        self.upgrades["bravado"] = (1, 3, "Fool's Bravado", "The Golden Trickster's trick shot now pretends to deal additional [fire], [lightning], and [physical] damage equal to 3 times its usual fake damage.\nAll of this extra damage behaves as if it is fully resisted by the target, only triggering effects that are triggered by raw incoming damage before resistances.")
         self.upgrades["mage"] = (1, 6, "Trickster Mage", "The Golden Trickster's trick shot now also has a 1/3 chance to cast Chaos Shuffle on its target.\nThis Chaos Shuffle gains all of your upgrades and bonuses.")
     
     def get_description(self):
