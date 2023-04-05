@@ -11771,7 +11771,7 @@ class NonlocalitySpell(Spell):
 
     def get_description(self):
         return ("The target unit gains [100_arcane:arcane] resistance and becomes an [arcane] unit. It becomes immobile, but will now automatically teleport each turn to a random enemy it's capable of harming before it acts, if possible.\n"
-                "Whenever it deals damage to an enemy, that enemy loses [{damage}_HP:damage]. This is not considered dealing damage, but benefits from this spell's [damage] bonuses.\n"
+                "Whenever it deals damage to an enemy with an attack, that enemy loses [{damage}_HP:damage]. This is not considered dealing damage, but benefits from this spell's [damage] bonuses.\n"
                 "Any on-summon effects you have will be triggered again when this effect is applied or reapplied.").format(**self.fmt_dict())
 
     def can_cast(self, x, y):
