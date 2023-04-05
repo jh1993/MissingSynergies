@@ -2886,7 +2886,27 @@ class GoldenTricksterShot(Spell):
         self.range = spell.get_stat("minion_range")
         self.requires_los = 0 if spell.get_stat("phase") else 1
         self.bravado = spell.get_stat("bravado")
-        self.description = "Hits 3 times, each hit pretending to deal fire, lightning, or physical damage. Teleports the target up to 3 tiles away."
+        self.description = "Hits 3 times, each hit only pretending to deal damage. Teleports the target up to 3 tiles away."
+        self.shuffle = None
+        self.damage_type = [Tags.Fire, Tags.Lightning, Tags.Physical]
+
+    def get_ai_target(self):
+
+        def is_good_target(u):
+            if not u:
+                return False
+            if not are_hostile(u, self.caster):
+                return False
+            if not self.can_cast(u.x, u.y):
+                return False
+            return True
+
+        targets = [u for u in self.caster.level.units if is_good_target(u)]
+        if not targets:
+            return None
+        else:
+            target = random.choice(targets)
+            return Point(target.x, target.y)
 
     def cast(self, x, y):
         for point in Bolt(self.caster.level, self.caster, Point(x, y), find_clear=self.requires_los):
@@ -2902,8 +2922,10 @@ class GoldenTricksterShot(Spell):
             self.caster.level.event_manager.raise_event(EventOnDamaged(unit, damage, dtype, self), unit)
         if self.bravado:
             for dtype in [Tags.Fire, Tags.Lightning, Tags.Physical]:
-                self.caster.level.event_manager.raise_event(EventOnPreDamaged(unit, 30, dtype, self), unit)
+                self.caster.level.event_manager.raise_event(EventOnPreDamaged(unit, damage*4, dtype, self), unit)
         randomly_teleport(unit, 3)
+        if self.shuffle and random.random() < 1/3:
+            self.caster.level.act_cast(self.caster, self.shuffle, unit.x, unit.y, pay_costs=False)
 
 class GoldenTricksterAura(Buff):
 
@@ -2949,11 +2971,11 @@ class GoldenTricksterSpell(Spell):
         self.radius = 3
         self.shields = 1
 
-        self.upgrades["radius"] = (2, 5)
-        self.upgrades["shields"] = (5, 5)
-        self.upgrades["phase"] = (1, 5, "Phase Shot", "The Golden Trickster's trick shot no longer requires line of sight.")
-        self.upgrades["bravado"] = (1, 3, "Fool's Bravado", "The Golden Trickster's trick shot now pretends to deal an additional [30_fire:fire], [30_lightning:lightning], and [30_physical:physical] damage, but all of this extra damage behaves as if it is fully resisted by the target, only triggering effects that are triggered by raw incoming damage before resistances.")
-        self.upgrades["mage"] = (1, 6, "Trickster Mage", "The Golden Trickster can cast Chaos Shuffle with a [3_turns:cooldown] cooldown.\nThis Chaos Shuffle gains all of your upgrades and bonuses.")
+        self.upgrades["radius"] = (2, 4)
+        self.upgrades["shields"] = (5, 3)
+        self.upgrades["phase"] = (1, 4, "Phase Shot", "The Golden Trickster's trick shot no longer requires line of sight.")
+        self.upgrades["bravado"] = (1, 4, "Fool's Bravado", "The Golden Trickster's trick shot now pretends to deal additional [fire], [lightning], and [physical] damage equal to 4 times its usual fake damage.\nAll of this extra damage behaves as if it is fully resisted by the target, only triggering effects that are triggered by raw incoming damage before resistances.")
+        self.upgrades["mage"] = (1, 6, "Trickster Mage", "The Golden Trickster's trick shot now also has a 1/3 chance to cast Chaos Shuffle on its target.\nThis Chaos Shuffle gains all of your upgrades and bonuses.")
     
     def get_description(self):
         return ("Summon a Golden Trickster, a flying, randomly teleporting minion with many resistances, [{minion_health}_HP:minion_health], and [{shields}_SH:shields].\n"
@@ -2972,7 +2994,8 @@ class GoldenTricksterSpell(Spell):
         unit.flying = True
         unit.max_hp = self.get_stat("minion_health")
         unit.shields = self.get_stat("shields")
-        unit.spells = [GoldenTricksterShot(self)]
+        shot = GoldenTricksterShot(self)
+        unit.spells = [shot]
         unit.buffs = [GoldenTricksterAura(self), TeleportyBuff(chance=1, radius=8)]
 
         if self.get_stat('mage'):
@@ -2980,9 +3003,9 @@ class GoldenTricksterSpell(Spell):
             shuffle.statholder = self.caster
             shuffle.max_charges = 0
             shuffle.cur_charges = 0
-            shuffle.cool_down = 3
-            shuffle.get_description = lambda: ""
-            unit.spells.insert(0, shuffle)
+            shuffle.caster = unit
+            shuffle.owner = unit
+            shot.shuffle = shuffle
 
         self.summon(unit, target=Point(x, y))
 
