@@ -6720,7 +6720,9 @@ class CosmicStasisBuff(Buff):
         self.stack_type = STACK_REPLACE
         self.extension_chance = self.spell.get_stat("extension_chance")
         self.global_triggers[EventOnBuffRemove] = self.on_buff_remove
+        self.laser = False
         if self.spell.get_stat("laser"):
+            self.laser = True
             self.global_triggers[EventOnPreDamaged] = self.on_pre_damaged
         self.to_refreeze = []
 
@@ -6758,6 +6760,11 @@ class CosmicStasisBuff(Buff):
         unit.deal_damage(math.floor(damage*self.extension_chance/100), Tags.Arcane, self.spell)
         yield
 
+    def can_redeal(self, target, source, dtype, already_checked):
+        if not self.laser or dtype != Tags.Ice:
+            return
+        return not is_immune(target, source, Tags.Arcane, already_checked)
+
 class CosmicStasisSpell(Spell):
 
     def on_init(self):
@@ -6772,7 +6779,7 @@ class CosmicStasisSpell(Spell):
 
         self.upgrades["duration"] = (5, 3)
         self.upgrades["extension_chance"] = (25, 4, "Extension Chance", "Increase the chance to extend [freeze] duration on enemies by 25%.")
-        self.upgrades["laser"] = (1, 5, "Laser Cooling", "A percentage of all [ice] damage dealt to enemies that is resisted or blocked by [SH:shields] will be redealt as [arcane] damage.\nThe percentage is equal to this spell's chance to extend [freeze] duration per turn.")
+        self.upgrades["laser"] = (1, 5, "Laser Cooling", "A percentage of all [ice] damage dealt to enemies that is resisted will be redealt as [arcane] damage.\nThe percentage is equal to this spell's chance to extend [freeze] duration per turn.")
     
     def get_description(self):
         return ("Each turn, the [freeze] duration on each enemy has a [{extension_chance}%:freeze] chance to be extended by [1_turn:duration]. Does not work on enemies that can gain clarity.\n"
