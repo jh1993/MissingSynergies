@@ -7989,27 +7989,51 @@ class FadingBuff(Buff):
         self.buff_type = BUFF_TYPE_CURSE
         self.color = Tags.Arcane.color
         self.asset = ["MissingSynergies", "Statuses", "fading"]
-        self.damage = self.spell.get_stat("damage")
-        self.agony = self.spell.get_stat("agony")
+        self.owner_triggers[EventOnDeath] = self.on_death
     
     def on_attempt_apply(self, owner):
         if owner.has_buff(FadingBuff):
+            if self.spell.get_stat("dry"):
+                damage = self.spell.get_stat("damage")
+                owner.level.show_effect(owner.x, owner.y, Tags.Arcane, minor=True)
+                for _ in range(math.ceil(owner.max_hp/damage/4)):
+                    self.give_essence(damage)
             return False
         if owner.turns_to_death is not None:
             self.spell.caster.apply_buff(StolenEssenceBuff(), owner.turns_to_death)
             owner.level.show_effect(owner.x, owner.y, Tags.Translocation)
             owner.kill()
             return False
-        return self.damage > 0
+        return self.spell.get_stat("damage") > 0
 
     def on_applied(self, owner):
-        self.owner.turns_to_death = math.ceil(self.owner.max_hp/self.damage)
+        self.owner.turns_to_death = math.ceil(self.owner.max_hp/self.spell.get_stat("damage"))
     
     def on_advance(self):
-        self.spell.caster.apply_buff(StolenEssenceBuff(), math.ceil(self.damage/10))
-        if self.agony:
-            self.owner.level.event_manager.raise_event(EventOnPreDamaged(self.owner, self.damage, Tags.Arcane, self.spell), self.owner)
-            self.owner.level.event_manager.raise_event(EventOnDamaged(self.owner, self.damage, Tags.Arcane, self.spell), self.owner)
+        # Could happen if a minion is berserked, applied with fading, recovers from berserk, then given Heart of Winter.
+        if self.owner.turns_to_death is None:
+            return
+        damage = self.spell.get_stat("damage")
+        self.give_essence(damage)
+        if self.spell.get_stat("haste"):
+            curr = math.ceil(self.owner.cur_hp/damage)
+            if curr < self.owner.turns_to_death:
+                self.owner.turns_to_death = curr
+        if self.spell.get_stat("agony"):
+            self.owner.level.event_manager.raise_event(EventOnPreDamaged(self.owner, damage, Tags.Arcane, self.spell), self.owner)
+            self.owner.level.event_manager.raise_event(EventOnDamaged(self.owner, damage, Tags.Arcane, self.spell), self.owner)
+
+    def on_death(self, evt):
+        if self.owner.turns_to_death is None:
+            return
+        if not self.spell.get_stat("haste") or self.owner.turns_to_death <= 0:
+            return
+        damage = self.spell.get_stat("damage")
+        for _ in range(self.owner.turns_to_death):
+            self.give_essence(damage)
+
+    def give_essence(self, damage):
+        self.spell.caster.apply_buff(StolenEssenceBuff(), math.ceil(damage/10))
 
 class StolenEssenceBuff(Buff):
     
@@ -8041,11 +8065,13 @@ class EssenceLeechSpell(Spell):
         self.range = 9
         self.damage = 10
         self.radius = 3
+        self.requires_los = False
 
         self.upgrades["max_charges"] = (7, 4)
-        self.upgrades["requires_los"] = (-1, 2, "Blindcasting", "Essence Leech can be cast without line of sight.")
         self.upgrades["radius"] = (2, 3)
         self.upgrades["agony"] = (1, 3, "Fading Agony", "Fading enemies behave as if they have taken [arcane] damage each turn equal to this spell's [damage] stat, ignoring immunity and triggering all effects that are normally triggered when enemies are damaged.")
+        self.upgrades["haste"] = (1, 4, "Hastened Demise", "Each turn, if a fading unit's current HP divided by this spell's [damage] stat is less than its remaining duration, its remaining duration is reduced to this value.\nIf a fading unit dies before its remaining duration expires, you immediately gain Stolen Essence equal to what you could have gained from all of its remaining turns.")
+        self.upgrades["dry"] = (1, 3, "Leech Dry", "When affecting an enemy that is already fading, you will immediately gain Stolen Essence equal to 25% of the total amount you could have gained from its whole lifetime.")
 
     def get_description(self):
         return ("Drain essence from enemies in a [{radius}_tile:radius] radius, causing them to begin fading, automatically dying after a number of turns equal to their max HP divided [{damage}:arcane], rounded up, as if they are temporarily summoned units. This number benefits from this spell's bonuses to [damage].\n"
