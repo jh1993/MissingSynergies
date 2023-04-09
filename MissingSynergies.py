@@ -10068,7 +10068,7 @@ class BoltJumpInstantImage(Upgrade):
         self.owner_triggers[EventOnMoved] = self.on_moved
     
     def get_description(self):
-        return "Whenever you teleport, you instantly send out [%i:num_targets] afterimages at random enemies in range." % self.prereq.get_stat("num_targets", base=2)
+        return "Whenever you teleport, you instantly send out [%i:num_targets] afterimages at random enemies in range.\nThese afterimages do not count toward the Static Shield upgrade." % self.prereq.get_stat("num_targets", base=2)
     
     def on_moved(self, evt):
         if not evt.teleport:
@@ -10083,6 +10083,19 @@ class BoltJumpInstantImage(Upgrade):
         for unit in units[:self.prereq.get_stat("num_targets", base=2)]:
             self.owner.level.queue_spell(self.prereq.jump(self.owner, unit, damage))
 
+class BoltJumpStaticShield(Upgrade):
+
+    def on_init(self):
+        self.name = "Static Shield"
+        self.level = 4
+        self.description = "When you end your turn, your number of [SH:shields] becomes equal to half of the number of afterimages you had before they are sent out, rounded down, if it was less."
+    
+    def on_advance(self):
+        num = self.owner.get_buff_stacks(BoltJumpAfterimage)//2
+        if num > self.owner.shields:
+            self.owner.shields = 0
+            self.owner.add_shields(num)
+
 class BoltJumpSpell(Spell):
 
     def on_init(self):
@@ -10090,7 +10103,7 @@ class BoltJumpSpell(Spell):
         self.asset = ["MissingSynergies", "Icons", "bolt_jump"]
         self.tags = [Tags.Lightning, Tags.Translocation, Tags.Sorcery]
         self.level = 5
-        self.max_charges = 6
+        self.max_charges = 8
         self.quick_cast = True
 
         self.range = 5
@@ -10099,10 +10112,10 @@ class BoltJumpSpell(Spell):
         self.must_target_walkable = True
         self.can_target_self = True
 
-        self.upgrades["max_charges"] = (5, 2)
         self.upgrades["requires_los"] = (-1, 3, "Blindcasting", "Bolt Jump can be cast without line of sight.\nThe afterimages created by this spell can now pass through walls.")
         self.upgrades["range"] = (3, 3)
         self.upgrades["free_cast_chance"] = (25, 4)
+        self.add_upgrade(BoltJumpStaticShield())
         self.add_upgrade(BoltJumpInstantImage())
 
     def can_cast(self, x, y):
