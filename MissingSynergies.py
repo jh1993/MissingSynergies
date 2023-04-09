@@ -10095,14 +10095,14 @@ class BoltJumpSpell(Spell):
 
         self.range = 5
         self.damage = 16
-        self.end_turn_chance = 50
+        self.free_cast_chance = 50
         self.must_target_walkable = True
         self.can_target_self = True
 
         self.upgrades["max_charges"] = (5, 2)
         self.upgrades["requires_los"] = (-1, 3, "Blindcasting", "Bolt Jump can be cast without line of sight.\nThe afterimages created by this spell can now pass through walls.")
         self.upgrades["range"] = (3, 3)
-        self.upgrades["end_turn_chance"] = (-25, 4)
+        self.upgrades["free_cast_chance"] = (25, 4)
         self.add_upgrade(BoltJumpInstantImage())
 
     def can_cast(self, x, y):
@@ -10114,7 +10114,7 @@ class BoltJumpSpell(Spell):
 
     def get_description(self):
         return ("Teleport to the target tile, and deal [{damage}_lightning:lightning] damage to all adjacent enemies. If targeting yourself, you still count as having teleported.\n"
-                "Casting this spell does not consume a turn, but each cast has a [{end_turn_chance}%:strikechance] chance to end your turn.\n"
+                "Casting this spell has a [{free_cast_chance}%:strikechance] chance to refund a charge and not consume a turn.\n"
                 "When you cast this spell, gain an afterimage. When you end your turn, each afterimage is sent toward a random enemy in range and line of sight to deal [{damage}_lightning:lightning] damage to it and adjacent enemies.").format(**self.fmt_dict())
     
     def jump(self, start, target, damage):
@@ -10130,8 +10130,10 @@ class BoltJumpSpell(Spell):
     
     def cast(self, x, y):
         self.caster.apply_buff(BoltJumpAfterimage(self))
-        if random.random() < self.get_stat("end_turn_chance")/100:
+        if random.random() >= self.get_stat("free_cast_chance")/100:
             self.caster.apply_buff(BoltJumpEndTurn())
+        else:
+            self.cur_charges = min(self.cur_charges + 1, self.get_stat("max_charges"))
         self.caster.invisible = True
         start = Point(self.caster.x, self.caster.y)
         if x == self.caster.x and y == self.caster.y:
