@@ -10147,12 +10147,12 @@ class BoltJumpSpell(Spell):
             self.cur_charges = min(self.cur_charges + 1, self.get_stat("max_charges"))
         self.caster.invisible = True
         start = Point(self.caster.x, self.caster.y)
-        if x == self.caster.x and y == self.caster.y:
-            self.caster.level.event_manager.raise_event(EventOnMoved(self.caster, x, y, teleport=True), self.caster)
-        else:
+        if self.caster.level.can_move(self.caster, x, y, teleport=True):
             self.caster.level.act_move(self.caster, x, y, teleport=True)
+        else:
+            self.caster.level.event_manager.raise_event(EventOnMoved(self.caster, self.caster.x, self.caster.y, teleport=True), self.caster)
         damage = self.get_stat("damage")
-        yield from self.jump(start, Point(x, y), damage)
+        yield from self.jump(start, self.caster, damage)
         self.caster.invisible = False
 
 class HealthMutation(Buff):
