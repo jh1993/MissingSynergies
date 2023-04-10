@@ -10086,10 +10086,10 @@ class BoltJumpStaticShield(Upgrade):
     def on_init(self):
         self.name = "Static Shield"
         self.level = 4
-        self.description = "When you end your turn, your number of [SH:shields] becomes equal to half of the number of afterimages you had before they are sent out, rounded down, if it was less."
+        self.description = "When you end your turn, your number of [SH:shields] becomes equal to 1/3 of the number of afterimages you had before they are sent out, rounded down, if it was less."
     
     def on_advance(self):
-        num = self.owner.get_buff_stacks(BoltJumpAfterimage)//2
+        num = self.owner.get_buff_stacks(BoltJumpAfterimage)//3
         if num > self.owner.shields:
             self.owner.shields = 0
             self.owner.add_shields(num)
