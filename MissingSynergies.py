@@ -10946,7 +10946,7 @@ class BlueSpikeBeastBuff(Buff):
     
     def on_damaged(self, evt):
         if random.random() < self.act_chance/200:
-            self.owner.level.queue_spell(self.boom(), prepend=True)
+            self.owner.level.queue_spell(self.boom())
     
     def boom(self):
         for stage in Burst(self.owner.level, self.owner, self.radius, ignore_walls=self.phase):
