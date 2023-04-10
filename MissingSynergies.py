@@ -1111,7 +1111,6 @@ class ReturningArrowBuff(Buff):
         self.color = Tags.Arcane.color
         self.buff_type = BUFF_TYPE_CURSE
         self.stack_type = STACK_INTENSITY
-        self.damage = self.spell.get_stat("damage")
         self.cursing = False
         if self.spell.get_stat("cursing"):
             self.cursing = True
@@ -1126,7 +1125,7 @@ class ReturningArrowBuff(Buff):
     
     def on_advance(self):
         if self.cursing:
-            self.owner.deal_damage(self.damage, Tags.Dark, self.spell)
+            self.owner.deal_damage(self.spell.get_stat("damage"), Tags.Dark, self.spell)
     
     def on_unapplied(self):
         self.owner.level.queue_spell(self.spell.arrow(self.owner, self.spell.caster, returning=True))
@@ -3518,10 +3517,10 @@ class ChaosHailBuff(Buff):
     def on_init(self):
         self.name = "Chaos Hail"
         self.color = Tags.Chaos.color
-        self.damage = self.spell.get_stat("damage")
         self.radius = self.spell.get_stat("radius")
         self.num_targets = self.spell.get_stat("num_targets")
         self.max_hits = self.spell.get_stat("max_hits")
+        self.stack_type = STACK_REPLACE
     
     def on_advance(self):
         targets = self.owner.level.get_units_in_ball(self.owner, self.radius)
@@ -3532,11 +3531,12 @@ class ChaosHailBuff(Buff):
         self.owner.level.show_effect(point.x, point.y, random.choice([Tags.Ice, Tags.Fire, Tags.Lightning, Tags.Physical]), minor=True)
     
     def effect_target(self, point):
+        damage = self.spell.get_stat("damage")
         for _ in range(random.choice(list(range(1, self.max_hits + 1)))):
             unit = self.owner.level.get_unit_at(point.x, point.y)
             if unit:
                 unit.apply_buff(FrozenBuff(), 1)
-            self.owner.level.deal_damage(point.x, point.y, self.damage, random.choice([Tags.Ice, Tags.Fire, Tags.Lightning, Tags.Physical]), self.spell)
+            self.owner.level.deal_damage(point.x, point.y, damage, random.choice([Tags.Ice, Tags.Fire, Tags.Lightning, Tags.Physical]), self.spell)
 
 class ChaosHailSpell(Spell):
 
@@ -3918,7 +3918,6 @@ class CausticBurnBuff(Buff):
     def __init__(self, spell):
         self.spell = spell
         self.power = spell.get_stat("power")
-        self.damage = spell.get_stat("damage", base=4) if spell.get_stat("bale") else 0
         Buff.__init__(self)
     
     def on_init(self):
@@ -3929,7 +3928,7 @@ class CausticBurnBuff(Buff):
         self.stack_type = STACK_DURATION
 
     def on_advance(self):
-        self.owner.deal_damage(self.turns_left + self.damage, Tags.Fire, self.spell)
+        self.owner.deal_damage(self.turns_left + (self.spell.get_stat("damage", base=4) if self.spell.get_stat("bale") else 0), Tags.Fire, self.spell)
         existing = self.owner.get_buff(Poison)
         if existing:
             existing.turns_left += self.power
@@ -4623,7 +4622,6 @@ class CloudCondensateBuff(Buff):
     def __init__(self, spell):
         Buff.__init__(self)
         self.name = "Cloud Condensate"
-        self.damage = spell.get_stat("damage", base=5)
         self.duration = spell.get_stat("duration")
         self.description = "Each turn, if not inside a thunderstorm or blizzard cloud, create a random cloud on this unit's tile for %i turns." % self.duration
         self.color = Tags.Metallic.color
@@ -4634,9 +4632,9 @@ class CloudCondensateBuff(Buff):
             return
         flip = random.choice([True, False])
         if flip:
-            cloud = StormCloud(self.owner, self.damage*2)
+            cloud = StormCloud(self.owner, self.spell.get_stat("damage", base=5)*2)
         else:
-            cloud = BlizzardCloud(self.owner, self.damage)
+            cloud = BlizzardCloud(self.owner, self.spell.get_stat("damage", base=5))
         cloud.source = self
         cloud.duration = self.duration
         self.owner.level.add_obj(cloud, self.owner.x, self.owner.y)
@@ -8227,7 +8225,6 @@ class QuantumOverlayBuff(Buff):
         self.global_triggers[EventOnDamaged] = self.on_damaged
         self.group = self.spell.get_stat("group")
         self.antimatter = self.spell.get_stat("antimatter")
-        self.damage = self.spell.get_stat("damage", base=20)
         if self.spell.get_stat("warp"):
             self.global_bonuses["requires_los"] = -1
             self.owner_triggers[EventOnSpellCast] = self.on_spell_cast
@@ -8247,7 +8244,7 @@ class QuantumOverlayBuff(Buff):
         for _ in range(self.overlays):
             self.deduct_hp(evt.unit, evt.damage//2)
         if self.antimatter:
-            self.deduct_hp(evt.unit, self.damage)
+            self.deduct_hp(evt.unit, self.spell.get_stat("damage", base=20))
             self.deduct_hp(evt.source.owner, 1)
 
     def on_spell_cast(self, evt):
@@ -10215,15 +10212,15 @@ class GeneticBreakdownBuff(Buff):
         self.buff_type = BUFF_TYPE_CURSE
         self.color = Tags.Poison.color
         self.stack_type = STACK_INTENSITY
-        self.damage = self.spell.get_stat("damage", base=5)
     
     def on_advance(self):
-        self.owner.deal_damage(self.damage, Tags.Poison, self.spell)
+        damage = self.spell.get_stat("damage", base=5)
+        self.owner.deal_damage(damage, Tags.Poison, self.spell)
         existing = self.owner.get_buff(Poison)
         if existing:
-            existing.turns_left += self.damage
+            existing.turns_left += damage
         else:
-            self.owner.apply_buff(Poison(), self.damage)
+            self.owner.apply_buff(Poison(), damage)
 
 class ChaoticFluxBuff(Buff):
 
@@ -11494,10 +11491,9 @@ class BurnoutReactorBuff(DamageAuraBuff):
     
     def on_init(self):
         self.asset = ["MissingSynergies", "Statuses", "burnout_reactor"]
-        self.blast_damage = self.spell.get_stat("damage")
         self.aura = self.spell.get_stat("aura")
         self.resists[Tags.Fire] = 100
-        self.global_bonuses["damage"] = self.blast_damage//2 + self.spell.get_stat("minion_damage")
+        self.global_bonuses["damage"] = self.spell.get_stat("damage")//2 + self.spell.get_stat("minion_damage")
         self.owner_triggers[EventOnDeath] = self.on_death
     
     def on_applied(self, owner):
@@ -11525,12 +11521,13 @@ class BurnoutReactorBuff(DamageAuraBuff):
         self.boom()
 
     def boom(self):
+        damage = self.spell.get_stat("damage")
         for p in self.owner.level.get_points_in_ball(self.owner.x, self.owner.y, self.radius):
             unit = self.owner.level.get_unit_at(p.x, p.y)
             if not unit or not are_hostile(unit, self.owner):
                 self.owner.level.show_effect(p.x, p.y, Tags.Fire)
             else:
-                unit.deal_damage(self.blast_damage, Tags.Fire, self.spell)
+                unit.deal_damage(damage, Tags.Fire, self.spell)
 
 class BurnoutReactorSpell(Spell):
 
@@ -11557,7 +11554,7 @@ class BurnoutReactorSpell(Spell):
     def get_description(self):
         return ("The target minion becomes temporary and dies after [{minion_duration}_turns:minion_duration], but becomes a [fire] unit and gains [100_fire:fire] resistance.\n"
                 "When this effect is applied, and also when the minion dies, it explodes; all enemies in a [{radius}_tile:radius] radius take [{damage}_fire:fire] damage from this spell.\n"
-                "The target minion also gains a bonus to all attack damage equal to [{minion_damage}:minion_damage] plus half of the explosion damage.\n"
+                "The target minion also gains a bonus to all attack damage equal to [{minion_damage}:minion_damage] plus half of the explosion damage at the time the effect is applied.\n"
                 "Any on-summon effects you have will be triggered again when this effect is applied or reapplied.").format(**self.fmt_dict())
 
     def can_cast(self, x, y):
@@ -11586,7 +11583,6 @@ class LiquidLightningBuff(Buff):
         self.stack_type = STACK_REPLACE
         self.color = Tags.Lightning.color
         self.resists[Tags.Lightning] = 100
-        self.damage = self.spell.get_stat("damage")
         self.radius = self.spell.get_stat("radius")
         self.phase = self.spell.get_stat("phase")
         self.owner_triggers[EventOnSpellCast] = lambda evt: self.send_bolt()
@@ -11624,7 +11620,7 @@ class LiquidLightningBuff(Buff):
             return
         if not isinstance(evt.source, Spell) or evt.source.caster is not self.owner:
             return
-        evt.unit.deal_damage(self.damage//2, Tags.Lightning, self.spell)
+        evt.unit.deal_damage(self.spell.get_stat("damage")//2, Tags.Lightning, self.spell)
 
     def send_bolt(self):
         targets = [u for u in self.owner.level.get_units_in_ball(self.owner, self.radius) if are_hostile(u, self.owner) and distance(u, self.owner) <= self.radius]
@@ -11638,7 +11634,7 @@ class LiquidLightningBuff(Buff):
         for p in Bolt(self.owner.level, self.owner, target):
             self.owner.level.show_effect(p.x, p.y, Tags.Lightning, minor=True)
             yield
-        target.deal_damage(self.damage, Tags.Lightning, self.spell)
+        target.deal_damage(self.spell.get_stat("damage"), Tags.Lightning, self.spell)
 
 class LiquidLightningSpell(Spell):
 
@@ -11776,7 +11772,6 @@ class NonlocalityBuff(Buff):
         self.stack_type = STACK_REPLACE
         self.color = Tags.Arcane.color
         self.resists[Tags.Arcane] = 100
-        self.damage = self.spell.get_stat("damage")
         self.global_triggers[EventOnDamaged] = self.on_damaged
         self.shield = self.spell.get_stat("shield")
 
@@ -11806,7 +11801,7 @@ class NonlocalityBuff(Buff):
 
     def on_damaged(self, evt):
         if are_hostile(evt.unit, self.owner) and isinstance(evt.source, Spell) and evt.source.caster is self.owner:
-            evt.unit.cur_hp = max(0, evt.unit.cur_hp - self.damage)
+            evt.unit.cur_hp = max(0, evt.unit.cur_hp - self.spell.get_stat("damage"))
             if evt.unit.cur_hp <= 0:
                 evt.unit.kill()
         elif evt.unit is self.owner and self.shield and self.owner.shields <= 0:
