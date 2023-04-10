@@ -533,8 +533,9 @@ class WildHuntSpell(Spell):
         
         self.tags = [Tags.Enchantment, Tags.Nature, Tags.Translocation]
         self.level = 4
-        self.max_charges = 3
-        self.range = 10
+        self.max_charges = 6
+        self.range = RANGE_GLOBAL
+        self.requires_los = False
         self.duration = 8
         self.num_targets = 3
         self.can_target_self = True
@@ -542,7 +543,6 @@ class WildHuntSpell(Spell):
         
         self.upgrades["duration"] = (8, 2)
         self.upgrades["num_targets"] = (2, 2, "Num Targets", "[2:num_targets] more minions are teleported to the target each turn.")
-        self.upgrades["requires_los"] = (-1, 2, "Blindcasting", "Wild Hunt can be cast without line of sight.")
         self.upgrades["holy_units"] = (1, 2, "Holy Crusade", "Can also teleport [holy] minions.")
         self.upgrades["demon_units"] = (1, 1, "Infernal Legion", "Can also teleport [demon] minions.")
         self.upgrades["undead_units"] = (1, 1, "Undead Horde", "Can also teleport [undead] minions.")
@@ -588,9 +588,10 @@ class PlanarBindingBuff(Buff):
             # Prevent infinite loop with Thorough Binding if the original location is blocked
             self.x = self.owner.x
             self.y = self.owner.y
+        yield
 
     def on_advance(self):
-        self.do_teleport()
+        self.owner.level.queue_spell(self.do_teleport())
         if self.redundancy and self.owner.is_alive():
             self.owner.level.event_manager.raise_event(EventOnMoved(self.owner, self.x, self.y, teleport=True), self.owner)
             self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
@@ -598,7 +599,7 @@ class PlanarBindingBuff(Buff):
     def on_moved(self, evt):
         if not evt.teleport:
             return
-        self.do_teleport()
+        self.owner.level.queue_spell(self.do_teleport())
 
 class PlanarBindingSpell(Spell):
 
@@ -608,14 +609,14 @@ class PlanarBindingSpell(Spell):
         
         self.tags = [Tags.Enchantment, Tags.Holy, Tags.Translocation]
         self.level = 3
-        self.max_charges = 6
-        self.range = 8
+        self.max_charges = 9
+        self.range = 12
         self.duration = 5
         self.can_target_self = True
         self.can_target_empty = False
         
         self.upgrades["duration"] = (10, 3)
-        self.upgrades["range"] = (7, 2)
+        self.upgrades["range"] = (8, 2)
         self.upgrades["requires_los"] = (-1, 2, "Blindcasting", "Planar Binding can be cast without line of sight.")
         self.upgrades["redundancy"] = (1, 2, "Redundancy", "The target still counts as having teleported an additional time per turn even if it did not move away from its original spot, triggering all effects that are triggered when it teleports.")
         self.upgrades["thorough"] = (1, 5, "Thorough Binding", "The target will now be immediately teleported back to its original location whenever it teleports.\nMost forms of movement other than a unit's movement action count as teleportation.")
@@ -10945,7 +10946,7 @@ class BlueSpikeBeastBuff(Buff):
     
     def on_damaged(self, evt):
         if random.random() < self.act_chance/200:
-            self.owner.level.queue_spell(self.boom())
+            self.owner.level.queue_spell(self.boom(), prepend=True)
     
     def boom(self):
         for stage in Burst(self.owner.level, self.owner, self.radius, ignore_walls=self.phase):
