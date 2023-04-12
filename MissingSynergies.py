@@ -10597,9 +10597,9 @@ class DivineRetribution(Upgrade):
         self.max_damage = 0
     
     def get_description(self):
-        return ("At the beginning of each of your turns, deal [holy] damage to the enemy with the highest current HP.\nThe damage dealt is equal to the highest damage dealt to any unit in a single hit from the beginning of your previous turn to the beginning of this turn, excluding this skill itself.").format(**self.fmt_dict())
+        return ("Each turn, deal [holy] damage to the enemy with the highest current HP.\nThe damage dealt is equal to the highest damage dealt to any unit in a single hit since the previous activation of this skill, excluding itself.").format(**self.fmt_dict())
 
-    def on_pre_advance(self):
+    def on_advance(self):
         if not self.max_damage:
             return
         enemies = [unit for unit in self.owner.level.units if are_hostile(unit, self.owner)]
