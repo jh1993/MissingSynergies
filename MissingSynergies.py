@@ -1898,18 +1898,16 @@ class ElementalChaosSpell(Spell):
         self.tags = [Tags.Arcane, Tags.Ice, Tags.Chaos, Tags.Conjuration]
         self.level = 5
         self.max_charges = 3
-        self.range = 0
 
         self.minion_health = 36
         self.minion_damage = 11
         self.minion_range = 6
         self.hp_gain = 5
-        self.thorns = 4
 
         self.upgrades["fire_focus"] = (1, 2, "Fire Focus", "The storm spirit is replaced by [{num_summons}:num_summons] fire spirits.", "focus")
         self.upgrades["lightning_focus"] = (1, 2, "Lightning Focus", "The starfire spirit is replaced by [{num_summons}:num_summons] spark spirits.", "focus")
         self.upgrades["hp_gain"] = (2, 3, "Max HP Gain", "Spirits gain [2:minion_health] more max HP when witnessing spells of their elements.")
-        self.upgrades["thorns"] = (2, 2, "Melee Retaliation", "Spirits gain [2:minion_damage] more melee retaliation damage.")
+        self.upgrades["retroactive"] = (1, 5, "Retroactive Growth", "New spirits you summon will have max HP equal to the average max HP of all existing spirits, if it is greater than the new spirit's initial HP.")
         self.upgrades["power"] = (1, 6, "Elemental Power", "The attacks of hybrid spirits deal damage of both of their elements instead of randomly one of them.\nThe attacks of pure spirits hit twice.")
     
     def fmt_dict(self):
@@ -1919,7 +1917,7 @@ class ElementalChaosSpell(Spell):
 
     def get_description(self):
         return ("Summon a starfire spirit, chaos spirit, and storm spirit near yourself.\n"
-                "Each spirit has [{minion_health}_HP:minion_health], [{thorns}_damage:minion_damage] melee retaliation of their elements, and an attack with [{minion_range}_range:minion_range] and [1_radius:radius] that deals [{minion_damage}_damage:minion_damage] of a random one of their elements.\n"
+                "Each spirit has [{minion_health}_HP:minion_health], [4_damage:minion_damage] melee retaliation of their elements, and an attack with [{minion_range}_range:minion_range] and [1_radius:radius] that deals [{minion_damage}_damage:minion_damage] of a random one of their elements.\n"
                 "Each spirit gains [{hp_gain}:minion_health] max HP when witnessing a spell of one of its elements.").format(**self.fmt_dict())
     
     def get_spirit(self, tags):
@@ -1932,7 +1930,7 @@ class ElementalChaosSpell(Spell):
         for tag in tags:
             spirit.resists[tag] = 100
             spirit.buffs.append(CustomSpiritBuff(self, tag))
-            spirit.buffs.append(Thorns(self.get_stat("thorns"), tag))
+            spirit.buffs.append(Thorns(4, tag))
         spirit.spells = [CustomSpiritBlast(self, tags)]
         return spirit
     
@@ -1949,8 +1947,21 @@ class ElementalChaosSpell(Spell):
                 spirits.append(self.get_spirit([Tags.Lightning]))
         else:
             spirits.append(self.get_spirit([Tags.Fire, Tags.Arcane]))
+        avg = 0
+        if self.get_stat("retroactive"):
+            sum = 0
+            num = 0
+            for unit in self.caster.level.units:
+                if unit.source is not self:
+                    continue
+                sum += unit.max_hp
+                num += 1
+            if num:
+                avg = math.ceil(sum/num)
         for spirit in spirits:
-            self.summon(spirit, radius=5, sort_dist=False)
+            if avg > spirit.max_hp:
+                spirit.max_hp = avg
+            self.summon(spirit, target=Point(x, y), radius=5)
 
 class RuinBuff(Buff):
     def on_init(self):
