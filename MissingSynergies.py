@@ -4346,7 +4346,6 @@ class GatheringStormSpell(Spell):
         self.level = 5
         self.max_charges = 4
         self.range = 8
-        self.must_target_walkable = True
 
         self.radius = 4
         self.minion_range = 8
@@ -4371,7 +4370,7 @@ class GatheringStormSpell(Spell):
         return stats
 
     def get_description(self):
-        return ("Consume all thunderstorm and blizzard clouds within [{radius}_tiles:radius] of the target tile to summon an immobile storm elemental with max HP and duration based on the damage, strikechance, and duration of clouds consumed, or teleport an existing storm elemental and boost its HP and duration.\n"
+        return ("Consume all thunderstorm and blizzard clouds within [{radius}_tiles:radius] of the target tile to summon a flying immobile storm elemental with max HP and duration based on the damage, strikechance, and duration of clouds consumed, or teleport an existing storm elemental and boost its HP and duration.\n"
                 "The storm elemental has a beam attack with [{minion_range}_range:minion_range] that deals [lightning] and [ice] damage equal to 10% of its max HP. Each turn, storm energy arcs from the storm elemental to each [elemental] ally in LOS within [{double_radius}_tiles:radius], dealing [lightning] and [ice] damage equal to 10% of the ally's max HP to units in between.").format(**self.fmt_dict())
 
     def cast(self, x, y):
@@ -4437,6 +4436,7 @@ class GatheringStormSpell(Spell):
         unit.resists[Tags.Ice] = 100
         unit.resists[Tags.Physical] = 50
         unit.stationary = True
+        unit.flying = True
         unit.max_hp = math.floor(cloud_damage*0.2)
         unit.turns_to_death = math.floor(cloud_duration*0.1)
         unit.spells = [StormBeam(self.get_stat("minion_range"))]
@@ -8643,7 +8643,6 @@ class ReflexArcSpell(Spell):
         self.range = 10
         self.duration = 1
         self.tags = [Tags.Nature, Tags.Lightning, Tags.Sorcery]
-        self.damage_type = [Tags.Lightning, Tags.Poison]
     
     def get_stat(self, attr, base=None):
         return self.upgrade.get_stat(attr, base) if self.upgrade else Spell.get_stat(self, attr, base)
