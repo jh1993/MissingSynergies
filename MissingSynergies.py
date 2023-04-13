@@ -897,35 +897,32 @@ class ShadowAssassin(Upgrade):
         self.old_y = self.owner.y
     
     def get_description(self):
-        return ("Whenever you teleport, if there is only a single enemy adjacent to you on arrival, deal [{damage}_dark:dark], [{damage}_physical:physical], and [{damage}_poison:poison] damage to it. Most forms of movement other than a unit's movement action count as teleportation.\n"
+        return ("Whenever you teleport, you deal [{damage}_dark:dark], [{damage}_physical:physical], and [{damage}_poison:poison] damage to a random adjacent enemy. Most forms of movement other than a unit's movement action count as teleportation.\n"
                 "If you teleported to that enemy from out of line of sight, or the enemy is [blind] or incapacitated ([stunned], [frozen], [petrified], [glassified], or similar), deal double damage.\n"
-                "If none of these conditions are satisfied, you still have a chance to deal double damage. The chance to fail is equal to 100% divided by half of the distance between your previous position and the enemy, up to 100%.").format(**self.fmt_dict())
+                "If none of these conditions are satisfied, you still have a chance to deal double damage. The chance to fail is equal to 100% divided by half of the distance between your previous position and the enemy, up to 100%.\n"
+                "Targets that you can deal double damage to are prioritized.").format(**self.fmt_dict())
     
     def on_moved(self, evt):
         
-        if evt.teleport:
-    
-            enemy_count = 0
-            points = self.owner.level.get_adjacent_points(self.owner)
-            target = None
-            for point in points:
-                unit = self.owner.level.get_unit_at(point.x, point.y)
-                if unit and are_hostile(unit, self.owner):
-                    enemy_count += 1
-                    if enemy_count > 1:
-                        return
-                    target = unit
-            if not target:
+        if evt.teleport:    
+            targets = [u for u in self.owner.level.get_units_in_ball(self.owner, 1, diag=True) if are_hostile(u, self.owner)]
+            if not targets:
                 return
-            
+            good_targets = [u for u in targets if self.can_double_damage(u)]
             damage = self.get_stat("damage")
-            if target.has_buff(BlindBuff) or target.has_buff(Stun) or not self.owner.level.can_see(target.x, target.y, self.old_x, self.old_y) or random.random() >= 2/distance(target, Point(self.old_x, self.old_y)):
+            if good_targets:
                 damage *= 2
+                target = random.choice(good_targets)
+            else:
+                target = random.choice(targets)
             for dtype in [Tags.Dark, Tags.Physical, Tags.Poison]:
                 target.deal_damage(damage, dtype, self)
 
         self.old_x = self.owner.x
         self.old_y = self.owner.y
+
+    def can_double_damage(self, target):
+        return target.has_buff(BlindBuff) or target.has_buff(Stun) or not self.owner.level.can_see(target.x, target.y, self.old_x, self.old_y) or random.random() >= 2/distance(target, Point(self.old_x, self.old_y))
 
 class PrismShellBuff(Buff):
     def __init__(self, spell):
@@ -2249,12 +2246,16 @@ class EnfleshedBuff(Buff):
             self.owner_triggers[EventOnDeath] = lambda evt: self.owner.level.queue_spell(self.boom())
 
     def on_applied(self, owner):
+        self.owner.level.queue_spell(self.modify_unit())
+    
+    def modify_unit(self):
         self.owner.max_hp += self.hp
         self.owner.cur_hp += self.hp
         if Tags.Living not in self.owner.tags:
             self.owner.tags.append(Tags.Living)
         else:
             self.nonliving = False
+        yield
 
     def check_hp(self):
         if self.owner.cur_hp <= self.hp:
@@ -7751,8 +7752,12 @@ class EmpyrealFormBuff(Buff):
             self.global_bonuses["minion_damage"] = 5
     
     def on_applied(self, owner):
+        self.owner.level.queue_spell(self.modify_unit())
+    
+    def modify_unit(self):
         self.owner.max_hp += self.max_hp
         self.owner.deal_damage(-self.max_hp, Tags.Heal, self.spell)
+        yield
 
     def on_unapplied(self):
         self.owner.level.queue_spell(self.unmodify_unit())
@@ -9698,10 +9703,14 @@ class TeleFrag(Upgrade):
     def get_description(self):
         return ("Whenever an enemy teleports, you intercept it by teleporting a small metal shard to the same location, dealing [{max_charges}_physical:physical] damage. This damage only benefits from bonuses to [max_charges:max_charges].\n"
                 "Most forms of movement other than a unit's movement action count as teleportation.\n"
-                "This skill has a maximum range of [{range}_tiles:range].").format(**self.fmt_dict())
+                "This skill has an effective range of [{range}_tiles:range]. Beyond that range, each enemy only has a chance to be affected, equal to 100% divided by 1 plus the excess distance.").format(**self.fmt_dict())
 
     def on_moved(self, evt):
-        if not evt.teleport or not are_hostile(evt.unit, self.owner) or distance(evt, self.owner) > self.get_stat("range"):
+        if not evt.teleport or not are_hostile(evt.unit, self.owner):
+            return
+        dist = distance(evt.unit, self.owner)
+        good_range = self.get_stat("range")
+        if dist > good_range and random.random() >= 1/(1 + dist - good_range):
             return
         evt.unit.deal_damage(self.get_stat("max_charges"), Tags.Physical, self)
 
@@ -10176,11 +10185,15 @@ class HealthMutation(Buff):
         self.stack_type = STACK_INTENSITY
     
     def on_applied(self, owner):
+        self.owner.level.queue_spell(self.modify_unit())
+    
+    def modify_unit(self):
         if self.buff_type == BUFF_TYPE_BLESS:
             self.owner.max_hp += 30
             self.owner.deal_damage(-30, Tags.Heal, self)
         else:
             drain_max_hp(self.owner, 30)
+        yield
     
     def on_unapplied(self):
         self.owner.level.queue_spell(self.unmodify_unit())
@@ -11507,6 +11520,9 @@ class BurnoutReactorBuff(DamageAuraBuff):
         self.owner_triggers[EventOnDeath] = self.on_death
     
     def on_applied(self, owner):
+        self.owner.level.queue_spell(self.modify_unit())
+    
+    def modify_unit(self):
         self.originally_fire = Tags.Fire in self.owner.tags
         if not self.originally_fire:
             self.owner.tags.append(Tags.Fire)
@@ -11514,6 +11530,7 @@ class BurnoutReactorBuff(DamageAuraBuff):
         self.owner.level.event_manager.raise_event(EventOnUnitPreAdded(self.owner), self.owner)
         self.owner.level.event_manager.raise_event(EventOnUnitAdded(self.owner), self.owner)
         self.boom()
+        yield
 
     def on_unapplied(self):
         self.owner.level.queue_spell(self.unmodify_unit())
@@ -11602,6 +11619,9 @@ class LiquidLightningBuff(Buff):
             self.global_triggers[EventOnPreDamaged] = self.on_pre_damaged
 
     def on_applied(self, owner):
+        self.owner.level.queue_spell(self.modify_unit())
+    
+    def modify_unit(self):
         if Tags.Lightning not in self.owner.tags:
             self.owner.tags.append(Tags.Lightning)
             self.originally_lightning = False
@@ -11614,6 +11634,7 @@ class LiquidLightningBuff(Buff):
             self.flip = False
         self.owner.level.event_manager.raise_event(EventOnUnitPreAdded(self.owner), self.owner)
         self.owner.level.event_manager.raise_event(EventOnUnitAdded(self.owner), self.owner)
+        yield
 
     def on_unapplied(self):
         self.owner.level.queue_spell(self.unmodify_unit())
@@ -11698,6 +11719,9 @@ class HeartOfWinterBuff(Buff):
             self.owner_triggers[EventOnDamaged] = self.on_damaged
 
     def on_applied(self, owner):
+        self.owner.level.queue_spell(self.modify_unit())
+    
+    def modify_unit(self):
         if not self.owner.has_buff(OrbBuff):
             self.owner.turns_to_death = None
         self.hp = self.spell.get_stat("damage")*5
@@ -11710,6 +11734,7 @@ class HeartOfWinterBuff(Buff):
             self.originally_ice = True
         self.owner.level.event_manager.raise_event(EventOnUnitPreAdded(self.owner), self.owner)
         self.owner.level.event_manager.raise_event(EventOnUnitAdded(self.owner), self.owner)
+        yield
 
     def on_unapplied(self):
         # Queue this so currently queued spells resolve before the max HP is reduced.
@@ -11786,6 +11811,9 @@ class NonlocalityBuff(Buff):
         self.shield = self.spell.get_stat("shield")
 
     def on_applied(self, owner):
+        self.owner.level.queue_spell(self.modify_unit())
+    
+    def modify_unit(self):
         if Tags.Arcane not in self.owner.tags:
             self.owner.tags.append(Tags.Arcane)
             self.originally_arcane = False
@@ -11798,6 +11826,7 @@ class NonlocalityBuff(Buff):
             self.flip = False
         self.owner.level.event_manager.raise_event(EventOnUnitPreAdded(self.owner), self.owner)
         self.owner.level.event_manager.raise_event(EventOnUnitAdded(self.owner), self.owner)
+        yield
 
     def on_unapplied(self):
         self.owner.level.queue_spell(self.unmodify_unit())
