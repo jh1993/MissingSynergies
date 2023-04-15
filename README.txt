@@ -17,6 +17,7 @@ Level 2:
 + Chaotic Spark (Fire/Lightning/Chaos/Sorcery)
 + Kingswater (Holy/Nature/Sorcery)
 + Toxic Orb (Nature/Orb/Conjuration)
++ Vainglory (Holy/Enchantment)
 + Volatile Orb (Chaos/Orb/Conjuration/Sorcery)
 
 Level 3:

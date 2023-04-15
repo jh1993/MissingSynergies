@@ -220,6 +220,7 @@ class ShiveringVenomBuff(Buff):
         Buff.__init__(self)
         self.upgrade = upgrade
         self.buff_type = BUFF_TYPE_PASSIVE
+        self.owner_triggers[EventOnPreDamaged] = self.on_pre_damaged
 
     def on_applied(self, owner):
         poison = self.owner.get_buff(Poison)
@@ -233,7 +234,15 @@ class ShiveringVenomBuff(Buff):
         else:
             self.resists[Tags.Poison] = 0
 
+    def on_pre_damaged(self, evt):
+        if evt.damage <= 0:
+            return
+        self.update_resists()
+
     def on_advance(self):
+        self.owner.level.queue_spell(self.update_resists_queued())
+
+    def update_resists(self):
 
         # Remove this if an enemy becomes friendly via Dominate
         if not are_hostile(self.owner, self.upgrade.owner):
@@ -255,6 +264,10 @@ class ShiveringVenomBuff(Buff):
         else:
             self.resists[Tags.Poison] = 0
         self.owner.resists[Tags.Poison] += self.resists[Tags.Poison]
+
+    def update_resists_queued(self):
+        self.update_resists()
+        yield
 
 class ShiveringVenom(Upgrade):
     def on_init(self):
@@ -2445,6 +2458,7 @@ class DivineGazeSpell(Spell):
         self.asset = ["MissingSynergies", "Icons", "divine_gaze"]
         self.level = 4
         self.tags = [Tags.Eye, Tags.Holy, Tags.Sorcery]
+        self.can_target_self = True
         self.range = RANGE_GLOBAL
         self.damage = 15
         self.max_charges = 8
@@ -2454,34 +2468,40 @@ class DivineGazeSpell(Spell):
         self.upgrades["order"] = (1, 4, "Eyes of Order", "Your non-stacking [eye] buffs are shot an additional time each.")
     
     def get_description(self):
-        return ("Deal [{damage}_holy:holy] damage in a beam.\n"
-                "When cast, each of your currently active [eye] buffs shoots its effect on all tiles in the same beam, each time reducing its duration by an amount equal to its [shot_cooldown:shot_cooldown]. If there isn't enough duration remaining, the effect will not occur.").format(**self.fmt_dict())
+        return ("Deal [{damage}_holy:holy] damage to all enemies in a beam.\n"
+                "If you target yourself, the beam will instead be shot at a random enemy in line of sight. This can be done even if you are [blind].\n"
+                "When cast, each of your currently active [eye] buffs shoots its effect at all enemies in the same beam, each time reducing its duration by an amount equal to its [shot_cooldown:shot_cooldown]. If there isn't enough duration remaining, the effect will not occur.").format(**self.fmt_dict())
     
     def get_impacted_tiles(self, x, y):
         return list(Bolt(self.caster.level, self.caster, Point(x, y)))
 
-    def eye_beam(self, target, eye):
-        # None represents this spell's own beam
-        if eye:
-            if eye.turns_left < eye.freq:
-                return
-            eye.turns_left -= eye.freq
-            if not eye.turns_left:
-                self.caster.remove_buff(eye)
-        damage = self.get_stat("damage")
-        for point in Bolt(self.caster.level, self.caster, target):
-            unit = self.caster.level.get_unit_at(point.x, point.y)
-            self.caster.level.deal_damage(point.x, point.y, eye.damage if eye else damage, eye.element if eye else Tags.Holy, eye.spell if eye else self)
-            if eye and unit:
-                eye.on_shoot(point)
-        yield
-
     def cast_instant(self, x, y):
+
+        if x == self.caster.x and y == self.caster.y:
+            units = [u for u in self.caster.level.get_units_in_los(self.caster) if are_hostile(u, self.caster)]
+            if not units:
+                return
+            target = random.choice(units)
+        else:
+            target = Point(x, y)
         eyes = [None]
         eyes.extend([buff for buff in self.caster.buffs if isinstance(buff, Spells.ElementalEyeBuff)])
-        for eye in eyes:
-            for _ in range(1 + (self.get_stat("order") if eye and eye.stack_type != STACK_INTENSITY else 0)):
-                self.caster.level.queue_spell(self.eye_beam(Point(x, y), eye))
+        holy_damage = self.get_stat("damage")
+        order = self.get_stat("order")
+
+        for p in Bolt(self.caster.level, self.caster, target):
+            unit = self.caster.level.get_unit_at(p.x, p.y)
+            for eye in eyes:
+                damage = eye.damage if eye else holy_damage
+                tag = eye.element if eye else Tags.Holy
+                spell = eye.spell if eye else self
+                for _ in range(1 + (order if eye and eye.stack_type != STACK_INTENSITY else 0)):
+                    if not unit or not are_hostile(unit, self.caster):
+                        self.caster.level.show_effect(p.x, p.y, tag)
+                    else:
+                        unit.deal_damage(damage, tag, spell)
+                        if eye and unit:
+                            eye.on_shoot(p)
 
 class WarpLensStrike(LeapAttack):
 
@@ -12406,5 +12426,82 @@ class MirrorScales(Upgrade):
             return
         breath.per_square_effect(evt.source.owner.x, evt.source.owner.y)
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell])
+class VaingloryBuff(Buff):
+
+    def __init__(self, spell, buff_type):
+        self.spell = spell
+        Buff.__init__(self)
+        self.buff_type = buff_type
+        self.name = "Vainglory"
+        self.color = Tags.Holy.color
+        self.stack_type = STACK_REPLACE
+        self.asset = ["MissingSynergies", "Statuses", "vainglory"]
+        self.resists[Tags.Heal] = 100 if self.buff_type == BUFF_TYPE_CURSE else -100
+        self.hp = 0
+    
+    def on_applied(self, owner):
+        self.owner.level.queue_spell(self.modify_unit())
+    
+    def modify_unit(self):
+        self.hp = math.floor(self.owner.max_hp*self.spell.get_stat("percentage")/100)
+        self.owner.max_hp += self.hp
+        yield
+    
+    def on_unapplied(self):
+        self.owner.level.queue_spell(self.unmodify_unit())
+    
+    def unmodify_unit(self):
+        drain_max_hp(self.owner, self.hp)
+        yield
+
+class VainglorySpell(Spell):
+
+    def on_init(self):
+        self.name = "Vainglory"
+        self.asset = ["MissingSynergies", "Icons", "vainglory"]
+        self.tags = [Tags.Holy, Tags.Enchantment]
+        self.level = 2
+        self.max_charges = 8
+
+        self.radius = 5
+        self.requires_los = False
+        self.range = 9
+        self.percentage = 25
+
+        self.upgrades["max_charges"] = (4, 2)
+        self.upgrades["radius"] = (3, 3)
+        self.upgrades["percentage"] = (25, 3)
+        self.upgrades["friendly"] = (1, 4, "True Pride", "Now also affects your minions, giving them healing bonus instead of penalty.")
+        self.upgrades["inadequacy"] = (1, 5, "Inadequacy", "When affecting an enemy already affected by Vainglory, this spell also deals [holy] damage equal to 25% of that enemy's missing HP.\nIf you have the True Pride upgrade, this will instead [heal] affected allies.")
+
+    def get_description(self):
+        return ("All enemies in a [{radius}_tile:radius] radius gain [{percentage}%:holy] more max HP, but do not gain any current HP, and suffer 100% healing penalty.").format(**self.fmt_dict())
+
+    def cast_instant(self, x, y):
+        friendly = self.get_stat("friendly")
+        inadequacy = self.get_stat("inadequacy")
+        for u in self.caster.level.get_units_in_ball(Point(x, y), self.get_stat("radius")):
+            if u is self.caster:
+                continue
+            hostile = are_hostile(u, self.caster)
+            if not hostile and not friendly:
+                continue
+            buff_type = BUFF_TYPE_CURSE if hostile else BUFF_TYPE_BLESS
+            existing = u.has_buff(VaingloryBuff)
+            old_hp = u.cur_hp
+            damage = math.ceil((u.max_hp - u.cur_hp)/4)
+            if inadequacy and existing and hostile:
+                u.deal_damage(damage, Tags.Holy, self)
+            u.apply_buff(VaingloryBuff(self, buff_type))
+            # Queue this so that the heal comes after the buff is reapplied.
+            if inadequacy and existing and not hostile:
+                self.caster.level.queue_spell(self.heal_ally(u, old_hp, damage))
+
+    def heal_ally(self, target, old_hp, heal):
+        # Make sure reapplying the buff doesn't lower the target's current HP.
+        target.cur_hp = min(max(target.cur_hp, old_hp), target.max_hp)
+        target.deal_damage(-heal, Tags.Heal, self)
+        yield
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales])
