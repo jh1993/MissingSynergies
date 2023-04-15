@@ -8885,11 +8885,13 @@ class WhispersOfOblivion(Upgrade):
         self.asset = ["MissingSynergies", "Icons", "whispers_of_oblivion"]
         self.tags = [Tags.Dark, Tags.Chaos]
         self.level = 7
-        self.description = "Each turn, each enemy that is [stunned], [frozen], [petrified], [glassified], or similarly incapacitated has a 5% chance to be instantly killed."
+        self.description = "Each turn, each enemy that is [stunned], [frozen], [petrified], [glassified], or similarly incapacitated has a chance to be instantly killed.\nThe chance begins at 5%, and approaches 10% as an enemy's HP percentage approaches 0%."
     
     def on_advance(self):
         for unit in list(self.owner.level.units):
-            if not are_hostile(unit, self.owner) or not unit.has_buff(Stun) or random.random() >= 0.05:
+            if not are_hostile(unit, self.owner) or not unit.has_buff(Stun):
+                continue
+            if random.random() >= 0.05 + 0.05*(unit.max_hp - unit.cur_hp)/unit.max_hp:
                 continue
             self.owner.level.show_effect(unit.x, unit.y, Tags.Translocation)
             unit.kill()
