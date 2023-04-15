@@ -8269,7 +8269,7 @@ class QuantumOverlayBuff(Buff):
 
         if evt.unit is self.owner or (self.group and not are_hostile(evt.unit, self.owner)):
             for _ in range(self.overlays):
-                self.deduct_hp(evt.unit, evt.damage//4)
+                self.deduct_hp(evt.unit, math.ceil(evt.damage/4))
         
         if not evt.source or not evt.source.owner:
             return
@@ -8278,7 +8278,7 @@ class QuantumOverlayBuff(Buff):
             return
 
         for _ in range(self.overlays):
-            self.deduct_hp(evt.unit, evt.damage//2)
+            self.deduct_hp(evt.unit, math.ceil(evt.damage/2))
         if self.antimatter:
             self.deduct_hp(evt.unit, self.spell.get_stat("damage", base=20))
             self.deduct_hp(evt.source.owner, 1)
@@ -8335,7 +8335,7 @@ class QuantumOverlaySpell(Spell):
 
     def get_description(self):
         return ("The existence of another you from a parallel world is partially overlaid onto yours.\n"
-                "Whenever you deal damage, this spell deducts current HP from the target equal to 50% of that damage. Whenever you take damage, this spell deducts current HP from you equal to 25% of that damage.\n"
+                "Whenever you deal damage, this spell deducts current HP from the target equal to 50% of that damage. Whenever you take damage, this spell deducts current HP from you equal to 25% of that damage. Both percentages round up.\n"
                 "Lasts [{duration}_turns:duration].\n"
                 "Casting this spell while the effect is active will cancel the effect and not consume a charge. This can be done even if the spell has no charges left.").format(**self.fmt_dict())
 
