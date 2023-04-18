@@ -517,7 +517,7 @@ class WildHuntBuff(Buff):
             return True
         if self.spell.get_stat("undead_units") and Tags.Undead in unit.tags:
             return True
-        return distance(unit, self.owner >= 2)
+        return distance(unit, self.owner) >= 2
     
     def do_teleport(self, units):
         units_teleported = 0
