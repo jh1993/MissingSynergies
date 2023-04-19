@@ -2968,7 +2968,7 @@ class GoldenTricksterAura(Buff):
     def on_init(self):
         self.radius = self.spell.get_stat("radius")
         self.shields = self.spell.get_stat("shields")
-        self.description = "Each turn, pretends to take 1 dark damage from every enemy within %i tiles. Gains 1 SH when taking damage, up to %i." % (self.radius, self.shields)
+        self.description = "Each turn, pretends to take 1 dark melee damage from every enemy within %i tiles. Gains 1 SH when taking damage, up to %i." % (self.radius, self.shields)
         self.color = Tags.Shield.color
         self.owner_triggers[EventOnDamaged] = self.on_damaged
     
@@ -2976,8 +2976,9 @@ class GoldenTricksterAura(Buff):
         enemies = [unit for unit in self.owner.level.get_units_in_ball(self.owner, self.radius) if are_hostile(self.owner, unit)]
         if not enemies:
             return
+        random.shuffle(enemies)
         for enemy in enemies:
-            dummy_hit = SimpleMeleeAttack()
+            dummy_hit = SimpleMeleeAttack(damage_type=Tags.Dark)
             dummy_hit.owner = enemy
             dummy_hit.caster = enemy
             self.owner.level.event_manager.raise_event(EventOnPreDamaged(self.owner, 1, Tags.Dark, dummy_hit), self.owner)
@@ -3012,7 +3013,7 @@ class GoldenTricksterSpell(Spell):
     def get_description(self):
         return ("Summon a Golden Trickster, a flying, randomly teleporting minion with many resistances, [{minion_health}_HP:minion_health], and [{shields}_SH:shields].\n"
                 "It has a trick shot with [{minion_range}_range:minion_range], which hits 3 times. Each hit inflicts no damage but ignores immunities and triggers on-damage effects as if [{minion_damage}_fire:fire], [{minion_damage}_lightning:lightning], or [{minion_damage}_physical:physical] damage has been done to the target. The target is also teleported up to [3_tiles:range] away.\n"
-                "Each turn, for each enemy within [{radius}_tiles:radius], it triggers on-damage effects as if it has taken [1_dark:dark] damage from that enemy. It gains [1_SH:shields] whenever it takes damage, up to a max of [{shields}_SH:shields].").format(**self.fmt_dict())
+                "Each turn, for each enemy within [{radius}_tiles:radius], it triggers on-damage effects as if it has taken [1_dark:dark] melee damage from that enemy. It gains [1_SH:shields] whenever it takes damage, up to a max of [{shields}_SH:shields].").format(**self.fmt_dict())
 
     def cast_instant(self, x, y):
 
