@@ -1230,11 +1230,8 @@ class PermaBerserkBuff(BerserkBuff):
 
     def __init__(self):
         BerserkBuff.__init__(self)
-        self.name = "Berserk"
-    
-    def on_unapplied(self):
-        if self.owner.is_alive():
-            self.owner.apply_buff(PermaBerserkBuff())
+        self.name = "Permanent Berserk"
+        self.buff_type = BUFF_TYPE_NONE
 
     def on_advance(self):
         if all([unit.team == TEAM_PLAYER for unit in self.owner.level.units if not unit.has_buff(PermaBerserkBuff)]):
@@ -1257,7 +1254,7 @@ class WordOfDetonationSpell(Spell):
     
     def get_description(self):
         return ("Summon a fire bomber or void bomber next to every unit except the caster.\n"
-                "The bombers are hostile and permanently [berserk]; the debuff reapplies itself if removed. They disappear if there are no other enemies in the realm.").format(**self.fmt_dict())
+                "The bombers are hostile and permanently [berserk]. They disappear if there are no other enemies in the realm.").format(**self.fmt_dict())
     
     def get_impacted_tiles(self, x, y):
         return [u for u in self.owner.level.units if u is not self.caster]
@@ -1301,11 +1298,11 @@ class WordOfUpheavalSpell(Spell):
 
         self.upgrades["max_charges"] = (1, 2)
         self.upgrades["damage"] = (20, 2)
-        self.upgrades["hallow"] = (1, 5, "Hallowed Earth", "50% chance for each summoned earth elemental to instead be a hallowed earth elemental that is friendly and not berserked.\n")
+        self.upgrades["hallow"] = (1, 5, "Hallowed Earth", "50% chance for each summoned earth elemental to instead be a hallowed earth elemental that is friendly and not [berserk].\n")
     
     def get_description(self):
         return ("Each unit that isn't [living] or [nature] has a 50% chance to take [{damage}_physical:physical] damage.\n"
-                "Each empty floor tile has a 25% chance to have an earth elemental summoned onto it. The elemental is hostile and permanently [berserk]; the debuff reapplies itself if removed. It disappears if there are no other enemies in the realm.\n"
+                "Each empty floor tile has a 25% chance to have an earth elemental summoned onto it. The elemental is hostile and permanently [berserk]. It disappears if there are no other enemies in the realm.\n"
                 "Turn all chasms into floors.\n"
                 "Turn all walls into chasms.").format(**self.fmt_dict())
     
@@ -1974,30 +1971,42 @@ class ElementalChaosSpell(Spell):
             self.summon(spirit, target=Point(x, y), radius=5)
 
 class RuinBuff(Buff):
+
     def on_init(self):
         self.name = "Ruin"
         self.asset = ["MissingSynergies", "Statuses", "ruin"]
         self.color = Tags.Dark.color
-        self.buff_type = BUFF_TYPE_CURSE
-        self.description = "Cannot gain buffs.\nThis debuff cannot be removed prematurely."
-        self.originally_unbuffable = False
-    def on_applied(self, owner):
-        if self.owner.buff_immune:
-            self.originally_unbuffable = True
-        self.owner.buff_immune = True
-    def on_unapplied(self):
-        if not self.originally_unbuffable:
-            self.owner.buff_immune = False
-        if self.turns_left > 0:
-            self.owner.apply_buff(RuinBuff(), self.turns_left)
+        self.buff_type = BUFF_TYPE_NONE
+        self.stack_type = STACK_INTENSITY
+        self.owner_triggers[EventOnDamaged] = self.on_damaged
+        self.owner_triggers[EventOnUnitAdded] = self.on_unit_added
+    
+    def on_unit_added(self, evt):
+        self.owner.remove_buff(self)
+    
+    def on_damaged(self, evt):
+        self.owner.level.queue_spell(self.remove_hp(evt.damage))
 
-class RuinAdept(Upgrade):
+    def remove_hp(self, hp):
+        self.owner.cur_hp -= hp
+        if self.owner.cur_hp <= 0:
+            self.owner.kill()
+        yield
+
+class FountOfPreservation(Upgrade):
+
     def on_init(self):
-        self.name = "Ruin Adept"
+        self.name = "Fount of Preservation"
         self.level = 4
-        self.description = "The duration of Ruin inflicted on enemies will be increased by this spell's bonuses to [duration:duration].\nThe duration of Ruin inflicted on allies will be decreased by this spell's bonuses to [duration:duration].\n"
-        self.spell_bonuses[RuinousImpactSpell]["duration"] = 5
-        self.spell_bonuses[RuinousImpactSpell]["adept"] = 1
+        self.description = "Whenever you use a mana potion, remove a stack of Ruin from yourself."
+        self.owner_triggers[EventOnSpellCast] = self.on_spell_cast
+    
+    def on_spell_cast(self, evt):
+        if not isinstance(evt.spell, SpellCouponSpell):
+            return
+        buff = self.owner.get_buff(RuinBuff)
+        if buff:
+            self.owner.remove_buff(buff)
 
 class RuinousImpactSpell(Spell):
 
@@ -2012,16 +2021,15 @@ class RuinousImpactSpell(Spell):
         self.can_target_self = True
 
         self.damage = 80
-        self.duration = 33
 
         self.upgrades["damage"] = (20, 3)
         self.upgrades["epicenter"] = (1, 5, "Epicenter", "Ruinous Impact now deals bonus damage equal to 100% of the maximum damage divided by 1 plus the distance of each unit from the target tile.")
-        self.add_upgrade(RuinAdept())
+        self.add_upgrade(FountOfPreservation())
 
     def get_description(self):
-        return ("Deal [fire], [lightning], [physical], and [dark] damage in a massive burst that covers the whole level, ignoring walls. The initial damage is [{damage}:damage] at the point of impact with a 100% chance to destroy walls.\n"
-                "After dealing damage, remove all buffs from the target and inflict Ruin for a fixed [33_turns:duration], which prevents the target from gaining buffs and reapplies itself if removed prematurely.\n"
-                "For every tile away from the point of impact, the damage and chance to destroy walls, remove buffs, and apply Ruin is reduced by 1%.\n"
+        return ("Deal [fire], [lightning], [physical], and [dark] damage in a massive burst that covers the whole level, ignoring walls. The initial damage is [{damage}:damage] at the point of impact and destroys walls.\n"
+                "After dealing damage, permanently inflict a stack of Ruin on all affected units, which is not considered a debuff and can only be removed when you enter a new realm. Whenever a unit takes damage, it loses the same amount of current HP per stack of Ruin.\n"
+                "For every tile away from the point of impact, the damage and chance to destroy walls and apply Ruin is reduced by 1%.\n"
                 "The caster is not immune to this spell. Use with extreme caution.").format(**self.fmt_dict())
     
     def get_impacted_tiles(self, x, y):
@@ -2036,7 +2044,6 @@ class RuinousImpactSpell(Spell):
     def cast(self, x, y):
         max_damage = self.get_stat("damage")
         epicenter = self.get_stat("epicenter")
-        duration_bonus = (self.get_stat("duration") - self.duration) if self.get_stat("adept") else 0
         stagenum = 0
         for stage in Burst(self.caster.level, Point(x, y), 60, ignore_walls=True):
             damage = math.ceil(max_damage*(1 - 0.01*stagenum))
@@ -2049,13 +2056,7 @@ class RuinousImpactSpell(Spell):
                     continue
                 unit = self.caster.level.get_unit_at(point.x, point.y)
                 if unit:
-                    buffs = list(unit.buffs)
-                    for buff in buffs:
-                        if buff.buff_type == BUFF_TYPE_BLESS:
-                            unit.remove_buff(buff)
-                    duration = self.duration + duration_bonus*(1 if are_hostile(self.caster, unit) else -1)
-                    if duration > 0:
-                        unit.apply_buff(RuinBuff(), duration)
+                    unit.apply_buff(RuinBuff())
                 if self.caster.level.tiles[point.x][point.y].is_wall():
                     self.caster.level.make_floor(point.x, point.y)
             stagenum += 1
@@ -4874,10 +4875,10 @@ class AgonizingStormSpell(Spell):
                 debuff_type = random.choice([Stun, BerserkBuff])
                 unit.apply_buff(debuff_type(), duration)
                 continue
-            if stun:
+            if stun and stun.buff_type == BUFF_TYPE_CURSE:
                 unit.remove_buff(stun)
                 unit.deal_damage(damage + stun.turns_left, Tags.Lightning, self, penetration=penetration)
-            if berserk:
+            if berserk and berserk.buff_type == BUFF_TYPE_CURSE:
                 unit.remove_buff(berserk)
                 unit.deal_damage(damage + berserk.turns_left, Tags.Dark, self, penetration=penetration)
 
