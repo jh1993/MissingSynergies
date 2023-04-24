@@ -2627,9 +2627,11 @@ class WarpLensGolemSpell(Spell):
         self.summon(golem, target=Point(x, y))
 
 class MortalShackleBuff(Stun):
+
     def __init__(self, spell):
         self.spell = spell
         Stun.__init__(self)
+
     def on_init(self):
         self.name = "Mortal Shackle"
         self.asset = ["MissingSynergies", "Statuses", "mortal_shackle"]
@@ -2638,15 +2640,25 @@ class MortalShackleBuff(Stun):
         weakness = self.spell.get_stat("resistance_reduction")
         self.resists[Tags.Physical] = -weakness
         self.resists[Tags.Poison] = -weakness
+
+class MortalityBuff(Buff):
+    
+    def on_init(self):
+        self.name = "Mortality"
+        self.color = Tags.Metallic.color
+        self.buff_type = BUFF_TYPE_NONE
         self.owner_triggers[EventOnBuffApply] = self.on_buff_apply
+
     def on_buff_apply(self, evt):
         if isinstance(evt.buff, ReincarnationBuff):
             evt.unit.remove_buff(evt.buff)
 
 class MortalChainmailBuff(StunImmune):
+
     def __init__(self, spell):
         self.spell = spell
         StunImmune.__init__(self)
+
     def on_init(self):
         self.name = "Mortal Chainmail"
         self.asset = ["MissingSynergies", "Statuses", "mortal_chainmail"]
@@ -2655,10 +2667,6 @@ class MortalChainmailBuff(StunImmune):
         weakness = self.spell.get_stat("resistance_reduction")
         self.resists[Tags.Physical] = weakness
         self.resists[Tags.Poison] = weakness
-        self.owner_triggers[EventOnBuffApply] = self.on_buff_apply
-    def on_buff_apply(self, evt):
-        if isinstance(evt.buff, ReincarnationBuff):
-            evt.unit.remove_buff(evt.buff)
 
 class MortalCoilSpell(Spell):
 
@@ -2675,11 +2683,12 @@ class MortalCoilSpell(Spell):
         self.damage = 15
         self.extra_damage = 2
         self.resistance_reduction = 25
+        self.fake_lives = 0
 
         self.upgrades["extra_damage"] = (2, 2, "Extra Damage", "+2 extra damage per reincarnation lost.")
         self.upgrades["resistance_reduction"] = (25, 2)
-        self.upgrades["delusion"] = (2, 3, "Mortal Delusion", "Every target will be affected as if it lost 2 additional reincarnations.\nThis does not allow the spell to chain to more targets, or trigger additional false deaths.")
-        self.upgrades["friendly"] = (1, 4, "Life Binding", "Mortal Coil can now also affect your minions, instead healing them for an amount equal to this spell's damage plus extra damage per reincarnation lost, and granting them Chainmail, which increases [physical] and [poison] resistance and provides [stun] immunity for the duration.\nThe target still cannot gain reincarnations for the duration of Chainmail.")
+        self.upgrades["fake_lives"] = (2, 3, "Mortal Delusion", "Every target will be affected as if it lost 2 additional reincarnations.\nThis does not allow the spell to chain to more targets, or trigger additional false deaths, but will also not count toward the duration in which the unit cannot gain reincarnations.")
+        self.upgrades["friendly"] = (1, 4, "Life Binding", "Mortal Coil can now also affect your minions, instead healing them for an amount equal to this spell's damage plus extra damage per reincarnation lost, and granting them Chainmail, which increases [physical] and [poison] resistance and provides [stun] immunity for the duration.\nThe target still cannot gain reincarnations for the same duration; this is a separate effect and can't be dispelled.")
     
     def can_cast(self, x, y):
         if not Spell.can_cast(self, x, y):
@@ -2693,9 +2702,9 @@ class MortalCoilSpell(Spell):
             return self.get_stat("friendly")
 
     def get_description(self):
-        return ("The target enemy loses all reincarnations, and is Shackled for a duration equal to the number of lives lost, during which it is [stunned], loses [{resistance_reduction}_physical:physical] and [{resistance_reduction}_poison:poison] resistance, and cannot gain reincarnations.\n"
-                "The target then takes [{damage}_physical:physical] and [{damage}_poison:poison] damage. For each life lost, it takes an additional [{extra_damage}_physical:physical] and [{extra_damage}_poison:poison] damage, triggers all on-death effects, and the spell chains to a new target in range, prioritizing targets with reincarnations.\n"
-                "This spell cannot remove lives from units that can gain clarity, or fake deaths if it fails to inflict Shackle.").format(**self.fmt_dict())
+        return ("The target enemy loses all reincarnations, and is Shackled for a duration equal to the number of lives lost, which [stuns] and reduces [physical] and [poison] resistances by [{resistance_reduction}:damage]. For that duration, it cannot gain reincarnations; this is a separate effect and can't be dispelled.\n"
+                "The target then takes [{damage}_physical:physical] and [{damage}_poison:poison] damage. For each life lost, it takes an additional [{extra_damage}_physical:physical] and [{extra_damage}_poison:poison] damage, triggers all on-death effects if successfully Shackled, and the spell chains to a new target in range, prioritizing targets with reincarnations.\n"
+                "Lives cannot be removed from units that can gain clarity.").format(**self.fmt_dict())
     
     def chain(self, start, end, already_hit, chains=1):
 
@@ -2713,7 +2722,8 @@ class MortalCoilSpell(Spell):
             if respawn:
                 lives = respawn.lives
                 unit.remove_buff(respawn)
-        effective_lives = lives + self.get_stat("delusion")
+                unit.apply_buff(MortalityBuff(), lives)
+        effective_lives = lives + self.get_stat("fake_lives")
 
         damage = self.get_stat("damage") + effective_lives*self.get_stat("extra_damage")
         if are_hostile(unit, self.caster):
