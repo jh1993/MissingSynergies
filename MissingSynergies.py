@@ -6587,8 +6587,8 @@ class MutantCyclopsSpell(Spell):
 
 class WastingBuff(Buff):
 
-    def __init__(self, source):
-        self.source = source
+    def __init__(self, spell):
+        self.spell = spell
         Buff.__init__(self)
         self.name = "Wasting"
 
@@ -6600,19 +6600,19 @@ class WastingBuff(Buff):
     
     def on_advance(self):
         if self.owner.max_hp < self.max_hp:
-            self.owner.deal_damage(self.max_hp - self.owner.max_hp, Tags.Dark, self.source)
+            self.owner.deal_damage(self.max_hp - self.owner.max_hp, Tags.Dark, self.spell)
 
 class PrimordialRotBuff(Buff):
 
-    def __init__(self, spell):
+    def __init__(self, spell, wasting):
         self.spell = spell
+        self.wasting = wasting
         Buff.__init__(self)
     
     def on_init(self):
         self.name = "Primordial Rot"
         self.color = Tags.Dark.color
         self.max_hp_steal = self.spell.get_stat("max_hp_steal")
-        self.wasting = self.spell.get_stat("wasting")
         self.description = "Attacks steal %i max HP and deal bonus damage based on max HP." % self.max_hp_steal
         self.global_triggers[EventOnPreDamaged] = self.on_pre_damaged
     
@@ -6624,7 +6624,7 @@ class PrimordialRotBuff(Buff):
     
     def effect(self, evt):
         if self.wasting:
-            evt.unit.apply_buff(WastingBuff(self))
+            evt.unit.apply_buff(WastingBuff(self.wasting.spell))
         amount = min(evt.unit.max_hp, self.max_hp_steal)
         drain_max_hp_kill(evt.unit, self.max_hp_steal, evt.source)
         self.owner.max_hp += amount
@@ -6653,11 +6653,26 @@ def PrimordialRotUnit(spell, max_hp):
     unit.resists[Tags.Poison] = 100
     unit.resists[Tags.Physical] = 50
     unit.spells = [SimpleMeleeAttack(damage=spell.get_stat("minion_damage"), damage_type=Tags.Dark)]
-    unit.buffs = [PrimordialRotBuff(spell)]
+    unit.buffs = [PrimordialRotBuff(spell, spell.caster.get_buff(PrimordialWasting))]
     if max_hp >= 8:
         unit.buffs.append(SplittingBuff(lambda: PrimordialRotUnit(spell, unit.max_hp//2)))
     unit.turns_to_death = spell.get_stat("minion_duration")
     return unit
+
+class PrimordialWasting(Upgrade):
+
+    def on_init(self):
+        self.name = "Primordial Wasting"
+        self.level = 4
+        self.description = "The slime's attacks permanently inflict wasting, which deals [dark] damage each turn equal to the amount of max HP the target has lost since the debuff was inflicted.\nThis is treated as damage dealt by your Wastefire spell."
+    
+    def on_applied(self, owner):
+        self.spell = WastefireSpell()
+        self.spell.caster = self.owner
+        self.spell.owner = self.owner
+        self.spell.statholder = self.owner
+        self.spell.max_charges = 0
+        self.spell.cur_charges = 0
 
 class PrimordialRotSpell(Spell):
 
@@ -6678,7 +6693,7 @@ class PrimordialRotSpell(Spell):
         self.upgrades["minion_health"] = (64, 7)
         self.upgrades["minion_duration"] = (5, 3)
         self.upgrades["max_hp_steal"] = (4, 4)
-        self.upgrades["wasting"] = (1, 4, "Primordial Wasting", "The slime's attacks permanently inflict primordial wasting, which deals [dark] damage each turn equal to the amount of max HP the target has lost since the debuff was inflicted.")
+        self.add_upgrade(PrimordialWasting())
 
     def get_description(self):
         return ("Summon a [nature] [undead] [slime] minion for [{minion_duration}_turns:minion_duration]. It has [{minion_health}_HP:minion_health] and a melee attack that deals [{minion_damage}_dark:dark] damage.\n"
@@ -7687,10 +7702,22 @@ class FulguriteAlchemy(Upgrade):
     def on_buff_apply(self, evt):
         if not are_hostile(evt.unit, self.owner):
             return
-        if not isinstance(evt.buff, PetrifyBuff) and not isinstance(evt.buff, GlassPetrifyBuff):
+        if not isinstance(evt.buff, PetrifyBuff):
             return
-        evt.unit.resists[Tags.Lightning] -= 200
-        evt.buff.resists[Tags.Lightning] = -100
+        self.change_buff(evt.buff)
+
+    def on_applied(self, owner):
+        for unit in self.owner.level.units:
+            if not are_hostile(unit, self.owner):
+                continue
+            for buff in unit.buffs:
+                if not isinstance(buff, PetrifyBuff):
+                    continue
+                self.change_buff(buff)
+
+    def change_buff(self, buff):
+        buff.owner.resists[Tags.Lightning] -= 200
+        buff.resists[Tags.Lightning] = -100
 
 class ShieldBurstSpell(Spell):
 
@@ -12507,5 +12534,93 @@ class VainglorySpell(Spell):
         target.deal_damage(-heal, Tags.Heal, self)
         yield
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell])
+class QuantumCollapse(Upgrade):
+
+    def on_init(self):
+        self.name = "Quantum Collapse"
+        self.level = 6
+        self.description = "Whenever an enemy dies due to a reason other than taking damage, an implosion occurs around its tile. All enemies in its area are subjected to the per-tile effect of Quantum Ripple.\nThe implosion is a burst that ignores walls. Its radius is half of the radius of this spell, which randomly rounds up or down."
+        self.global_triggers[EventOnDeath] = self.on_death
+    
+    def on_death(self, evt):
+        if not are_hostile(evt.unit, self.owner) or evt.damage_event:
+            return
+        self.owner.level.queue_spell(self.implode(evt.unit))
+
+    def implode(self, target):
+        for stage in reversed(list(Burst(self.owner.level, target, random.choice([math.ceil, math.floor])(self.prereq.get_stat("radius")/2), ignore_walls=True))):
+            for p in stage:
+                self.prereq.hit(p.x, p.y)
+            yield
+
+class QuantumRippleSpell(Spell):
+
+    def on_init(self):
+        self.name = "Quantum Ripple"
+        self.asset = ["MissingSynergies", "Icons", "quantum_ripple"]
+        self.level = 2
+        self.tags = [Tags.Arcane, Tags.Chaos, Tags.Sorcery]
+        self.max_charges = 20
+        self.damage = 7
+        self.radius = 3
+        self.requires_los = False
+        self.range = 12
+
+        self.upgrades["radius"] = (1, 3)
+        self.upgrades["damage"] = (13, 3)
+        self.upgrades["virtual"] = (1, 4, "Virtual Particles", "On hit, Quantum Ripple behaves as if it has dealt [arcane] damage to the enemy. For each of [fire], [lightning], and [physical], it has a 1/3 chance to behave as if it has also dealt that damage type.\nThis ignores resistances, and triggers all effects that are normally triggered when dealing damage.")
+        self.upgrades["mortality"] = (1, 6, "Quantum Mortality", "The amount of HP an enemy loses is now multiplied by the sum of all of its elemental weaknesses.")
+        self.add_upgrade(QuantumCollapse())
+
+    def get_impacted_tiles(self, x, y):
+        return [p for stage in Burst(self.caster.level, Point(x, y), self.get_stat('radius'), ignore_walls=True) for p in stage]
+
+    def get_description(self):
+        return ("All enemies in a [{radius}_tile:radius] burst lose [{damage}:damage] current HP. The burst can pass through walls.\nThe amount of HP lost is equal to the [damage] stat of this spell, but is not treated as dealing damage.\nIf an enemy is shielded, it instead loses [1_SH:shields].").format(**self.fmt_dict())
+
+    def hit(self, x, y):
+
+        self.caster.level.show_effect(x, y, Tags.Arcane)
+        chaos_tags =  [Tags.Fire, Tags.Lightning, Tags.Physical]
+        for tag in chaos_tags:
+            if random.random() >= 1/3:
+                continue
+            self.caster.level.show_effect(x, y, tag)
+        
+        unit = self.caster.level.get_unit_at(x, y)
+        if not unit or not are_hostile(unit, self.caster):
+            return
+        damage = self.get_stat("damage")
+        weakness = 0
+        if self.get_stat("mortality"):
+            for tag in unit.resists:
+                if tag == Tags.Heal or unit.resists[tag] >= 0:
+                    continue
+                weakness += unit.resists[tag]
+        damage = math.ceil(damage*(100 - weakness)/100)
+        
+        if self.get_stat("virtual"):
+            self.caster.level.event_manager.raise_event(EventOnPreDamaged(unit, damage, Tags.Arcane, self), unit)
+            self.caster.level.event_manager.raise_event(EventOnDamaged(unit, damage, Tags.Arcane, self), unit)
+            for tag in chaos_tags:
+                if random.random() >= 1/3:
+                    continue
+                self.caster.level.event_manager.raise_event(EventOnPreDamaged(unit, damage, tag, self), unit)
+                self.caster.level.event_manager.raise_event(EventOnDamaged(unit, damage, tag, self), unit)
+
+        if unit.shields:
+            unit.shields -= 1
+            self.caster.level.show_effect(x, y, Tags.Shield_Expire)
+        else:
+            unit.cur_hp -= damage
+            if unit.cur_hp <= 0:
+                unit.kill()
+
+    def cast(self, x, y):
+        for stage in Burst(self.caster.level, Point(x, y), self.get_stat("radius"), ignore_walls=True):
+            for p in stage:
+                self.hit(p.x, p.y)
+            yield
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell])
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales])
