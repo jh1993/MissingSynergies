@@ -31,12 +31,13 @@ def send_bolts(effect_path, effect_target, origin, targets):
         bolts = [bolt for bolt in bolts if next(bolt)]
         yield
 
-def drain_max_hp_kill(unit, hp):
+def drain_max_hp_kill(unit, hp, source):
     if unit.max_hp > hp:
         drain_max_hp(unit, hp)
     else:
+        old_hp = unit.max_hp
         unit.max_hp = 1
-        unit.kill()
+        unit.kill(damage_event=EventOnDamaged(unit, old_hp, Tags.Dark, source))
 
 class BitterCurse(Buff):
     def __init__(self, spell):
@@ -2254,7 +2255,6 @@ class EnfleshedBuff(Buff):
         self.name = "Enfleshed (%i HP)" % self.hp
         self.asset = ["MissingSynergies", "Statuses", "enfleshed"]
         self.nonliving = True
-        self.owner_triggers[EventOnDamaged] = lambda evt: self.check_hp()
         self.owner_triggers[EventOnBuffApply] = self.on_buff_apply
         if self.spell.get_stat("explosion"):
             self.owner_triggers[EventOnDeath] = lambda evt: self.owner.level.queue_spell(self.boom())
@@ -2270,17 +2270,14 @@ class EnfleshedBuff(Buff):
         else:
             self.nonliving = False
         yield
-
-    def check_hp(self):
-        if self.owner.cur_hp <= self.hp:
-            self.owner.kill()
     
     def on_advance(self):
-        self.check_hp()
         if are_hostile(self.owner, self.spell.caster):
             self.owner.deal_damage(self.owner.max_hp//20, Tags.Poison, self.spell)
         else:
             self.owner.deal_damage(-(self.owner.max_hp//20), Tags.Heal, self.spell)
+        if self.owner.cur_hp <= self.hp:
+            self.owner.kill(damage_event=EventOnDamaged(self.owner, self.hp, Tags.Poison, self.spell))
 
     def on_unapplied(self):
         # Only remove living tag and added max HP after other queued spells resolve.
@@ -2337,7 +2334,7 @@ class MalignantGrowthSpell(Spell):
     def get_description(self):
         return ("Enemies in a [{radius}_tile:radius] radius are enfleshed. They become [living], lose [100_poison:poison] resistance, and gain [{hp_bonus}:living] max HP; the HP bonus is equal to 5 times the [damage] of this spell.\n"
                 "Each turn, enfleshed enemies take [poison] damage equal to 5% of their max HP.\n"
-                "If an enfleshed unit's current HP drops to an amount equal to or below the max HP it gained from enfleshment, it dies instantly.").format(**self.fmt_dict())
+                "If an enfleshed unit's current HP drops to an amount equal to or below the max HP it gained from enfleshment, it dies instantly at the end of its turn; this is treated as killed by [poison] damage equal to the enfleshed amount.").format(**self.fmt_dict())
 
     def cast_instant(self, x, y):
         friendly = self.get_stat("friendly")
@@ -6622,14 +6619,14 @@ class PrimordialRotBuff(Buff):
     def on_pre_damaged(self, evt):
         if evt.damage <= 0 or evt.source.owner is not self.owner or not isinstance(evt.source, Spell):
             return
-        # Queue this so the max HP drain happens after the triggering damage
+        # Queue this so the max HP drain happens after the triggering damage.
         self.owner.level.queue_spell(self.effect(evt))
     
     def effect(self, evt):
         if self.wasting:
             evt.unit.apply_buff(WastingBuff(self))
         amount = min(evt.unit.max_hp, self.max_hp_steal)
-        drain_max_hp_kill(evt.unit, self.max_hp_steal)
+        drain_max_hp_kill(evt.unit, self.max_hp_steal, evt.source)
         self.owner.max_hp += amount
         self.owner.deal_damage(-amount, Tags.Heal, self)
         if evt.source.melee:
@@ -6685,7 +6682,8 @@ class PrimordialRotSpell(Spell):
 
     def get_description(self):
         return ("Summon a [nature] [undead] [slime] minion for [{minion_duration}_turns:minion_duration]. It has [{minion_health}_HP:minion_health] and a melee attack that deals [{minion_damage}_dark:dark] damage.\n"
-                "The slime's attacks steal [{max_hp_steal}:dark] max HP, and instantly kill targets with less max HP than that. Its melee attacks deal bonus damage equal to 25% of its max HP, and other attacks deal bonus damage equal to 10% of its max HP.\n"
+                "The slime's attacks steal [{max_hp_steal}:dark] max HP, and instantly kill targets with less max HP than that; this counts as dying to [dark] damage.\n"
+                "Its melee attacks deal bonus damage equal to 25% of its max HP, and other attacks deal bonus damage equal to 10% of its max HP.\n"
                 "On death, the slime splits into two slimes with half max HP if its initial max HP was at least 8.").format(**self.fmt_dict())
 
     def update_sprite(self, unit):
@@ -7586,7 +7584,7 @@ class InexorableDecay(Upgrade):
         self.asset = ["MissingSynergies", "Icons", "inexorable_decay"]
         self.tags = [Tags.Dark]
         self.level = 5
-        self.description = "Whenever anything tries to deal [dark] damage to an enemy, that enemy permanently loses 2 max HP.\nIf it has 2 max HP or less, it will be instantly killed."
+        self.description = "Whenever anything tries to deal [dark] damage to an enemy, that enemy permanently loses 2 max HP.\nIf it has 2 max HP or less, it will be instantly killed; this counts as dying to [dark] damage."
         self.global_triggers[EventOnPreDamaged] = self.on_pre_damaged
     
     def on_pre_damaged(self, evt):
@@ -7595,7 +7593,7 @@ class InexorableDecay(Upgrade):
         self.owner.level.queue_spell(self.decay(evt.unit))
 
     def decay(self, unit):
-        drain_max_hp_kill(unit, 2)
+        drain_max_hp_kill(unit, 2, self)
         yield
 
     # For my No More Scams mod
@@ -7607,7 +7605,7 @@ class RaiseWastewight(Upgrade):
     def on_init(self):
         self.name = "Raise Wastewight"
         self.level = 5
-        self.description = "When an enemy with wasting dies, it has a chance to summon a wastewight, equal to twice the percentage of max HP it has lost since it was afflicted with wasting, with a minimum of 10%.\nWastewights are [fire] [undead] minions with melee attacks that permanently drain 2 max HP, and instantly kill targets with 2 max HP or less."
+        self.description = "When an enemy with wasting dies, it has a chance to summon a wastewight, equal to twice the percentage of max HP it has lost since it was afflicted with wasting, with a minimum of 10%.\nWastewights are [fire] [undead] minions with melee attacks that permanently drain 2 max HP, and instantly kill targets with 2 max HP or less; this is treated as dying to [dark] damage."
         self.global_triggers[EventOnDeath] = self.on_death
     
     def on_death(self, evt):
@@ -7620,11 +7618,12 @@ class RaiseWastewight(Upgrade):
         unit.asset = ["MissingSynergies", "Units", "wastewight"]
         unit.tags.append(Tags.Fire)
         unit.resists[Tags.Fire] = 100
-        unit.spells[0].damage_type = Tags.Fire
-        unit.spells[0].onhit = lambda caster, target: drain_max_hp_kill(target, 2)
-        unit.spells[0].description = "Drains 2 max HP. Targets with less than 2 max HP are instantly killed."
+        melee = unit.spells[0]
+        melee.damage_type = Tags.Fire
+        melee.onhit = lambda caster, target: drain_max_hp_kill(target, 2, melee)
+        melee.description = "Drains 2 max HP. Targets with less than 2 max HP are instantly killed."
         # For my No More Scams mod
-        unit.spells[0].can_redeal = lambda target, already_checked: True
+        melee.can_redeal = lambda target, already_checked: True
         apply_minion_bonuses(self.prereq, unit)
         self.owner.level.queue_spell(self.do_summon(unit, evt.unit))
 
@@ -7653,7 +7652,8 @@ class WastefireSpell(Spell):
 
     def get_description(self):
         return ("Permanently inflict wasting to all enemies in a [{radius}_tile:radius] burst, which deals [dark] damage to the victim equal to the amount of max HP it has lost since being afflicted with the debuff.\n"
-                "Then deal [{damage}_fire:fire] damage to affected enemies, and drain max HP equal to 25% of the damage dealt; enemies with less max HP than that are instantly killed. If the enemy already has wasting, the percentage of max HP drain is doubled.").format(**self.fmt_dict())
+                "Then deal [{damage}_fire:fire] damage to affected enemies, and drain max HP equal to 25% of the damage dealt. Enemies with less max HP than that are instantly killed; this counts as dying to [dark] damage.\n"
+                "If the enemy already has wasting, the percentage of max HP drain is doubled.").format(**self.fmt_dict())
 
     def cast(self, x, y):
         damage = self.get_stat("damage")
@@ -7671,7 +7671,7 @@ class WastefireSpell(Spell):
                     div = 4
                 dealt = unit.deal_damage(damage, Tags.Fire, self)
                 if dealt:
-                    drain_max_hp_kill(unit, dealt//div)
+                    drain_max_hp_kill(unit, dealt//div, self)
             yield
 
 class FulguriteAlchemy(Upgrade):
