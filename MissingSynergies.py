@@ -1299,52 +1299,39 @@ class WordOfUpheavalSpell(Spell):
 
         self.upgrades["max_charges"] = (1, 2)
         self.upgrades["damage"] = (20, 2)
-        self.upgrades["hallow"] = (1, 5, "Hallowed Earth", "50% chance for each summoned earth elemental to instead be a hallowed earth elemental that is friendly and not [berserk].\n")
+        self.upgrades["prison"] = (1, 5, "Earthen Prison", "This spell will no longer ensure that all tiles are reachable after shuffling.\nFriends and foes alike may be trapped permanently if they do not have the ability to teleport or change the terrain.")
     
     def get_description(self):
-        return ("Each unit that isn't [living] or [nature] has a 50% chance to take [{damage}_physical:physical] damage.\n"
-                "Each empty floor tile has a 25% chance to have an earth elemental summoned onto it. The elemental is hostile and permanently [berserk]. It disappears if there are no other enemies in the realm.\n"
-                "Turn all chasms into floors.\n"
-                "Turn all walls into chasms.").format(**self.fmt_dict())
+        return ("Each unit that is not [living] or [nature] has a 50% chance to take [{damage}_physical:physical] damage.\n"
+                "Turn all walls into floors.\n"
+                "Turn all floors not occupied by items or non-flying units into chasms.\n"
+                "Turn all empty chasms into walls.\n"
+                "After shuffling all tiles as above, some tiles may be changed further to ensure that all tiles are reachable.").format(**self.fmt_dict())
     
     def get_impacted_tiles(self, x, y):
         return list(self.caster.level.iter_tiles())
     
     def cast_instant(self, x, y):
 
-        earth_summon = WizardEarthEle()
-        # Dummy caster to make the earth elementals start out hostile and not benefit from skills
-        dummy_caster = Unit()
-        dummy_caster.level = self.caster.level
-        earth_summon.caster = dummy_caster
-        hallow = self.get_stat("hallow")
-
         for tile in self.caster.level.iter_tiles():
-                
             unit = self.caster.level.get_unit_at(tile.x, tile.y)
-
             if unit:
                 if Tags.Living not in unit.tags and Tags.Nature not in unit.tags and random.random() < 0.5:
                     self.caster.level.deal_damage(tile.x, tile.y, self.get_stat("damage"), Tags.Physical, self)
-                continue
-            
-            if self.caster.level.can_walk(tile.x, tile.y) and random.random() < 0.25:
-                if hallow and random.random() < 0.5:
-                    elemental = HolyEarthElemental()
-                    apply_minion_bonuses(self, elemental)
-                    self.summon(elemental, target=tile)
-                else:
-                    earth_summon.cast_instant(tile.x, tile.y)
-                    elemental = self.caster.level.get_unit_at(tile.x, tile.y)
-                    if elemental:
-                        elemental.apply_buff(PermaBerserkBuff())
-                        elemental.turns_to_death = None
-            
-            if tile.is_chasm:
-                self.caster.level.make_floor(tile.x, tile.y)
-            
             if tile.is_wall():
+                self.caster.level.make_floor(tile.x, tile.y)
+            elif tile.is_floor():
+                if tile.prop:
+                    continue
+                if unit and not unit.flying:
+                    continue
                 self.caster.level.make_chasm(tile.x, tile.y)
+            elif tile.is_chasm and not unit:
+                self.caster.level.make_wall(tile.x, tile.y)
+        
+        if not self.get_stat("prison"):
+            self.caster.level.gen_params.ensure_connectivity()
+            self.caster.level.gen_params.ensure_connectivity(chasm=True)
 
 class RaiseDracolichBreath(BreathWeapon):
 
@@ -4766,7 +4753,7 @@ class LivingLabyrinthSpell(Spell):
         self.upgrades["minion_range"] = (10, 3)
         self.upgrades["minion_damage"] = (8, 2)
         self.upgrades["radius"] = (2, 3)
-        self.upgrades["prison"] = (1, 5, "Living Prison", "The Living Labyrinth will no longer ensure that the mazes it creates are always escapable.\nFriends and foes alike may be trapped permanently if they do not have the ability to teleport.")
+        self.upgrades["prison"] = (1, 5, "Living Prison", "The Living Labyrinth will no longer ensure that the mazes it creates are always escapable.\nFriends and foes alike may be trapped permanently if they do not have the ability to teleport or change the terrain.")
 
     def get_description(self):
         return ("Summon the Living Labyrinth, an [arcane] minotaur with [{minion_health}_HP:minion_health], and a teleport attack with [{minion_range}_range:minion_range] that deals [{minion_damage}_arcane:arcane] damage.\n"
