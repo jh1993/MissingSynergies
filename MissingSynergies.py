@@ -4362,7 +4362,15 @@ class StormElementalBuff(Buff):
             duration = self.spell.get_stat("duration")
             points = [point for point in self.owner.level.get_points_in_ball(self.owner.x, self.owner.y, self.spell.get_stat("radius")) if self.owner.level.can_see(self.owner.x, self.owner.y, point.x, point.y)]
             random.shuffle(points)
-            for point in points:
+            for p in points:
+                existing = self.owner.level.tiles[p.x][p.y].cloud
+                if isinstance(existing, BlizzardCloud):
+                    self.owner.level.deal_damage(p.x, p.y, 10 + damage, Tags.Lightning, self.spell)
+                elif isinstance(existing, StormCloud):
+                    self.owner.level.deal_damage(p.x, p.y, 10 + damage, Tags.Ice, self.spell)
+                    unit = self.owner.level.get_unit_at(p.x, p.y)
+                    if unit:
+                        unit.apply_buff(FrozenBuff(), 1)
                 if random.choice([True, False]):
                     cloud = BlizzardCloud(self.spell.caster)
                     cloud.damage += damage
@@ -4371,7 +4379,7 @@ class StormElementalBuff(Buff):
                     cloud.damage += 2*damage
                 cloud.duration += duration
                 cloud.source = self.spell
-                self.owner.level.add_obj(cloud, point.x, point.y)
+                self.owner.level.add_obj(cloud, p.x, p.y)
             return
     
         if self.aggregate and Tags.Elemental in evt.unit.tags and evt.unit is not self.owner and distance(evt.unit, self.owner) <= self.radius and self.owner.level.can_see(self.owner.x, self.owner.y, evt.unit.x, evt.unit.y):
@@ -4395,7 +4403,7 @@ class GatheringStormSpell(Spell):
         self.upgrades["minion_range"] = (4, 2)
         self.upgrades["protection"] = (1, 3, "Storm Protection", "Each turn, [elemental] allies within the storm elemental's arcing distance gain [lightning] and [ice] resistances enough to put these resistances at 100.\nThis effect is removed at the start of the storm elemental's next turn.")
         self.upgrades["aggregate"] = (1, 5, "Elemental Aggregate", "When an [elemental] unit other than the storm elemental dies within the storm elemental's arcing distance, the storm elemental's max and current HP are increased by 20% of the dead elemental's HP.")
-        self.upgrades["disperse"] = (1, 3, "Storm Dispersal", "When the storm elemental dies, it creates thunderstorm and blizzard clouds in an area around itself with radius equal to this spell's radius.")
+        self.upgrades["disperse"] = (1, 5, "Storm Dispersal", "When the storm elemental dies, it creates thunderstorm and blizzard clouds in an area around itself with radius equal to this spell's radius.\nIf a tile is already occupied by a blizzard cloud, the unit on it takes [{cloud_damage}_lightning:lightning] damage.\nIf a tile is already occupied by a thunderstorm cloud, the unit on it takes [{cloud_damage}_ice:ice] damage and is [frozen] for [1_turn:duration].")
 
     def can_cast(self, x, y):
         if not Spell.can_cast(self, x, y):
@@ -4407,6 +4415,7 @@ class GatheringStormSpell(Spell):
 
     def fmt_dict(self):
         stats = Spell.fmt_dict(self)
+        stats["cloud_damage"] = self.get_stat("damage", base=5)*2
         stats["double_radius"] = self.get_stat("radius")*2
         return stats
 
@@ -5374,22 +5383,20 @@ class AfterlifeEchoesBuff(Buff):
             if spells:
                 hp_left = unit.max_hp
                 while hp_left > 0:
-                    chance = min(20, hp_left)/20
-                    hp_left -= 20
-                    if random.random() >= chance:
-                        continue
                     random.shuffle(spells)
                     can_cast = False
                     for spell in spells:
-                        targets = [u for u in list(self.owner.level.units) if are_hostile(u, self.owner) and spell.can_cast(u.x, u.y)]
-                        if not targets:
+                        chance = hp_left/40
+                        if random.random() >= chance:
+                            continue
+                        target = spell.get_ai_target()
+                        if not target:
                             continue
                         can_cast = True
-                        target = random.choice(targets)
                         self.owner.level.act_cast(unit, spell, target.x, target.y, pay_costs=False)
-                        break
                     if not can_cast:
                         break
+                    hp_left -= 40
 
         life = (self.echo_type == self.ECHO_LIFE) and (Tags.Nature in unit.tags or Tags.Living in unit.tags)
         damage = unit.max_hp//2
@@ -5495,7 +5502,7 @@ class AfterlifeEchoesSpell(Spell):
         self.upgrades["myriad"] = (1, 5, "Myriad Souls", "For the duration, spells and skills that summon multiple minions will summon [1:num_summons] more minion.")
         self.upgrades["life"] = (1, 5, "Life Echoes", "When you summon a [living] or [nature] minion, that minion's death explosion will [poison] enemies for a number of turns equal to 50% of its max HP.\nIf an enemy is already [poisoned], any excess duration will be dealt as [poison] damage.", "echo")
         self.upgrades["spirit"] = (1, 5, "Spirit Echoes", "When you summon a [holy], [demon], or [undead] minion, that minion's death explosion will summon an Afterlife Shade with the same max HP.\nThe Afterlife Shade has an attack with [{minion_range}_range:minion_range] that deals [holy] and [dark] damage equal to [{minion_damage}:minion_damage] plus 10% of its max HP.", "echo")
-        self.upgrades["elemental"] = (1, 5, "Elemental Echoes", "When you summon a [fire], [lightning], or [ice] minion, that minion's death explosion has a chance to cast Fireball, Lightning Bolt, or Icicle respectively at valid enemy targets. A minion with multiple tags will cast one of the spells at random.\nThe chance to cast is the minion's max HP divided by 20, with an extra guaranteed cast per 20 HP the minion has.\nThese spells gain all of your upgrades and bonuses.", "echo")
+        self.upgrades["elemental"] = (1, 5, "Elemental Echoes", "When you summon a [fire], [lightning], or [ice] minion, that minion's death explosion has a chance to cast Fireball, Lightning Bolt, or Icicle respectively at valid enemy targets.\nA minion with multiple tags will try to cast every qualifying spell independently in random order.\nThe chance to cast is the minion's max HP divided by 40, with an extra guaranteed cast per 40 HP the minion has.\nThese spells gain all of your upgrades and bonuses.", "echo")
         self.upgrades["shattering"] = (1, 5, "Shattering Echoes", "When you summon an [arcane], [metallic], or [glass] minion, that minion's death explosion will summon a Soul Shard on a random tile for every 20 HP and [2_SH:shields] the minion has, rounded up.\nSoul Shards have fixed 1 HP and [1_SH:shields], and teleport to random tiles each turn. They deal [2_physical:physical] or [2_arcane:arcane] damage to enemies that hit them.", "echo")
 
     def fmt_dict(self):
@@ -9137,7 +9144,7 @@ class HeavyElements(Upgrade):
         self.asset = ["MissingSynergies", "Icons", "heavy_elements"]
         self.tags = [Tags.Fire, Tags.Lightning, Tags.Ice, Tags.Arcane]
         self.level = 6
-        self.description = "Whenever one of your [fire], [lightning], [ice], [arcane], [dragon], or [elemental] minions attempts to damage an enemy with an attack, deal additional damage of the same type equal to 10% of the minion's max HP, rounded down."
+        self.description = "Whenever one of your [fire], [lightning], [ice], [arcane], [dragon], or [elemental] minions attempts to damage an enemy with an attack, that enemy takes additional damage of the same type equal to 10% of the minion's max HP, rounded down."
         self.global_triggers[EventOnPreDamaged] = self.on_pre_damaged
     
     def on_pre_damaged(self, evt):
