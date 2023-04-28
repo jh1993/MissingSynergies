@@ -1227,17 +1227,17 @@ class ReturningArrowSpell(Spell):
     def cast(self, x, y):
         yield from self.arrow(self.caster, Point(x, y))
 
-class PermaBerserkBuff(BerserkBuff):
+class KillBombersBuff(Buff):
 
-    def __init__(self):
-        BerserkBuff.__init__(self)
-        self.name = "Permanent Berserk"
-        self.buff_type = BUFF_TYPE_NONE
-
+    def __init__(self, bombers):
+        self.bombers = bombers
+        Buff.__init__(self)
+        self.buff_type = BUFF_TYPE_PASSIVE
+    
     def on_advance(self):
-        if all([unit.team == TEAM_PLAYER for unit in self.owner.level.units if not unit.has_buff(PermaBerserkBuff)]):
-            self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
-            self.owner.kill(trigger_death_event=False)
+        for bomber in self.bombers:
+            bomber.kill()
+        self.owner.remove_buff(self)
 
 class WordOfDetonationSpell(Spell):
 
@@ -1253,34 +1253,34 @@ class WordOfDetonationSpell(Spell):
         self.upgrades["max_charges"] = (1, 2)
         self.upgrades["greater"] = (1, 4, "Greater Detonation", "Chance to instead summon a giant bomber, equal to each target's max HP, up to 100%.")
     
+    def get_stat(self, attr, base=None):
+        if attr == "minion_damage":
+            return Spell.get_stat(self, "minion_damage", base) + Spell.get_stat(self, "damage", base)
+        return Spell.get_stat(self, attr, base)
+
     def get_description(self):
         return ("Summon a fire bomber or void bomber next to every unit except the caster.\n"
-                "The bombers are hostile and permanently [berserk]. They disappear if there are no other enemies in the realm.").format(**self.fmt_dict())
+                "The bombers will all die automatically at the end of your turn.\n"
+                "The bombers benefit from this spell's [damage] and [radius] bonuses.").format(**self.fmt_dict())
     
     def get_impacted_tiles(self, x, y):
         return [u for u in self.owner.level.units if u is not self.caster]
     
-    def cast(self, x, y):
-
-        units = list(self.caster.level.units)
-        random.shuffle(units)
+    def cast_instant(self, x, y):
         greater = self.get_stat("greater")
-
-        for unit in units:
-
+        bombers = []
+        for unit in list(self.caster.level.units):
             if unit is self.caster:
                 continue
-            
             if greater and random.random() < min(unit.max_hp/100, 1):
                 bomber_type = random.choice([FireBomberGiant, VoidBomberGiant])
             else:
                 bomber_type = random.choice([FireBomber, VoidBomber])
-            
             bomber = bomber_type()
-            self.summon(bomber, target=unit, team=TEAM_ENEMY, radius=5)
-            bomber.apply_buff(PermaBerserkBuff())
-
-            yield
+            apply_minion_bonuses(self, bomber)
+            if self.summon(bomber, target=unit, radius=5):
+                bombers.append(bomber)
+        self.caster.apply_buff(KillBombersBuff(bombers))
 
 class WordOfUpheavalSpell(Spell):
 
@@ -5407,10 +5407,6 @@ class AfterlifeEchoesBuff(Buff):
                             target.deal_damage(excess, Tags.Poison, self.spell)
                         target.apply_buff(Poison(), damage)
             yield
-        
-        self.owner.level.queue_spell(self.kill_unit(unit))
-    
-    def kill_unit(self, unit):
 
         existing = unit.get_buff(ReincarnationBuff)
         if existing:
@@ -5449,23 +5445,25 @@ class AfterlifeEchoesBuff(Buff):
                 shard.buffs = [SoulShardBuff(), TeleportyBuff(radius=RANGE_GLOBAL, chance=1)]
                 self.spell.summon(shard, radius=RANGE_GLOBAL, sort_dist=False)
 
-        yield
-
 class AfterlifeShadeBolt(SimpleRangedAttack):
+
     def __init__(self, damage, range):
         SimpleRangedAttack.__init__(self, "Twilight Bolt", damage=damage, damage_type=[Tags.Holy, Tags.Dark], range=range)
         self.all_damage_types = True
+
     def hit(self, x, y):
         damage = self.get_stat("damage")
         self.caster.level.deal_damage(x, y, damage, Tags.Dark, self)
         self.caster.level.deal_damage(x, y, damage, Tags.Holy, self)
 
 class SoulShardBuff(Buff):
+
     def on_init(self):
         self.name = "Soul Shard"
         self.color = Tags.Glass.color
         self.description = "When hit by an enemy, deal 2 arcane or 2 physical damage to that enemy."
         self.owner_triggers[EventOnPreDamaged] = self.on_pre_damaged
+
     def on_pre_damaged(self, evt):
         if evt.damage <= 0 or not evt.source or not evt.source.owner or not are_hostile(evt.source.owner, self.owner):
             return
