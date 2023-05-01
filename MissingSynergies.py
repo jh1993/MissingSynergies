@@ -9891,9 +9891,13 @@ class CoolantBuff(Buff):
     def consume(self):
         if self.turns_left <= 0:
             return
+        self.owner.apply_buff(FrozenBuff(), self.turns_left)
+        self.owner.level.queue_spell(self.deal_damage())
+
+    def deal_damage(self):
         for _ in range(self.turns_left):
             self.owner.deal_damage(1, Tags.Poison, self.spell)
-        self.owner.apply_buff(FrozenBuff(), self.turns_left)
+        yield
 
     def on_damaged(self, evt):
         if evt.damage_type != Tags.Ice:
