@@ -9,7 +9,7 @@ from Shrines import *
 from Consumables import *
 import random, math, os, sys
 
-from mods.Bugfixes.Bugfixes import RemoveBuffOnPreAdvance, MinionBuffAura
+from mods.Bugfixes.Bugfixes import RemoveBuffOnPreAdvance, MinionBuffAura, drain_max_hp_kill, increase_cooldown
 import mods.Bugfixes.Bugfixes
 
 try:
@@ -30,14 +30,6 @@ def send_bolts(effect_path, effect_target, origin, targets):
     while bolts:
         bolts = [bolt for bolt in bolts if next(bolt)]
         yield
-
-def drain_max_hp_kill(unit, hp, source):
-    if unit.max_hp > hp:
-        drain_max_hp(unit, hp)
-    else:
-        old_hp = unit.max_hp
-        unit.max_hp = 1
-        unit.kill(damage_event=EventOnDamaged(unit, old_hp, Tags.Dark, source))
 
 class BitterCurse(Buff):
     def __init__(self, spell):
@@ -2825,10 +2817,10 @@ class MorbidSphereSpell(OrbSpell):
         self.timer = 20
 
         self.upgrades["timer"] = (-10, 4, "Morph Timer", "Summoned vampire bats take 10 fewer turns to transform.")
-        self.upgrades["push"] = (1, 4, "Stand Back", "Each turn, a summoned vampire bat has a chance to push all enemy units within [{radius}_tiles:radius] of itself [1_tile:range] away.\nThe chance is equal to the number of turns it has been alive divided by the number of turns it takes to transform.")
-        self.upgrades["higher"] = (1, 4, "Higher Vampires", "When a vampire bat is summoned, it has a 50% chance to instead be an armored vampire bat, vampiric mist, or vampire eye.")
-        self.upgrades["ghost"] = (1, 2, "Bloody Mist", "Each turn, also summon a bloodghast, which inherits a quarter of the orb's bonus to max HP.")
-        self.upgrades["orb_walk"] = (1, 4, "Night Lord", "Targeting an existing blood orb with another transforms it into a vampire necromancer or vampire count, chosen at random, which inherits the orb's full max HP bonus.")
+        self.upgrades["push"] = (1, 2, "Stand Back", "Each turn, a summoned vampire bat has a chance to push all enemy units within [{radius}_tiles:radius] of itself [1_tile:range] away.\nThe chance is equal to the number of turns it has been alive divided by the number of turns it takes to transform.")
+        self.upgrades["higher"] = (1, 4, "Higher Vampires", "When a vampire bat is summoned, it has a 50% chance to instead be an armored vampire bat, vampiric mist, or vampire eye.\nArmored vampire bats mature into armored vampires, which are [metallic] and have many more resistances.\nVampiric mists mature into greater vampires, whose attacks drain 7 max HP on hit and instantly kill targets with less max HP than that; this counts as killing with [dark] damage.\n Vampire eyes mature into mind vampires, whose attacks increase the cooldown of a random one of the target's abilities by [1_turn:cooldown] if possible (does not work on units that can gain clarity); otherwise the target takes the same damage again. The attack also gives [1_SH:shields] to the user, to a max of 3.")
+        self.upgrades["ghost"] = (1, 3, "Bloody Mist", "Each turn, also summon a bloodghast, which inherits a quarter of the orb's bonus to max HP.")
+        self.upgrades["orb_walk"] = (1, 5, "Night Lord", "Targeting an existing blood orb with another transforms it into a vampire necromancer or vampire count, chosen at random, which inherits the orb's full max HP bonus.\nThis has a chance to refund a charge of Morbid Sphere, equal to the orb's remaining duration divided by maximum duration.")
     
     def fmt_dict(self):
         stats = Spell.fmt_dict(self)
@@ -2856,6 +2848,7 @@ class MorbidSphereSpell(OrbSpell):
         original_max_hp = unit.max_hp
         apply_minion_bonuses(self, unit)
         unit.max_hp = original_max_hp + (self.get_stat("minion_health") - self.minion_health)//hp_div
+        unit.tags = [Tags.Dark, Tags.Undead]
 
     def get_unit(self, vamp_type, is_bat=True):
 
@@ -2867,22 +2860,28 @@ class MorbidSphereSpell(OrbSpell):
             unit.spells[0].description = "Freezes the target for %i turns" % unit.spells[0].duration
             unit.spells[1] = MorbidSphereHauntSpell(self)
         
-        if vamp_type == 3 and not is_bat:
+        if vamp_type == 3:
+            unit.tags.append(Tags.Arcane)
+            if not is_bat:
+                melee = unit.spells[0]
+                def increase_cooldown_shield(caster, target):
+                    if caster.shields < 3:
+                        caster.add_shields(1)
+                    increase_cooldown(caster, target, melee)
+                melee.onhit = increase_cooldown_shield
+                melee.description = "On hit, increase a random ability cooldown by 1 turn if possible; otherwise deal damage again. Shields self for 1, to a max of 3."
+
+        if vamp_type == 2 and not is_bat:
             melee = unit.spells[0]
-            def increase_cooldown(caster, target):
-                if caster.shields < 3:
-                    caster.add_shields(1)
-                spells = [s for s in target.spells if s.cool_down and target.cool_downs.get(s, 0) < s.cool_down]
-                if target.gets_clarity:
-                    spells = []
-                if not spells:
-                    target.deal_damage(melee.get_stat("damage"), melee.damage_type, melee)
-                    return
-                spell = random.choice(spells)
-                cooldown = target.cool_downs.get(spell, 0)
-                target.cool_downs[spell] = cooldown + 1
-            melee.onhit = increase_cooldown
-            melee.description = "On hit, increase a random ability cooldown by 1 turn if possible; otherwise deal damage again. Shields self for 1, to a max of 3."
+            melee.onhit = lambda caster, target: drain_max_hp_kill(target, 7, melee)
+            melee.description = "Drains 7 max HP."
+            melee.can_redeal = lambda unit, already_checked: True
+
+        if vamp_type == 1:
+            unit.tags.append(Tags.Metallic)
+            unit.resists[Tags.Ice] = 100
+            unit.resists[Tags.Lightning] = 100
+            unit.resists[Tags.Fire] = 50
 
         morph_index = None
         morph = None
@@ -2918,6 +2917,8 @@ class MorbidSphereSpell(OrbSpell):
     
     def on_orb_walk(self, existing):
         existing.kill(trigger_death_event=False)
+        if random.random() < existing.turns_to_death/(self.get_stat("range")- 1):
+            self.cur_charges = min(self.cur_charges + 1, self.get_stat("max_charges"))
         self.summon(self.get_unit(random.choice([4, 5]), is_bat=False), target=existing)
         yield
 
@@ -11391,17 +11392,7 @@ class MindMonarchSpell(Spell):
         melee.name = "Brain Bite"
         if queen:
             melee.damage += 6
-        def increase_cooldown(caster, target):
-            spells = [s for s in target.spells if s.cool_down and target.cool_downs.get(s, 0) < s.cool_down]
-            if target.gets_clarity:
-                spells = []
-            if not spells:
-                target.deal_damage(melee.get_stat("damage"), melee.damage_type, melee)
-                return
-            spell = random.choice(spells)
-            cooldown = target.cool_downs.get(spell, 0)
-            target.cool_downs[spell] = cooldown + 1
-        melee.onhit = increase_cooldown
+        melee.onhit = lambda caster, target: increase_cooldown(caster, target, melee)
         melee.description = "On hit, increase a random ability cooldown by 1 turn if possible; otherwise deal damage again."
         unit.spells = [melee]
 
