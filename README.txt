@@ -137,6 +137,7 @@ Level 4:
 + Fulgurite Alchemy (Arcane/Lightning)
 + Nuclear Winter (Lightning/Ice/Nature)
 + Orb Ponderance (Orb)
++ Serpent Brood (Dragon/Nature)
 + Shadow Assassin (Dark/Translocation)
 + Singular Eye (Eye)
 + Slime Instability (Arcane/Chaos)

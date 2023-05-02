@@ -2867,6 +2867,23 @@ class MorbidSphereSpell(OrbSpell):
             unit.spells[0].description = "Freezes the target for %i turns" % unit.spells[0].duration
             unit.spells[1] = MorbidSphereHauntSpell(self)
         
+        if vamp_type == 3 and not is_bat:
+            melee = unit.spells[0]
+            def increase_cooldown(caster, target):
+                if caster.shields < 3:
+                    caster.add_shields(1)
+                spells = [s for s in target.spells if s.cool_down and target.cool_downs.get(s, 0) < s.cool_down]
+                if target.gets_clarity:
+                    spells = []
+                if not spells:
+                    target.deal_damage(melee.get_stat("damage"), melee.damage_type, melee)
+                    return
+                spell = random.choice(spells)
+                cooldown = target.cool_downs.get(spell, 0)
+                target.cool_downs[spell] = cooldown + 1
+            melee.onhit = increase_cooldown
+            melee.description = "On hit, increase a random ability cooldown by 1 turn if possible; otherwise deal damage again. Shields self for 1, to a max of 3."
+
         morph_index = None
         morph = None
         for i, buff in enumerate(unit.buffs):
@@ -12628,5 +12645,44 @@ class QuantumRippleSpell(Spell):
                 self.hit(p.x, p.y)
             yield
 
+class SerpentBrood(Upgrade):
+
+    def on_init(self):
+        self.name = "Serpent Brood"
+        self.asset = ["MissingSynergies", "Icons", "serpent_brood"]
+        self.tags = [Tags.Dragon, Tags.Nature]
+        self.level = 4
+        self.minion_health = 9
+        self.minion_damage = 5
+        self.minion_range = 7
+        self.duration = 5
+    
+    def get_description(self):
+        return ("Each turn, each of your [dragon] minions has a 15% chance to spawn a snake.\n"
+                "Snakes are [living] [nature] minions with [{minion_health}_HP:minion_health]. Their melee attacks deal [{minion_damage}_physical:physical] damage and inflict [{duration}_turns:duration] of [poison].\n"
+                "If the dragon has a breath weapon, each snake it spawns will gain 100 resistance of its element, and a ranged attack of that element dealing the same damage as the snake's melee. This attack has a range of [{minion_range}_tiles:minion_range].").format(**self.fmt_dict())
+
+    def on_advance(self):
+        units = [u for u in self.owner.level.units if Tags.Dragon in u.tags and not are_hostile(u, self.owner)]
+        if not units:
+            return
+        random.shuffle(units)
+        duration = self.get_stat("duration")
+        for u in units:
+            if random.random() >= 0.15:
+                continue
+            breath = None
+            for s in u.spells:
+                if isinstance(s, BreathWeapon):
+                    breath = s
+                    break
+            snake = Snake()
+            snake.resists[Tags.Ice] = 0
+            snake.spells[0].damage = self.minion_damage
+            snake.spells[0].buff_duration = duration
+            apply_minion_bonuses(self, snake)
+            if self.summon(snake, target=u, radius=5) and breath:
+                snake.apply_buff(TouchedBySorcery(breath.damage_type, self))
+
 all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell])
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood])
