@@ -12685,5 +12685,65 @@ class SerpentBrood(Upgrade):
             if self.summon(snake, target=u, radius=5) and breath:
                 snake.apply_buff(TouchedBySorcery(breath.damage_type, self))
 
+class ReflectionBuff(Buff):
+
+    def on_init(self):
+        self.name = "Reflection"
+        self.color = Tags.Metallic.color
+        self.description = "Whenever this unit takes damage, redeal that damage to a random enemy in line of sight."
+        self.owner_triggers[EventOnDamaged] = self.on_damaged
+    
+    def on_damaged(self, evt):
+        units = [u for u in self.owner.level.get_units_in_los(self.owner) if are_hostile(u, self.owner)]
+        if not units:
+            return
+        self.owner.level.queue_spell(self.reflect(random.choice(units), evt))
+
+    def reflect(self, target, evt):
+        for p in Bolt(self.owner.level, self.owner, target):
+            self.owner.level.show_effect(p.x, p.y, evt.damage_type, minor=True)
+            yield
+        target.deal_damage(evt.damage, evt.damage_type, self)
+
+class MirrorDecoys(Upgrade):
+
+    def on_init(self):
+        self.name = "Mirror Decoys"
+        self.asset = ["MissingSynergies", "Icons", "mirror_decoys"]
+        self.tags = [Tags.Arcane, Tags.Metallic]
+        self.level = 5
+        self.minion_health = 40
+        self.global_triggers[EventOnDeath] = self.on_death
+
+    def get_description(self):
+        return ("Each turn, and also whenever a mirror crystal dies, you have a chance to summon a mirror crystal near yourself, equal to 100% divided by 1 plus the current number of mirror crystals you have.\n"
+                "Mirror crystals are [arcane] [metallic] stationary minions with [{minion_health}_HP:minion_health], no resistances, and no attacks of their own. Each turn each mirror crystal teleports to a random tile.\n"
+                "Whenever a mirror crystal takes damage, it redeals that damage to a random enemy in its line of sight.").format(**self.fmt_dict())
+
+    def try_summon(self):
+        if random.random() >= 1/(1 + len([u for u in self.owner.level.units if u.source is self])):
+            return
+        unit = Unit()
+        unit.asset = ["MissingSynergies", "Units", "mirror_crystal"]
+        unit.name = "Mirror Crystal"
+        unit.max_hp = self.get_stat("minion_health")
+        unit.tags = [Tags.Arcane, Tags.Metallic]
+        for tag in [Tags.Fire, Tags.Ice, Tags.Lightning, Tags.Physical, Tags.Holy, Tags.Dark, Tags.Arcane, Tags.Poison]:
+            unit.resists[tag] = 0
+        unit.stationary = True
+        unit.buffs = [ReflectionBuff(), TeleportyBuff(radius=RANGE_GLOBAL, chance=1)]
+        self.summon(unit, radius=5, sort_dist=False)
+        yield
+
+    def on_death(self, evt):
+        if evt.unit.source is not self:
+            return
+        self.owner.level.queue_spell(self.try_summon())
+
+    def on_advance(self):
+        if all([u.team == TEAM_PLAYER for u in self.owner.level.units]):
+            return
+        self.owner.level.queue_spell(self.try_summon())
+
 all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell])
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys])

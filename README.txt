@@ -155,6 +155,7 @@ Level 5:
 + Fractured Memories (Arcane/Chaos)
 + Halogenesis (Holy/Nature)
 + Inexorable Decay (Dark)
++ Mirror Decoys (Arcane/Metallic)
 + Orb Substitution (Orb/Translocation)
 + Outrage Rune (Fire/Sorcery)
 + Reflex Arc (Nature/Lightning/Sorcery)
