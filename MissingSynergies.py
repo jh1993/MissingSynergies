@@ -8984,27 +8984,6 @@ class ConfusedStruggleSpell(Spell):
 
     def cast_instant(self, x, y):
         self.caster.level.deal_damage(x, y, self.spell.get_stat("damage"), Tags.Physical, self.spell)
-
-        if self.spell.get_stat("scream"):
-            radius = math.ceil(self.spell.get_stat("minion_range")/3)
-            effects_left = 7
-
-            for unit in self.caster.level.get_units_in_ball(self.caster, radius):
-                if are_hostile(self.caster, unit):
-                    continue
-                unit.deal_damage(2, Tags.Physical, self.spell)
-                effects_left -= 1
-
-            # Show some graphical indication of this aura if it didnt hit much
-            points = self.caster.level.get_points_in_ball(self.caster.x, self.caster.y, radius)
-            points = [p for p in points if not self.caster.level.get_unit_at(p.x, p.y)]
-            random.shuffle(points)
-            for _ in range(effects_left):
-                if not points:
-                    break
-                p = points.pop()
-                self.caster.level.show_effect(p.x, p.y, Tags.Physical, minor=True)
-
         if self.caster.gets_clarity:
             # Apply clarity for 2 turns so that 1 turn of it remains after the turn that was spent struggling.
             self.caster.apply_buff(StunImmune(), 2)
@@ -9055,10 +9034,35 @@ class ConfusionBuff(Buff):
             return True
         if existing.spells[0].timer > 0:
             existing.spells[0].timer -= 1
+        elif self.spell.get_stat("scream"):
+            owner.level.queue_spell(self.scream(owner))
         return False
 
     def summon_bush(self):
         self.spell.summon_bush(self.owner, sort_dist=True)
+        yield
+
+    def scream(self, owner):
+
+        radius = math.ceil(self.spell.get_stat("minion_range")/3)
+        effects_left = 7
+
+        for unit in owner.level.get_units_in_ball(self.caster, radius):
+            if are_hostile(owner, unit):
+                continue
+            unit.deal_damage(2, Tags.Physical, self.spell)
+            effects_left -= 1
+
+        # Show some graphical indication of this aura if it didnt hit much
+        points = owner.level.get_points_in_ball(owner.x, owner.y, radius)
+        points = [p for p in points if not owner.level.get_unit_at(p.x, p.y)]
+        random.shuffle(points)
+        for _ in range(effects_left):
+            if not points:
+                break
+            p = points.pop()
+            owner.level.show_effect(p.x, p.y, Tags.Physical, minor=True)
+        
         yield
 
 class XenodruidFormBuff(Buff):
@@ -9087,6 +9091,7 @@ class XenodruidFormBuff(Buff):
 class ConfusionSpell(SimpleCurse):
 
     def __init__(self, spell):
+        self.spell = spell
         SimpleCurse.__init__(self, lambda: ConfusionBuff(spell), 0, Tags.Arcane)
         self.range = spell.get_stat("minion_range")
         self.requires_los = False
@@ -9103,7 +9108,7 @@ class ConfusionSpell(SimpleCurse):
             existing = unit.get_buff(ConfusionBuff)
             if not existing:
                 return True
-            return existing.spells[0].timer > 0
+            return existing.spells[0].timer > 0 or self.spell.get_stat("scream")
 
 class XenodruidFormSpell(Spell):
 
@@ -9111,7 +9116,7 @@ class XenodruidFormSpell(Spell):
         self.name = "Xenodruid Form"
         self.asset = ["MissingSynergies", "Icons", "xenodruid_form"]
         self.tags = [Tags.Arcane, Tags.Enchantment, Tags.Conjuration]
-        self.level = 6
+        self.level = 7
         self.max_charges = 3
         self.range = 0
 
@@ -9129,7 +9134,7 @@ class XenodruidFormSpell(Spell):
         self.upgrades["germination"] = (1, 5, "Spell Germination", "Whenever you cast a spell, you summon a number of braintangler bushes at random locations around the target tile equal to the spell's level.")
         self.upgrades["parasite"] = (1, 7, "Brain Parasite", "Whenever a confused enemy dies, summon a braintangler bush at its location.")
         self.upgrades["lethargy"] = (1, 3, "Lethargy", "Each turn, a confused enemy has a 50% chance per ability to increase the ability's remaining cooldown by [1_turn:duration], before it acts.\nThis does not affect abilities with no cooldown, and cannot increase an ability's cooldown beyond its maximum cooldown.\nEnemies that can gain clarity are unaffected by this upgrade.")
-        self.upgrades["scream"] = (1, 5, "Confused Screaming", "Whenever a confused enemy uses the special confusion ability, it will also deal [2_physical:physical] damage to all of its allies in a radius equal to 1/3 of this spell's [minion_range:minion_range] stat, rounded up.\nThis damage is fixed, and cannot be increased using shrines, skills, or buffs.")
+        self.upgrades["scream"] = (1, 6, "Confused Screaming", "Braintangler bushes will now target an enemy even when that enemy's confusion timer is 0.\nWhenever an enemy with 0 confusion timer is hit with confusion again, it will scream in confusion, dealing [2_physical:physical] damage to itself and all of its allies in a radius equal to 1/3 of this spell's [minion_range:minion_range] stat, rounded up.\nThis damage is fixed, and cannot be increased using shrines, skills, or buffs.")
     
     def get_description(self):
         return ("Transform into an alien treant for [{duration}_turns:duration], summoning [{num_summons}:num_summons] braintangler bushes each turn at random locations within [{minion_range}_tiles:minion_range] of yourself. They are immobile [arcane] minions with [{minion_health}_HP:minion_health], last [{minion_duration}_turns:minion_duration], and can inflict confusion on an enemy within [{minion_range}_tiles:minion_range] or decrease an enemy's confusion timer by [1_turn:duration].\n"

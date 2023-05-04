@@ -110,7 +110,6 @@ Level 6:
 + Stone Egg (Dragon/Orb/Conjuration)
 + Thermal Imbalance (Fire/Ice/Enchantment)
 + Twisted Mutation (Chaos/Nature/Enchantment)
-+ Xenodruid Form (Arcane/Conjuration/Enchantment)
 
 Level 7:
 + Copper Furnace (Chaos/Metallic/Conjuration)
@@ -125,6 +124,7 @@ Level 7:
 + Word of Rust (Word/Metallic)
 + Word of Upheaval (Nature/Word)
 + Wormwood (Holy/Nature/Sorcery)
++ Xenodruid Form (Arcane/Conjuration/Enchantment)
 
 ---
 
