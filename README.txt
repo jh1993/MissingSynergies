@@ -74,7 +74,6 @@ Level 5:
 + Damnation (Dark/Enchantment/Conjuration)
 + Disintegrate (Arcane/Metallic/Sorcery)
 + Drought (Fire/Nature/Enchantment)
-+ Elemental Chaos (Arcane/Ice/Chaos/Conjuration)
 + Flesh Sacrifice (Dark/Conjuration)
 + Fleshburst Zombie (Dark/Nature/Conjuration)
 + Gathering Storm (Lightning/Ice/Conjuration)
@@ -100,6 +99,7 @@ Level 5:
 Level 6:
 + Astral Meltdown (Arcane/Chaos/Sorcery)
 + Death Metal (Dark/Metallic/Conjuration)
++ Elemental Chaos (Arcane/Ice/Chaos/Conjuration)
 + Eyes of Chaos (Chaos/Eye/Enchantment)
 + Frigid Famine (Dark/Ice/Enchantment)
 + High Sorcery (Fire/Lightning/Ice/Sorcery)
