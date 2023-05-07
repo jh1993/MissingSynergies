@@ -9203,8 +9203,8 @@ class FleshLoan(Upgrade):
         self.hp_loaned[evt.unit] = dealt
         if Tags.Living not in evt.unit.tags:
             evt.unit.tags.append(Tags.Living)
-            # Don't lose default poison immunity from not being living.
-            if Tags.Poison not in evt.unit.resists.keys():
+            # Don't lose default poison immunity from not being living or demon.
+            if Tags.Poison not in evt.unit.resists.keys() and Tags.Demon not in evt.unit.tags:
                 evt.unit.resists[Tags.Poison] = 100
 
     def on_pre_advance(self):
@@ -12753,5 +12753,35 @@ class MirrorDecoys(Upgrade):
             return
         self.owner.level.queue_spell(self.try_summon())
 
+class BloodFodder(Upgrade):
+
+    def on_init(self):
+        self.name = "Blood Fodder"
+        self.asset = ["MissingSynergies", "Icons", "blood_fodder"]
+        self.tags = [Tags.Dark, Tags.Nature]
+        self.level = 4
+        self.minion_health = 7
+        self.minion_damage = 2
+        self.duration = 10
+    
+    def on_advance(self):
+        max_num = (self.owner.max_hp - self.owner.cur_hp)//5
+        cur_num = len([u for u in self.owner.level.units if u.source is self])
+        for _ in range(max_num - cur_num):
+            unit = Goblin()
+            unit.name = "Hemogoblin"
+            unit.tags = [Tags.Nature, Tags.Demon]
+            unit.asset = ["MissingSynergies", "Units", "hemogoblin"]
+            apply_minion_bonuses(self, unit)
+            melee = unit.spells[0]
+            melee.onhit = lambda caster, target: caster.apply_buff(BloodrageBuff(1), caster.get_stat(self.get_stat("duration"), melee, "duration"))
+            melee.description = ""
+            melee.get_description = lambda: "Gain +1 damage for %i turns with each attack" % unit.get_stat(self.get_stat("duration"), melee, "duration")
+            self.summon(unit, radius=RANGE_GLOBAL)
+    
+    def get_description(self):
+        return ("You are accompanied by a number of hemogoblins equal to your missing HP divided by 5, which are replenished to the maxumum number each turn.\n"
+                "Hemogoblins are [nature] [demon] minions with [{minion_health}_HP:minion_health]. Their melee attacks deal [{minion_damage}_physical:physical] damage, and grant the attacker bloodrage for [{duration}_turns:duration] on hit, increasing all damage by 1.").format(**self.fmt_dict())
+
 all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell])
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder])

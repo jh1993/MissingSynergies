@@ -131,6 +131,7 @@ Level 7:
 Skills:
 
 Level 4:
++ Blood Fodder (Dark/Nature)
 + Cantrip Adept (Sorcery)
 + Chaos Trick (Chaos/Fire/Lightning)
 + Flesh Loan (Dark/Nature)
