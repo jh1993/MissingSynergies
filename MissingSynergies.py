@@ -3377,7 +3377,7 @@ class AshenAvatarBuff(BlindBuff):
         resists = self.spell.get_stat("resists")
         for tag in [Tags.Fire, Tags.Dark, Tags.Poison]:
             self.resists[tag] = resists
-        if self.spell.get_stat("power"):
+        if self.spell.get_stat("expanse"):
             for tag in [Tags.Fire, Tags.Dark, Tags.Nature]:
                 self.tag_bonuses[tag]["radius"] = 1
         self.global_triggers[EventOnDeath] = self.on_death
@@ -3431,7 +3431,7 @@ class AshenAvatarSpell(Spell):
         self.upgrades["duration"] = (8, 2)
         self.upgrades["resists"] = (25, 2)
         self.upgrades["mult"] = (1, 5, "Multipliers", "[Fire] damage now [blinds:blind] for a duration equal to [20%:duration] of the damage, and [poisons:poison] for a duration equal to [50%:duration] of the damage.\nAshen phantoms now deal damage equal to [20%:minion_damage] of their max HP.")
-        self.upgrades["power"] = (1, 5, "Ashen Power", "[Fire], [dark], and [nature] spells and skills gain [1_radius:radius] for the duration.\nSpells and skills with more than one of these tags will benefit multiple times.")
+        self.upgrades["expanse"] = (1, 5, "Ashen Expanse", "[Fire], [dark], and [nature] spells and skills gain [1_radius:radius] for the duration.\nSpells and skills with more than one of these tags will benefit multiple times.")
     
     def fmt_dict(self):
         stats = Spell.fmt_dict(self)
@@ -12783,5 +12783,84 @@ class BloodFodder(Upgrade):
         return ("You are accompanied by a number of hemogoblins equal to your missing HP divided by 5, which are replenished to the maxumum number each turn.\n"
                 "Hemogoblins are [nature] [demon] minions with [{minion_health}_HP:minion_health]. Their melee attacks deal [{minion_damage}_physical:physical] damage, and grant the attacker bloodrage for [{duration}_turns:duration] on hit, increasing all damage by 1.").format(**self.fmt_dict())
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell])
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder])
+class ExorbitantPower(Upgrade):
+
+    def on_init(self):
+        self.name = "Exorbitant Power"
+        self.asset = ["MissingSynergies", "Icons", "exorbitant_power"]
+        self.tags = [Tags.Enchantment]
+        self.level = 7
+        self.description = "Whenever an ally, including you, gains a stacking buff, all of that unit's existing stacks of that buff have their durations increased to match the duration of the new stack if the latter is higher."
+        self.global_triggers[EventOnBuffApply] = self.on_buff_apply
+
+    def on_buff_apply(self, evt):
+        if evt.buff.stack_type != STACK_INTENSITY or not evt.buff.turns_left or are_hostile(evt.unit, self.owner):
+            return
+        for buff in evt.unit.buffs:
+            if type(buff) != type(evt.buff) or buff.turns_left >= evt.buff.turns_left:
+                continue
+            buff.turns_left = evt.buff.turns_left
+
+class OverlordBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+        self.name = "Might of the Overlord"
+        self.stack_type = STACK_REPLACE
+        self.color = Tags.Enchantment.color
+    
+    def on_applied(self, owner):
+
+        mult = self.spell.get_stat("percentage")
+        if self.spell.get_stat("lords"):
+            for buff in self.owner.buffs:
+                if not isinstance(buff, Upgrade) or buff.prereq or buff.level != 7:
+                    continue
+                mult += 25
+
+        omnicompetent = self.spell.get_stat("omnicompetent")
+        for tag in self.owner.tag_bonuses:
+            for attr in self.owner.tag_bonuses[tag]:
+                if not omnicompetent and attr != "damage":
+                    continue
+                self.global_bonuses[attr] += self.owner.tag_bonuses[tag][attr]
+        
+        for attr in self.global_bonuses:
+            self.global_bonuses[attr] = math.floor(self.global_bonuses[attr]*mult/100)
+
+    def on_unapplied(self):
+        self.owner.level.queue_spell(self.fix_charges())
+
+    def fix_charges(self):
+        for spell in self.owner.spells:
+            spell.cur_charges = min(spell.cur_charges, spell.get_stat("max_charges"))
+        yield
+
+class MightOfTheOverlordSpell(Spell):
+
+    def on_init(self):
+        self.name = "Might of the Overlord"
+        self.asset = ["MissingSynergies", "Icons", "might_of_the_overlord"]
+        self.tags = [Tags.Enchantment]
+        self.level = 7
+        self.duration = 2
+        self.max_charges = 1
+        self.range = 0
+        self.percentage = 100
+
+        self.upgrades["max_charges"] = (1, 3)
+        self.upgrades["duration"] = (3, 3)
+        self.upgrades["percentage"] = (50, 4)
+        self.upgrades["lords"] = (1, 5, "Lord of Lords", "For every level 7 skill you have, the percentage multiplier of this spell is increased by 25%.")
+        self.upgrades["omnicompetent"] = (1, 7, "Omnicompetent Lord", "Might of the Overlord now affects all stats instead of only [damage].\nWhen the effect expires, any excess spell charges you gained from it will be lost.")
+
+    def get_description(self):
+        return ("All of your spells and skills gain a [damage] bonus equal to [{percentage}%:enchantment] of the sum of all tag-specific [damage] bonuses you have, rounded down.\nLasts [{duration}_turns:duration].").format(**self.fmt_dict())
+
+    def cast_instant(self, x, y):
+        self.caster.apply_buff(OverlordBuff(self), self.get_stat("duration") + 1)
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell])
+
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower])
