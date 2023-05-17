@@ -6510,9 +6510,7 @@ class MutantCyclopsMassTelekinesis(Spell):
         if not Spell.can_cast(self, x, y):
             return False
         if not self.conjure:
-            units = self.get_thrown_units()
-            if not units or all([not self.get_throw_target(x, y, unit) for unit in units]):
-                return False
+            return bool(self.get_thrown_units())
         return True
 
     def cast(self, x, y):
