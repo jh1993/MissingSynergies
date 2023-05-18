@@ -10789,8 +10789,8 @@ class DamnationSpell(Spell):
         self.upgrades["double"] = (1, 5, "Double Damned", "Each damned shade has a 50% chance to also be damned, summoning another damned shade when it dies.")
 
     def get_description(self):
-        return ("All enemies in a [{radius}_tile:radius] radius that do not have reincarnations lose 50% max HP but gain 1 reincarnation.\n"
-                "All enemies in the area are also damned, which is a passive effect that persists beyond death. When a damned enemy dies, you summon a damned shade near it with the same max HP.\n"
+        return ("All enemies in a [{radius}_tile:radius] radius that do not have reincarnations lose 50% max HP but gain 1 reincarnation; otherwise they take [dark] damage equal to 1/8 of their max HP.\n"
+                "All enemies in the area are also damned, which is a passive effect that persists beyond death. When a damned enemy dies, you summon a damned shade near it with the same max HP for [{minion_duration}_turns:minion_duration].\n"
                 "Damned shades are [demon] [undead] minions with [physical] immunity. They have teleport attacks with a range of [{minion_range}_tiles:minion_range] that deal [{minion_damage}_dark:dark] damage, and melee attacks with the same damage that give themselves [{duration}_turns:duration] of bloodrage on hit and heal themselves for the damage done.").format(**self.fmt_dict())
 
     def cast_instant(self, x, y):
@@ -10803,6 +10803,8 @@ class DamnationSpell(Spell):
                 buff = ReincarnationBuff(1)
                 buff.buff_type = BUFF_TYPE_PASSIVE
                 unit.apply_buff(buff)
+            else:
+                unit.deal_damage(unit.max_hp//8, Tags.Dark, self)
             unit.apply_buff(DamnedBuff(self))
             self.caster.level.show_effect(unit.x, unit.y, Tags.Dark)
 
