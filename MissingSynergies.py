@@ -12793,8 +12793,14 @@ class ExorbitantPower(Upgrade):
         self.asset = ["MissingSynergies", "Icons", "exorbitant_power"]
         self.tags = [Tags.Enchantment]
         self.level = 7
-        self.description = "Whenever an ally, including you, gains a stacking buff, all of that unit's existing stacks of that buff have their durations increased to match the duration of the new stack if the latter is higher."
+        self.description = "Whenever an ally, including you, gains a stacking buff, all of that unit's existing stacks of that buff have their durations increased to match the duration of the new stack if the latter is higher.\nWhen you enter a new realm, you now lose all of your stackable buffs."
         self.global_triggers[EventOnBuffApply] = self.on_buff_apply
+        self.owner_triggers[EventOnUnitAdded] = self.on_unit_added
+
+    def on_unit_added(self, evt):
+        for buff in list(self.owner.buffs):
+            if buff.buff_type == BUFF_TYPE_BLESS and buff.stack_type == STACK_INTENSITY:
+                self.owner.remove_buff(buff)
 
     def on_buff_apply(self, evt):
         if evt.buff.stack_type != STACK_INTENSITY or not evt.buff.turns_left or are_hostile(evt.unit, self.owner):
