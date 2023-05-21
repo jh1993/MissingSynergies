@@ -3876,7 +3876,7 @@ class MassEnchantmentBuff(Buff):
 
         if self.copied or Tags.Enchantment not in evt.spell.tags:
             return
-        aoe = evt.spell.get_impacted_tiles(evt.x, evt.y)
+        aoe = list(evt.spell.get_impacted_tiles(evt.x, evt.y))
         if len(aoe) != 1 or aoe[0] != Point(evt.x, evt.y):
             return
         original = self.owner.level.get_unit_at(evt.x, evt.y)
@@ -11769,6 +11769,9 @@ class LiquidLightningSpell(Spell):
         self.upgrades["radius"] = (4, 2)
         self.upgrades["phase"] = (1, 4, "Phase Bolts", "The bolts shot by Liquid Lightning now ignore line of sight.")
         self.upgrades["charged"] = (1, 5, "Charged Power", "Whenever a minion affected by Liquid Lightning tries to damage an enemy with an attack, that enemy takes [lightning] damage from this spell equal to half of this spell's damage.")
+
+    def get_impacted_tiles(self, x, y):
+        return [Point(x, y)]
 
     def get_description(self):
         return ("The target unit gains [100_lightning:lightning] resistance and becomes a [lightning] unit. If it was immobile, it gains the ability to move.\n"
