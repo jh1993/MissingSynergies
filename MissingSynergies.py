@@ -12771,6 +12771,8 @@ class BloodFodder(Upgrade):
         self.duration = 10
     
     def on_advance(self):
+        if all([u.team == TEAM_PLAYER for u in self.owner.level.units]):
+            return
         max_num = (self.owner.max_hp - self.owner.cur_hp)//5
         cur_num = len([u for u in self.owner.level.units if u.source is self])
         for _ in range(max_num - cur_num):
