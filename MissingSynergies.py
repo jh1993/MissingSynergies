@@ -2239,6 +2239,8 @@ class EnfleshedBuff(Buff):
             self.owner_triggers[EventOnDeath] = lambda evt: self.owner.level.queue_spell(self.boom())
 
     def on_applied(self, owner):
+        if self.owner.has_buff(SlimeBuff):
+            self.hp = 0
         self.owner.level.queue_spell(self.modify_unit())
     
     def modify_unit(self):
@@ -2313,7 +2315,8 @@ class MalignantGrowthSpell(Spell):
     def get_description(self):
         return ("Enemies in a [{radius}_tile:radius] radius are enfleshed. They become [living], lose [100_poison:poison] resistance, and gain [{hp_bonus}:living] max HP; the HP bonus is equal to 5 times the [damage] of this spell.\n"
                 "Each turn, enfleshed enemies take [poison] damage equal to 5% of their max HP.\n"
-                "If an enfleshed unit's current HP drops to an amount equal to or below the max HP it gained from enfleshment, it dies instantly at the end of its turn; this is treated as killed by [poison] damage equal to the enfleshed amount.").format(**self.fmt_dict())
+                "If an enfleshed unit's current HP drops to an amount equal to or below the max HP it gained from enfleshment, it dies instantly at the end of its turn; this is treated as killed by [poison] damage equal to the enfleshed amount.\n"
+                "This spell cannot increase the max HP of units that split like slimes.").format(**self.fmt_dict())
 
     def cast_instant(self, x, y):
         friendly = self.get_stat("friendly")
