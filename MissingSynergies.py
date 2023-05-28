@@ -3491,19 +3491,10 @@ class CriticalInstabilityBuff(Buff):
         self.buff_type = BUFF_TYPE_CURSE
         self.owner_triggers[EventOnDeath] = self.on_death
         self.show_effect = False
+        self.resists[Tags.Arcane] = -100
     
     def on_death(self, evt):
         self.owner.level.queue_spell(self.spell.cast(self.owner.x, self.owner.y))
-
-class AstralDecayBuff(Buff):
-    def __init__(self, applier):
-        Buff.__init__(self)
-        self.name = "Astral Decay"
-        self.color = Tags.Arcane.color
-        self.buff_type = BUFF_TYPE_CURSE
-        self.resists[Tags.Arcane] = -100
-        self.show_effect = False
-        self.applier = applier
 
 class AstralMeltdownSpell(Spell):
 
@@ -3519,13 +3510,13 @@ class AstralMeltdownSpell(Spell):
         self.range = 10
         self.requires_los = 0
 
+        self.upgrades["range"] = (40, 3)
         self.upgrades["damage"] = (10, 4)
         self.upgrades["radius"] = (2, 6)
-        self.upgrades["decay"] = (1, 5, "Astral Decay", "Inflict Astral Decay on targets before dealing damage, which is removed before the start of your next turn.\nUnits with Astral Decay lose [100_arcane:arcane] resistance.")
         self.upgrades["vacuum"] = (1, 5, "Vacuum Burst", "Each explosion of this spell has a 20% chance to trigger another explosion on a random tile within the original explosion radius.")
     
     def get_description(self):
-        return ("Inflict Critical Instability on targets in a [{radius}_tile:radius] burst, then deal [{damage}_arcane:arcane] damage, and randomly [{damage}_fire:fire], [{damage}_lightning:lightning], or [{damage}_physical:physical] damage. Melts walls on affected tiles.\n"
+        return ("Inflict Critical Instability on targets in a [{radius}_tile:radius] burst, which reduces [arcane] resistance by 100, then deal [{damage}_arcane:arcane] damage, and randomly [{damage}_fire:fire], [{damage}_lightning:lightning], or [{damage}_physical:physical] damage. Melts walls on affected tiles.\n"
                 "When a unit with Critical Instability dies, the explosion of this spell occurs again centered around its tile.\n"
                 "Critical Instability is removed from all units at the beginning of your next turn.").format(**self.fmt_dict())
 
@@ -3534,20 +3525,15 @@ class AstralMeltdownSpell(Spell):
     
     def cast(self, x, y):
         damage = self.get_stat("damage")
-        decay = self.get_stat("decay")
         alive = self.caster.is_alive()
         if alive:
             self.caster.apply_buff(RemoveBuffOnPreAdvance(CriticalInstabilityBuff))
-            if decay:
-                self.caster.apply_buff(RemoveBuffOnPreAdvance(AstralDecayBuff))
         for stage in Burst(self.caster.level, Point(x, y), self.get_stat('radius'), ignore_walls=True):
             for p in stage:
                 if alive:
                     unit = self.caster.level.get_unit_at(p.x, p.y)
                     if unit:
                         unit.apply_buff(CriticalInstabilityBuff(self))
-                        if decay:
-                            unit.apply_buff(AstralDecayBuff(self.caster))
                 if self.caster.level.tiles[p.x][p.y].is_wall():
                     self.caster.level.make_floor(p.x, p.y)
                 self.caster.level.deal_damage(p.x, p.y, damage, Tags.Arcane, self)
