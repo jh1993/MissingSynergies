@@ -5337,10 +5337,15 @@ class AfterlifeEchoesBuff(Buff):
         self.spell = spell
         Buff.__init__(self)
     
+    def on_pre_advance(self):
+        self.count = 0
+
     def on_init(self):
         self.name = "Afterlife Echoes"
         self.color = Tags.Dark.color
         self.radius = self.spell.get_stat("radius")
+        self.stack_type = STACK_REPLACE
+        self.count = 0
         if self.spell.get_stat("life"):
             self.echo_type = self.ECHO_LIFE
         elif self.spell.get_stat("spirit"):
@@ -5353,12 +5358,18 @@ class AfterlifeEchoesBuff(Buff):
             self.echo_type = None
         if self.spell.get_stat("myriad"):
             self.global_bonuses["num_summons"] = 1
-        self.global_triggers[EventOnUnitAdded] = lambda evt: self.owner.level.queue_spell(self.boom(evt.unit))
+        self.global_triggers[EventOnUnitAdded] = self.on_unit_added
+
+    def on_unit_added(self, evt):
+
+        if are_hostile(evt.unit, self.owner) or evt.unit.is_player_controlled or evt.unit.source is self.spell:
+            return
+        if self.count >= self.spell.get_stat("num_targets"):
+            return
+        self.count += 1
+        self.owner.level.queue_spell(self.boom(evt.unit))
 
     def boom(self, unit):
-
-        if are_hostile(unit, self.owner) or unit.is_player_controlled or unit.source is self.spell:
-            return
         
         if self.echo_type == self.ECHO_ELEMENTAL:
             spells = []
@@ -5486,11 +5497,12 @@ class AfterlifeEchoesSpell(Spell):
         self.max_charges = 3
         self.range = 0
 
-        self.duration = 15
+        self.duration = 30
         self.radius = 2
+        self.num_targets = 5
 
-        self.upgrades["duration"] = (15, 2)
-        self.upgrades["radius"] = (1, 4)
+        self.upgrades["num_targets"] = (5, 4, "Trigger Limit", "Afterlife Echoes can trigger 5 more times per turn.")
+        self.upgrades["radius"] = (1, 3)
         self.upgrades["myriad"] = (1, 5, "Myriad Souls", "For the duration, spells and skills that summon multiple minions will summon [1:num_summons] more minion.")
         self.upgrades["life"] = (1, 5, "Life Echoes", "When you summon a [living] or [nature] minion, that minion's death explosion will [poison] enemies for a number of turns equal to 50% of its max HP.\nIf an enemy is already [poisoned], any excess duration will be dealt as [poison] damage.", "echo")
         self.upgrades["spirit"] = (1, 5, "Spirit Echoes", "When you summon a [holy], [demon], or [undead] minion, that minion's death explosion will summon an Afterlife Shade with the same max HP.\nThe Afterlife Shade has an attack with [{minion_range}_range:minion_range] that deals [holy] and [dark] damage equal to [{minion_damage}:minion_damage] plus 10% of its max HP.", "echo")
@@ -5507,7 +5519,7 @@ class AfterlifeEchoesSpell(Spell):
         return [Point(self.caster.x, self.caster.y)]
 
     def get_description(self):
-        return ("Whenever you summon a minion from any source other than this spell, that minion gains 1 reincarnation, then immediately dies.\n"
+        return ("The first [{num_targets}:num_targets] times each turn you summon a minion from any source other than this spell, that minion gains 1 reincarnation, then immediately dies.\n"
                 "This death creates an explosion that deals [holy] and [dark] damage to enemies in a [{radius}_tile:radius] burst. The damage dealt is equal to half of the minion's max HP.\n"
                 "Lasts [{duration}_turns:duration].").format(**self.fmt_dict())
 
@@ -7391,6 +7403,7 @@ class EternalBomberBuff(Buff):
         self.owner.remove_buff(self.reincarnation)
 
 class EternalBomberPhaseBomber(Upgrade):
+
     def on_init(self):
         self.name = "Phase Bomber"
         self.level = 4
