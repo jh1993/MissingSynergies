@@ -178,6 +178,7 @@ Level 6:
 + Scarlet Bison (Fire/Nature)
 + Secrets of Blood (Dark/Metallic)
 + Shivering Venom (Ice/Nature)
++ Soul Investiture (Dark/Arcane)
 
 Level 7:
 + Ataraxia (Sorcery/Enchantment/Conjuration)
