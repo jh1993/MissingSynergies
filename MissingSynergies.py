@@ -2191,20 +2191,22 @@ class GenesisSpell(Spell):
         self.minion_damage = 32
         self.num_summons = 2
         self.death_chance = 100
+        self.max_channel = 10
 
+        self.upgrades["max_channel"] = (5, 2)
         self.upgrades["num_summons"] = (1, 4)
         self.upgrades["death_chance"] = (-50, 6, "Lasting Presence", "Each unit summoned by Genesis now has a 50% chance to not die each turn.")
         self.upgrades["greater"] = (1, 7, "Greater Gods", "Each unit summoned by Genesis now has a 10% chance to instead be Odin, Aesir Immortal or Chronos, Titan Immortal.")
     
     def get_description(self):
-        return ("Channel to summon [{num_summons}:num_summons] lesser gods near the target tile each turn, each of which may be an Aesir or a Titan, chosen at random.\n"
+        return ("Channel to summon [{num_summons}:num_summons] lesser gods near the target tile each turn for [{max_channel}_turns:duration], each of which may be an Aesir or a Titan, chosen at random.\n"
                 "Aesirs are [lightning] units, while Titans are [fire] units; both are [living] and [holy].\n"
                 "Aesirs and Titans have very high HP and powerful attacks, but their presences are transient. They are immune to debuffs, but have a [{death_chance}%_chance:chaos] to die after each turn.").format(**self.fmt_dict())
 
     def cast(self, x, y, channel_cast=False):
 
         if not channel_cast:
-            self.caster.apply_buff(ChannelBuff(self.cast, Point(x, y)))
+            self.caster.apply_buff(ChannelBuff(self.cast, Point(x, y)), self.get_stat("max_channel"))
             return
         
         greater = self.get_stat("greater")
@@ -5356,8 +5358,6 @@ class AfterlifeEchoesBuff(Buff):
             self.echo_type = self.ECHO_SHATTERING
         else:
             self.echo_type = None
-        if self.spell.get_stat("myriad"):
-            self.global_bonuses["num_summons"] = 1
         self.global_triggers[EventOnUnitAdded] = self.on_unit_added
 
     def on_unit_added(self, evt):
@@ -5497,13 +5497,13 @@ class AfterlifeEchoesSpell(Spell):
         self.max_charges = 3
         self.range = 0
 
-        self.duration = 30
+        self.duration = 15
         self.radius = 2
         self.num_targets = 5
 
         self.upgrades["num_targets"] = (5, 4, "Trigger Limit", "Afterlife Echoes can trigger 5 more times per turn.")
         self.upgrades["radius"] = (1, 3)
-        self.upgrades["myriad"] = (1, 5, "Myriad Souls", "For the duration, spells and skills that summon multiple minions will summon [1:num_summons] more minion.")
+        self.upgrades["duration"] = (15, 2)
         self.upgrades["life"] = (1, 5, "Life Echoes", "When you summon a [living] or [nature] minion, that minion's death explosion will [poison] enemies for a number of turns equal to 50% of its max HP.\nIf an enemy is already [poisoned], any excess duration will be dealt as [poison] damage.", "echo")
         self.upgrades["spirit"] = (1, 5, "Spirit Echoes", "When you summon a [holy], [demon], or [undead] minion, that minion's death explosion will summon an Afterlife Shade with the same max HP.\nThe Afterlife Shade has an attack with [{minion_range}_range:minion_range] that deals [holy] and [dark] damage equal to [{minion_damage}:minion_damage] plus 10% of its max HP.", "echo")
         self.upgrades["elemental"] = (1, 5, "Elemental Echoes", "When you summon a [fire], [lightning], or [ice] minion, that minion's death explosion has a chance to cast Fireball, Lightning Bolt, or Icicle respectively at valid enemy targets.\nA minion with multiple tags will try to cast every qualifying spell independently in random order.\nThe chance to cast is the minion's max HP divided by 40, with an extra guaranteed cast per 40 HP the minion has.\nThese spells gain all of your upgrades and bonuses.", "echo")
@@ -8917,6 +8917,7 @@ class ForcefulChanneling(Upgrade):
         self.tags = [Tags.Sorcery, Tags.Conjuration]
         self.level = 5
         self.description = "Each turn, each spell you channel has a 25% chance to repeat its effect once.\nYou also become immune to [stun], [freeze], [petrify], [glassify], and similar debuffs when channeling."
+        self.global_bonuses["max_channel"] = 5
     
     def on_pre_advance(self):
         buffs = [buff for buff in self.owner.buffs if isinstance(buff, ChannelBuff)]
@@ -12914,6 +12915,86 @@ class SoulInvestiture(Upgrade):
             return
         self.owner.apply_buff(SoulInvestitureBuff(dealt, self))
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell])
+class StoredWrathBuff(Buff):
+
+    def __init__(self, source, amount):
+        self.source = source
+        self.amount = amount
+        Buff.__init__(self)
+    
+    def on_init(self):
+        self.name = "Stored Wrath"
+        self.color = Tags.Demon.color
+        self.stack_type = STACK_INTENSITY
+    
+    def on_advance(self):
+        units = [u for u in self.owner.level.units if u.source is self.source]
+        if not units:
+            return
+        random.choice(units).apply_buff(BloodrageBuff(self.amount), self.turns_left)
+        self.owner.remove_buff(self)
+
+class WrathOfTheHordeBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+    
+    def on_init(self):
+        self.name = "Wrath of the Horde"
+        self.color = Tags.Demon.color
+        self.stack_type = STACK_REPLACE
+        self.global_bonuses["num_summons"] = self.spell.get_stat("num_summons_bonus")
+        self.stored = self.spell.get_stat("stored")
+        self.full = self.spell.get_stat("full")
+        self.bloodrage_duration = self.spell.get_stat("bloodrage_duration")
+        self.global_triggers[EventOnDeath] = self.on_death
+    
+    def on_death(self, evt):
+        if are_hostile(evt.unit, self.owner) or not evt.unit.source:
+            return
+        units = [u for u in self.owner.level.units if u.source is evt.unit.source and u is not evt.unit]
+        self.apply_bloodrage(math.ceil(evt.unit.max_hp/10), self.bloodrage_duration, units, evt.unit.source)
+        if not self.full:
+            return
+        for buff in evt.unit.buffs:
+            if not isinstance(buff, BloodrageBuff):
+                continue
+            self.apply_bloodrage(buff.bonus, buff.turns_left, units, evt.unit.source)
+    
+    def apply_bloodrage(self, amount, duration, units, source):
+        if units:
+            random.choice(units).apply_buff(BloodrageBuff(amount), duration)
+        elif self.stored:
+            self.owner.apply_buff(StoredWrathBuff(source, amount), duration)
+
+class WrathOfTheHordeSpell(Spell):
+
+    def on_init(self):
+        self.name = "Wrath of the Horde"
+        self.asset = ["MissingSynergies", "Icons", "wrath_of_the_horde"]
+        self.tags = [Tags.Dark, Tags.Fire, Tags.Enchantment]
+        self.level = 6
+        self.range = 0
+        self.max_charges = 3
+
+        self.duration = 30
+        self.bloodrage_duration = 10
+        self.num_summons_bonus = 1
+
+        self.upgrades["bloodrage_duration"] = (5, 2)
+        self.upgrades["num_summons_bonus"] = (1, 3)
+        self.upgrades["stored"] = (1, 3, "Stored Wrath", "When a minion dies and there are no other minions of the same source to grant bloodrage to, you now instead gain an equivalent amount of stored wrath.\nStored wrath does not benefit you, but will consume itself to grant an equivalent bloodrage stack to a random eligible minion when you end your turn, if possible.")
+        self.upgrades["full"] = (1, 6, "Full Transfer", "When a minion with bloodrage dies, it now transfers all of its bloodrage stacks to your other minions summoned by the same source, distributed at random.")
+
+    def get_description(self):
+        return ("All spells and skills gain [{num_summons_bonus}_num_summons:num_summons].\n"
+                "Whenever one of your minions dies, another random minion summoned by the same source gains a stack of bloodrage for [{bloodrage_duration}_turns:duration], increasing all of its attack damage by an amount equal to 10% of the dead minion's max HP, rounded up.\n"
+                "Lasts [{duration}_turns:duration].").format(**self.fmt_dict())
+
+    def cast_instant(self, x, y):
+        self.caster.apply_buff(WrathOfTheHordeBuff(self), self.get_stat("duration"))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell])
 
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture])

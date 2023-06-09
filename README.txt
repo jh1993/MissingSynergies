@@ -110,6 +110,7 @@ Level 6:
 + Stone Egg (Dragon/Orb/Conjuration)
 + Thermal Imbalance (Fire/Ice/Enchantment)
 + Twisted Mutation (Chaos/Nature/Enchantment)
++ Wrath of the Horde (Dark/Fire/Enchantment)
 
 Level 7:
 + Copper Furnace (Chaos/Metallic/Conjuration)
