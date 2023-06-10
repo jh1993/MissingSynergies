@@ -8733,7 +8733,13 @@ class ReflexArcSpell(Spell):
         self.tags = [Tags.Nature, Tags.Lightning, Tags.Sorcery]
     
     def get_stat(self, attr, base=None):
-        return self.upgrade.get_stat(attr, base) if self.upgrade else Spell.get_stat(self, attr, base)
+        if self.upgrade:
+            return self.upgrade.get_stat(attr, base)
+        elif self.statholder:
+            upgrade = self.statholder.get_buff(ReflexArc)
+            if upgrade:
+                return upgrade.get_stat(attr, base)
+        return Spell.get_stat(attr, base)
 
     def cast(self, x, y):
         for p in Bolt(self.caster.level, self.caster, Point(x, y)):
