@@ -11354,6 +11354,8 @@ class DisintegrateSpell(Spell):
                 "Disintegration points are not considered separate debuffs or duration.").format(**self.fmt_dict())
 
     def hit(self, target, damage, center):
+        if not damage:
+            return
         if center:
             num = damage
         else:
