@@ -5570,6 +5570,8 @@ class TimeDilationSpell(Spell):
                 self.caster.level.event_manager.raise_event(EventOnSpellCast(self, self.caster, x, y), self.caster)
             for _ in range(turns):
                 for buff in list(self.caster.buffs):
+                    if not buff.applied:
+                        continue
                     if selective and buff.buff_type == BUFF_TYPE_CURSE:
                         continue
                     buff.on_pre_advance()
@@ -5582,6 +5584,8 @@ class TimeDilationSpell(Spell):
             self.caster.level.show_effect(unit.x, unit.y, Tags.Arcane)
             for _ in range(turns):
                 for buff in list(unit.buffs):
+                    if not buff.applied:
+                        continue
                     if selective and (are_hostile(self.caster, unit) == (buff.buff_type != BUFF_TYPE_CURSE)):
                         continue
                     buff.on_pre_advance()
