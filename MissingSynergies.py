@@ -9100,7 +9100,7 @@ class XenodruidFormBuff(Buff):
 
     def on_spell_cast(self, evt):
         for _ in range(evt.spell.level):
-            self.spell.summon_bush(Point(evt.x, evt.y))
+            self.spell.summon_bush(Point(evt.x, evt.y), sort_dist=True)
 
 class ConfusionSpell(SimpleCurse):
 
@@ -9145,7 +9145,7 @@ class XenodruidFormSpell(Spell):
         self.upgrades["minion_duration"] = (5, 3)
         self.upgrades["num_summons"] = (1, 3)
         self.upgrades["confusion_timer"] = (-4, 3)
-        self.upgrades["germination"] = (1, 5, "Spell Germination", "Whenever you cast a spell, you summon a number of braintangler bushes at random locations around the target tile equal to the spell's level.")
+        self.upgrades["germination"] = (1, 5, "Spell Germination", "Whenever you cast a spell, you summon a number of braintangler bushes near the target tile equal to the spell's level.")
         self.upgrades["parasite"] = (1, 7, "Brain Parasite", "Whenever a confused enemy dies, summon a braintangler bush at its location.")
         self.upgrades["lethargy"] = (1, 3, "Lethargy", "Each turn, a confused enemy has a 50% chance per ability to increase the ability's remaining cooldown by [1_turn:duration], before it acts.\nThis does not affect abilities with no cooldown, and cannot increase an ability's cooldown beyond its maximum cooldown.\nEnemies that can gain clarity are unaffected by this upgrade.")
         self.upgrades["scream"] = (1, 6, "Confused Screaming", "Braintangler bushes will now target an enemy even when that enemy's confusion timer is 0.\nWhenever an enemy with 0 confusion timer is hit with confusion again, it will scream in confusion, dealing [2_physical:physical] damage to itself and all of its allies in a radius equal to 1/3 of this spell's [minion_range:minion_range] stat, rounded up.\nThis damage is fixed, and cannot be increased using shrines, skills, or buffs.")
@@ -12797,10 +12797,10 @@ class BloodFodder(Upgrade):
             melee.onhit = lambda caster, target: caster.apply_buff(BloodrageBuff(1), caster.get_stat(self.get_stat("duration"), melee, "duration"))
             melee.description = ""
             melee.get_description = lambda: "Gain +1 damage for %i turns with each attack" % unit.get_stat(self.get_stat("duration"), melee, "duration")
-            self.summon(unit, radius=RANGE_GLOBAL)
+            self.summon(unit, radius=RANGE_GLOBAL, sort_dist=False)
     
     def get_description(self):
-        return ("You are accompanied by a number of hemogoblins equal to your missing HP divided by 5, which are replenished to the maxumum number each turn.\n"
+        return ("You are accompanied by a number of hemogoblins equal to your missing HP divided by 5, which are replenished to the maxumum number each turn and summoned onto random tiles.\n"
                 "Hemogoblins are [nature] [demon] minions with [{minion_health}_HP:minion_health]. Their melee attacks deal [{minion_damage}_physical:physical] damage, and grant the attacker bloodrage for [{duration}_turns:duration] on hit, increasing all damage by 1.").format(**self.fmt_dict())
 
 class ExorbitantPower(Upgrade):
