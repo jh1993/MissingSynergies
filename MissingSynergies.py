@@ -13061,12 +13061,12 @@ class RealityFeintSpell(Spell):
         self.asset = ["MissingSynergies", "Icons", "reality_feint"]
         self.tags = [Tags.Arcane, Tags.Enchantment]
         self.level = 4
-        self.max_charges = 4
+        self.max_charges = 3
         self.range = 0
 
-        self.upgrades["max_charges"] = (4, 3)
+        self.upgrades["max_charges"] = (3, 3)
         self.upgrades["extended"] = (1, 5, "Extended Feint", "Your invulnerability now has a 50% chance to not wear off each turn.")
-        self.upgrades["ultimate"] = (1, 6, "Ultimate Feint", "Before gaining invulnerability, you now instead heal to full HP then take [arcane] damage equal to your max HP.\nAfter losing invulnerability, you now instead heal to full HP, then take [arcane] damage equal to your missing HP when you cast this spell.")
+        self.upgrades["ultimate"] = (1, 7, "Ultimate Feint", "Before gaining invulnerability, you now instead heal to full HP then take [arcane] damage equal to your max HP.\nAfter losing invulnerability, you now instead heal to full HP, then take [arcane] damage equal to your missing HP when you cast this spell.")
 
     def get_description(self):
         return ("You temporarily shift out of existence, becoming unable to be killed by damage until the beginning of your next turn, then take [arcane] damage equal to your current HP.\n"
