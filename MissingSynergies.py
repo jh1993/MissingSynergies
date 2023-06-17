@@ -9248,15 +9248,13 @@ class KarmicLoanBuff(Buff):
             self.do_heal(self.owner.max_hp)
     
     def get_damage(self):
-        shield_mult = max(0, (1 - self.owner.shields/20))
-        return math.ceil(max(0, self.total_healed - self.total_self_damage)*shield_mult)
+        return max(0, self.total_healed - self.total_self_damage)
 
     def on_unapplied(self):
-        damage = self.get_damage()
-        if self.owner.shields:
-            self.owner.shields = 0
-            self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Shield_Expire)
-        self.owner.deal_damage(damage, Tags.Holy, self.spell)
+        old_shields = self.owner.shields
+        self.owner.shields = 0
+        self.owner.deal_damage(self.get_damage(), Tags.Holy, self.spell)
+        self.owner.shields = old_shields
     
     def on_advance(self):
         self.do_heal(self.heal)
@@ -9294,7 +9292,7 @@ class KarmicLoanSpell(Spell):
     def get_description(self):
         return ("For [{duration}_turns:duration], you gain [{holy_resistance}_holy:holy] resistance and heal for [{heal}_HP:heal] each turn.\n"
                 "When the effect is removed, you take [holy] damage equal to the total amount healed by this spell, minus all damage inflicted on you by allies for the duration, if the amount is positive. This damage is dealt before you lose the [holy] resistance granted by this spell.\n"
-                "You lose all [SH:shields] before taking this damage, but the damage is reduced by 5% per SH lost.").format(**self.fmt_dict())
+                "You lose all [SH:shields] before taking this damage, then regain the same amount afterwards.").format(**self.fmt_dict())
     
     def cast_instant(self, x, y):
         self.caster.apply_buff(KarmicLoanBuff(self), self.get_stat("duration"))
@@ -13007,6 +13005,77 @@ class WrathOfTheHordeSpell(Spell):
     def cast_instant(self, x, y):
         self.caster.apply_buff(WrathOfTheHordeBuff(self), self.get_stat("duration"))
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell])
+class RealityFeintBuff(Soulbound):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Soulbound.__init__(self, self.spell.caster)
+        self.name = "Reality Feint"
+        self.color = Tags.Arcane.color
+        self.stack_type = STACK_REPLACE
+        self.ultimate = self.spell.get_stat("ultimate")
+        self.asset = None
+    
+    def on_self_damage(self, damage):
+        if self.owner.cur_hp <= 0:
+            self.owner.cur_hp = 1
+
+    def feint(self):
+        self.missing_hp = self.owner.max_hp - self.owner.cur_hp
+        if self.ultimate:
+            damage = self.owner.max_hp
+            self.owner.deal_damage(-damage, Tags.Heal, self.spell)
+        else:
+            damage = self.owner.cur_hp
+        old_shields = self.owner.shields
+        self.owner.shields = 0
+        self.damage = self.owner.deal_damage(damage, Tags.Arcane, self.spell)
+        self.owner.shields = old_shields
+        yield
+
+    def on_applied(self, owner):
+        self.owner.level.queue_spell(self.feint())
+
+    def unfeint(self):
+        self.owner.deal_damage(-self.owner.max_hp if self.ultimate else -self.damage, Tags.Heal, self.spell)
+        if not self.ultimate:
+            return
+        old_shields = self.owner.shields
+        self.owner.shields = 0
+        self.owner.deal_damage(self.missing_hp, Tags.Arcane, self.spell)
+        self.owner.shields = old_shields
+        yield
+
+    def on_unapplied(self):
+        self.owner.level.queue_spell(self.unfeint())
+
+    def on_pre_advance(self):
+        if self.spell.get_stat("extended") and random.random() < 0.5:
+            return
+        self.owner.remove_buff(self)
+
+class RealityFeintSpell(Spell):
+
+    def on_init(self):
+        self.name = "Reality Feint"
+        self.asset = ["MissingSynergies", "Icons", "reality_feint"]
+        self.tags = [Tags.Arcane, Tags.Enchantment]
+        self.level = 4
+        self.max_charges = 4
+        self.range = 0
+
+        self.upgrades["max_charges"] = (4, 3)
+        self.upgrades["extended"] = (1, 5, "Extended Feint", "Your invulnerability now has a 50% chance to not wear off each turn.")
+        self.upgrades["ultimate"] = (1, 6, "Ultimate Feint", "Before gaining invulnerability, you now instead heal to full HP then take [arcane] damage equal to your max HP.\nAfter losing invulnerability, you now instead heal to full HP, then take [arcane] damage equal to your missing HP when you cast this spell.")
+
+    def get_description(self):
+        return ("You temporarily shift out of existence, becoming unable to be killed by damage until the beginning of your next turn, then take [arcane] damage equal to your current HP.\n"
+                "When your invulnerability is lost, you heal for an amount equal to the damage you took when you cast this spell.\n"
+                "You lose all [SH:shields] before taking damage from this spell, then regain the same amount afterwards.").format(**self.fmt_dict())
+
+    def cast_instant(self, x, y):
+        self.owner.apply_buff(RealityFeintBuff(self))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell])
 
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture])

@@ -57,6 +57,7 @@ Level 4:
 + Nonlocality (Arcane/Translocation/Enchantment)
 + Prism Shell (Holy/Ice/Enchantment)
 + Psychedelic Spores (Arcane/Nature/Sorcery)
++ Reality Feint (Arcane/Enchantment)
 + Returning Arrow (Arcane/Metallic/Sorcery)
 + Time Dilation (Arcane/Enchantment)
 + Wild Hunt (Nature/Translocation/Enchantment)
