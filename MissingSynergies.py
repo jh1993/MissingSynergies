@@ -8803,7 +8803,7 @@ class DyingStar(Upgrade):
     
     def get_description(self):
         return ("Each turn, deal [fire] damage to all units.\n"
-                "The damage starts at [{damage}:damage], and decreases by 1 per tile away from you, to a minimum of 1. It penetrates [fire] resistance by an amount equal to your percentage of missing HP.\n"
+                "The damage starts at [{damage}:damage], and decreases by 1 per tile away from you, to a minimum of 2. It penetrates [fire] resistance by an amount equal to your percentage of missing HP.\n"
                 "The maximum damage benefits from your bonuses to [damage].\n"
                 "This skill does not activate when there are no enemies on the level, but otherwise cannot be paused.").format(**self.fmt_dict())
 
@@ -8813,7 +8813,7 @@ class DyingStar(Upgrade):
         max_damage = self.get_stat("damage")
         penetration = math.ceil(100*(self.owner.max_hp - self.owner.cur_hp)/self.owner.max_hp)
         for unit in list(self.owner.level.units):
-            damage = max(1, max_damage - math.floor(distance(self.owner, unit)))
+            damage = max(2, max_damage - math.floor(distance(self.owner, unit)))
             unit.deal_damage(damage, Tags.Fire, self, penetration=penetration)
 
 class CantripAdept(Upgrade):
