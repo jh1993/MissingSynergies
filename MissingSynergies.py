@@ -13107,7 +13107,7 @@ class PoisonHatcheryBuff(Buff):
         for p in Bolt(self.owner.level, poison.owner, self.owner):
             self.owner.level.show_effect(p.x, p.y, Tags.Poison, minor=True)
             yield
-        duration = poison.turns_left//10
+        duration = math.ceil(poison.turns_left/10)
         if self.spell.get_stat("full") and random.random() < 0.1:
             duration = poison.turns_left
         poison.turns_left -= duration
