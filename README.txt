@@ -105,6 +105,7 @@ Level 6:
 + Frigid Famine (Dark/Ice/Enchantment)
 + High Sorcery (Fire/Lightning/Ice/Sorcery)
 + Mutant Cyclops (Arcane/Conjuration)
++ Poison Hatchery (Dragon/Nature/Enchantment/Conjuration)
 + Pureglass Knight (Holy/Arcane/Conjuration)
 + Quantum Overlay (Arcane/Chaos/Enchantment)
 + Raise Dracolich (Dragon/Dark/Enchantment/Conjuration)

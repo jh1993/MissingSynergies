@@ -1614,7 +1614,7 @@ class DraconianBrutality(Upgrade):
         self.name = "Draconian Brutality"
         self.level = 5
         self.tags = [Tags.Dragon, Tags.Nature, Tags.Translocation]
-        self.description = ("Each of your [dragon] minions has its basic melee attack replaced by a swipe attack that deals the same damage, but hits in an arc, and does not damage allies.\nIf it has a breath weapon and melee attack, it also gains a dive attack that has the same melee damage, and the same range as its breath weapon.")
+        self.description = ("Each of your [dragon] minions' basic melee now attacks an additional time.\nIf it has a breath weapon and melee attack, it also gains a dive attack that has the same melee damage, and the same range as its breath weapon.")
         self.global_triggers[EventOnUnitAdded] = self.on_unit_added
         self.asset = ["MissingSynergies", "Icons", "draconian_brutality"]
     
@@ -1623,26 +1623,19 @@ class DraconianBrutality(Upgrade):
         if are_hostile(self.owner, evt.unit) or Tags.Dragon not in evt.unit.tags:
             return
         
-        melee_index = None
         melee_damage = None
         breath_range = None
 
-        for i, spell in enumerate(evt.unit.spells):
+        for spell in evt.unit.spells:
             if isinstance(spell, SimpleMeleeAttack):
-                melee_index = i
+                spell.attacks += 1
                 melee_damage = spell.damage
             elif isinstance(spell, BreathWeapon):
                 breath_range = spell.range
 
-        if melee_index is None:
+        if melee_damage is None or breath_range is None:
             return
-        swipe = DragonSwipe(melee_damage)
-        swipe.caster = evt.unit
-        swipe.owner = evt.unit
-        evt.unit.spells[melee_index] = swipe
         
-        if breath_range is None:
-            return
         dive = LeapAttack(melee_damage, breath_range)
         dive.name = "Dive"
         dive.caster = evt.unit
@@ -13076,6 +13069,173 @@ class RealityFeintSpell(Spell):
     def cast_instant(self, x, y):
         self.owner.apply_buff(RealityFeintBuff(self))
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell])
+class PoisonBreath(BreathWeapon):
+
+    def __init__(self, spell):
+        BreathWeapon.__init__(self)
+        self.name = "Poison Breath"
+        self.damage_type = Tags.Poison
+        self.damage = spell.get_stat("breath_damage")
+        self.range = spell.get_stat("minion_range")
+        self.duration = spell.get_stat("duration")
+    
+    def get_description(self):
+        return "Deals damage to enemies in a cone. Inflicts poison for %i turns." % self.get_stat("duration")
+
+    def per_square_effect(self, x, y):
+        unit = self.caster.level.get_unit_at(x, y)
+        if not unit or not are_hostile(unit, self.caster):
+            self.caster.level.show_effect(x, y, Tags.Poison)
+        else:
+            unit.deal_damage(self.get_stat("damage"), Tags.Poison, self)
+            unit.apply_buff(Poison(), self.get_stat("duration"))
+
+class PoisonHatcheryBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+    
+    def on_init(self):
+        self.name = "Poison Hatchery"
+        self.color = Tags.Poison.color
+        self.global_triggers[EventOnDeath] = self.on_death
+        self.counter = 0
+
+    def absorb(self, poison):
+        for p in Bolt(self.owner.level, poison.owner, self.owner):
+            self.owner.level.show_effect(p.x, p.y, Tags.Poison, minor=True)
+            yield
+        duration = poison.turns_left//10
+        if self.spell.get_stat("full") and random.random() < 0.1:
+            duration = poison.turns_left
+        poison.turns_left -= duration
+        if poison.turns_left <= 0:
+            poison.owner.remove_buff(poison)
+        self.counter += duration
+        self.try_summon()
+    
+    def try_summon(self):
+        greater = self.spell.get_stat("greater")
+        while self.counter >= 100:
+            self.counter -= 100
+            if random.random() < 0.5:
+                unit = self.spell.get_snake()
+            else:
+                if random.random() < 0.5:
+                    unit = self.spell.get_drake(massive=(random.random() < 0.5) if greater else False)
+                else:
+                    unit = self.spell.get_wyrm(broodmother=(random.random() < 0.5) if greater else False)
+            self.spell.summon(unit, radius=5)
+
+    def on_death(self, evt):
+        if distance(evt.unit, self.owner) > self.spell.get_stat("radius"):
+            return
+        poison = evt.unit.get_buff(Poison)
+        if not poison:
+            return
+        self.owner.level.queue_spell(self.absorb(poison))
+
+    def on_advance(self):
+        for u in self.owner.level.get_units_in_ball(self.owner, self.spell.get_stat("radius")):
+            poison = u.get_buff(Poison)
+            if not poison:
+                continue
+            self.owner.level.queue_spell(self.absorb(poison))
+
+class PoisonHatcherySpell(Spell):
+
+    def on_init(self):
+        self.name = "Poison Hatchery"
+        self.asset = ["MissingSynergies", "Icons", "poison_hatchery"]
+        self.tags = [Tags.Nature, Tags.Dragon, Tags.Enchantment, Tags.Conjuration]
+        self.level = 6
+        self.max_charges = 2
+        self.range = 0
+
+        self.duration = 10
+        self.minion_range = 7
+        self.minion_damage = 8
+        self.breath_damage = 14
+        self.minion_health = 75
+        self.radius = 7
+
+        self.upgrades["radius"] = (3, 2)
+        self.upgrades["duration"] = (10, 2)
+        self.upgrades["full"] = (1, 4, "Full Absorption", "This spell now has a 10% chance each time to absorb all of the [poison] duration from each affected unit.")
+        self.upgrades["greater"] = (1, 5, "Greater Dragons", "Each drake summoned by this spell now has a 50% chance to be a massive drake, which has more HP, damage, range, and wider breath weapons.\nEach wyrm summoned by this spell now has a 50% chance to be a wyrm broodmother, which has more HP, and a 5% chance to spawn a wyrm each turn.")
+        self.upgrades["dragon_mage"] = (1, 6, "Dragon Mage", "Summoned drakes and wyrms can cast Poison Sting with a 3 turn cooldown.\nThis Poison Sting gains all of your upgrades and bonuses.")
+
+    def get_description(self):
+        return ("Each turn for [{duration}_turns:duration], you absorb 10% of the [poison] duration from each [poisoned] unit in a [{radius}_tile:radius] radius, reducing it by the same amount. A [poisoned] unit that dies in this radius will have the same done to it.\n"
+                "For every [100_turns:duration] of [poison] you absorb, which has a 50% chance to be a poison-touched giant snake, 25% chance to be a poison drake, and 25% chance to be a poison wyrm.\n"
+                "All are [living] [nature] minions with [poison] immunity and the ability to inflict [poison]. Drakes and wyrms are [dragon] minions with breath weapons that have a range of [{minion_range}_tiles:minion_range] and do not damage allies.").format(**self.fmt_dict())
+
+    def get_snake(self):
+        unit = SnakeGiant()
+        apply_minion_bonuses(self, unit)
+        unit.resists[Tags.Ice] = 0
+        unit.tags.append(Tags.Poison)
+        unit.buffs = [TouchedBySorcery(Tags.Poison, self)]
+        unit.spells[0].buff_duration = self.get_stat("duration")
+        return unit
+
+    def get_drake(self, massive=False):
+        unit = Unit()
+        unit.name = "Poison Drake"
+        unit.asset = ["MissingSynergies", "Units", "poison_drake"]
+        unit.max_hp = self.get_stat("minion_health", base=45)
+        unit.tags = [Tags.Dragon, Tags.Living, Tags.Nature, Tags.Poison]
+        unit.resists[Tags.Poison] = 100
+        unit.flying = True
+        unit.spells = [PoisonBreath(self), SimpleMeleeAttack(self.get_stat("minion_damage", base=8))]
+        if massive:
+            unit.name = "Massive Poison Drake"
+            unit.asset[2] += "_massive"
+            unit.max_hp += 90
+            unit.spells[0].angle = math.pi/4.0
+            unit.spells[0].range += 2
+            unit.spells[0].damage += 4
+            unit.spells[1].damage += self.minion_damage
+        if self.get_stat("dragon_mage"):
+            spell = PoisonSting()
+            spell.caster = unit
+            spell.owner = unit
+            spell.statholder = self.caster
+            spell.max_charges = 0
+            spell.cur_charges = 0
+            spell.cool_down = 3
+            unit.spells.insert(1, spell)
+        return unit
+    
+    def get_wyrm(self, broodmother=False):
+        unit = Unit()
+        unit.name = "Poison Wyrm"
+        unit.asset = ["MissingSynergies", "Units", "wyrm_poison"]
+        unit.max_hp = self.get_stat("minion_health")
+        unit.tags = [Tags.Dragon, Tags.Living, Tags.Nature, Tags.Poison]
+        unit.resists[Tags.Poison] = 100
+        unit.spells = [PoisonBreath(self), SimpleMeleeAttack(self.get_stat("minion_damage"), trample=True)]
+        unit.buffs = [RegenBuff(8)]
+        if broodmother:
+            unit.name = "Poison Wyrm Broodmother"
+            unit.asset[2] += "_broodmother"
+            unit.max_hp += 150
+            unit.buffs.append(GeneratorBuff(lambda: self.get_wyrm(), 0.05, apply_bonuses=False))
+        if self.get_stat("dragon_mage"):
+            spell = PoisonSting()
+            spell.caster = unit
+            spell.owner = unit
+            spell.statholder = self.caster
+            spell.max_charges = 0
+            spell.cur_charges = 0
+            spell.cool_down = 3
+            unit.spells.insert(1, spell)
+        return unit
+
+    def cast_instant(self, x, y):
+        self.caster.apply_buff(PoisonHatcheryBuff(self), self.get_stat("duration"))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell])
 
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture])
