@@ -13118,6 +13118,7 @@ class PoisonHatcheryBuff(Buff):
     
     def try_summon(self):
         greater = self.spell.get_stat("greater")
+        radius = self.spell.get_stat("radius")
         while self.counter >= 100:
             self.counter -= 100
             if random.random() < 0.5:
@@ -13127,7 +13128,7 @@ class PoisonHatcheryBuff(Buff):
                     unit = self.spell.get_drake(massive=(random.random() < 0.5) if greater else False)
                 else:
                     unit = self.spell.get_wyrm(broodmother=(random.random() < 0.5) if greater else False)
-            self.spell.summon(unit, radius=5)
+            self.spell.summon(unit, radius=radius)
 
     def on_death(self, evt):
         if distance(evt.unit, self.owner) > self.spell.get_stat("radius"):
