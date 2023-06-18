@@ -13080,11 +13080,11 @@ class PoisonBreath(BreathWeapon):
         self.duration = spell.get_stat("duration")
     
     def get_description(self):
-        return "Deals damage to enemies in a cone. Inflicts poison for %i turns." % self.get_stat("duration")
+        return "Deals damage in a cone. Inflicts poison for %i turns." % self.get_stat("duration")
 
     def per_square_effect(self, x, y):
         unit = self.caster.level.get_unit_at(x, y)
-        if not unit or not are_hostile(unit, self.caster):
+        if not unit:
             self.caster.level.show_effect(x, y, Tags.Poison)
         else:
             unit.deal_damage(self.get_stat("damage"), Tags.Poison, self)
@@ -13101,6 +13101,7 @@ class PoisonHatcheryBuff(Buff):
         self.color = Tags.Poison.color
         self.global_triggers[EventOnDeath] = self.on_death
         self.counter = 0
+        self.resists[Tags.Poison] = 100
 
     def absorb(self, poison):
         for p in Bolt(self.owner.level, poison.owner, self.owner):
@@ -13143,6 +13144,12 @@ class PoisonHatcheryBuff(Buff):
                 continue
             self.owner.level.queue_spell(self.absorb(poison))
 
+    def on_unapplied(self):
+        if random.random() >= self.counter/100:
+            return
+        self.counter = 100
+        self.try_summon()
+
 class PoisonHatcherySpell(Spell):
 
     def on_init(self):
@@ -13167,9 +13174,9 @@ class PoisonHatcherySpell(Spell):
         self.upgrades["dragon_mage"] = (1, 6, "Dragon Mage", "Summoned drakes and wyrms can cast Poison Sting with a 3 turn cooldown.\nThis Poison Sting gains all of your upgrades and bonuses.")
 
     def get_description(self):
-        return ("Each turn for [{duration}_turns:duration], you absorb 10% of the [poison] duration from each [poisoned] unit in a [{radius}_tile:radius] radius, reducing it by the same amount. A [poisoned] unit that dies in this radius will have the same done to it.\n"
-                "For every [100_turns:duration] of [poison] you absorb, which has a 50% chance to be a poison-touched giant snake, 25% chance to be a poison drake, and 25% chance to be a poison wyrm.\n"
-                "All are [living] [nature] minions with [poison] immunity and the ability to inflict [poison]. Drakes and wyrms are [dragon] minions with breath weapons that have a range of [{minion_range}_tiles:minion_range] and do not damage allies.").format(**self.fmt_dict())
+        return ("For [{duration}_turns:duration], you gain [100_poison:poison] resistance, and absorb 10% of the [poison] duration from each [poisoned] unit in a [{radius}_tile:radius] radius each turn, reducing it by the same amount. A [poisoned] unit that dies in this radius will have the same done to it.\n"
+                "For every [100_turns:duration] of [poison] you absorb, you summon a minion, which has a 50% chance to be a poison-touched giant snake, 25% chance to be a poison drake, and 25% chance to be a poison wyrm.\n"
+                "All are [living] [nature] minions with [poison] immunity and the ability to inflict [poison]. Drakes and wyrms are [dragon] minions with breath weapons that have a range of [{minion_range}_tiles:minion_range].").format(**self.fmt_dict())
 
     def get_snake(self):
         unit = SnakeGiant()
