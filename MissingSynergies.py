@@ -13094,15 +13094,15 @@ class PoisonBreath(BreathWeapon):
         self.duration = spell.get_stat("duration")
     
     def get_description(self):
-        return "Deals damage in a cone. Inflicts poison for %i turns." % self.get_stat("duration")
+        return "Inflicts poison for %i turns and deals damage in a cone." % self.get_stat("duration")
 
     def per_square_effect(self, x, y):
         unit = self.caster.level.get_unit_at(x, y)
         if not unit:
             self.caster.level.show_effect(x, y, Tags.Poison)
         else:
-            unit.deal_damage(self.get_stat("damage"), Tags.Poison, self)
             unit.apply_buff(Poison(), self.get_stat("duration"))
+            unit.deal_damage(self.get_stat("damage"), Tags.Poison, self)
 
 class PoisonHatcheryBuff(Buff):
 
@@ -13117,13 +13117,16 @@ class PoisonHatcheryBuff(Buff):
         self.counter = 0
         self.resists[Tags.Poison] = 100
 
-    def absorb(self, poison):
+    def absorb(self, poison, death=False):
         for p in Bolt(self.owner.level, poison.owner, self.owner):
             self.owner.level.show_effect(p.x, p.y, Tags.Poison, minor=True)
             yield
-        duration = math.ceil(poison.turns_left/4)
-        if self.spell.get_stat("full") and random.random() < 0.25:
-            duration = poison.turns_left
+        if death:
+            duration = min(poison.owner.max_hp, poison.turns_left)
+        else:
+            duration = math.ceil(poison.turns_left/4)
+            if self.spell.get_stat("full") and random.random() < 0.25:
+                duration = poison.turns_left
         poison.turns_left -= duration
         if poison.turns_left <= 0:
             poison.owner.remove_buff(poison)
@@ -13145,12 +13148,12 @@ class PoisonHatcheryBuff(Buff):
             self.spell.summon(unit, radius=radius)
 
     def on_death(self, evt):
-        if distance(evt.unit, self.owner) > self.spell.get_stat("radius"):
+        if not self.spell.get_stat("full") or distance(evt.unit, self.owner) > self.spell.get_stat("radius"):
             return
         poison = evt.unit.get_buff(Poison)
         if not poison:
             return
-        self.owner.level.queue_spell(self.absorb(poison))
+        self.owner.level.queue_spell(self.absorb(poison, death=True))
 
     def on_advance(self):
         for u in self.owner.level.get_units_in_ball(self.owner, self.spell.get_stat("radius")):
@@ -13171,7 +13174,7 @@ class PoisonHatcherySpell(Spell):
         self.name = "Poison Hatchery"
         self.asset = ["MissingSynergies", "Icons", "poison_hatchery"]
         self.tags = [Tags.Nature, Tags.Dragon, Tags.Enchantment, Tags.Conjuration]
-        self.level = 5
+        self.level = 4
         self.max_charges = 3
         self.range = 0
 
@@ -13184,12 +13187,12 @@ class PoisonHatcherySpell(Spell):
 
         self.upgrades["radius"] = (3, 2)
         self.upgrades["duration"] = (10, 2)
-        self.upgrades["full"] = (1, 3, "Full Absorption", "This spell now has a 25% chance each time to absorb all of the [poison] duration from each affected unit.")
+        self.upgrades["full"] = (1, 4, "Full Absorption", "This spell now has a 25% chance each time to absorb all of the [poison] duration from each affected unit.\nWhen a [poisoned] unit dies in this spell's radius, you now absorb all of its [poison] duration, up to an amount equal to its max HP.")
         self.upgrades["greater"] = (1, 5, "Greater Dragons", "Each drake summoned by this spell now has a 50% chance to be a massive drake, which has more HP, damage, range, and wider breath weapons.\nEach wyrm summoned by this spell now has a 50% chance to be a wyrm broodmother, which has more HP, and a 5% chance to spawn a wyrm each turn.")
         self.upgrades["dragon_mage"] = (1, 6, "Dragon Mage", "Summoned drakes and wyrms can cast Poison Sting with a 3 turn cooldown.\nThis Poison Sting gains all of your upgrades and bonuses.")
 
     def get_description(self):
-        return ("For [{duration}_turns:duration], you gain [100_poison:poison] resistance, and absorb 25% of the [poison] duration from each [poisoned] unit in a [{radius}_tile:radius] radius each turn, reducing it by the same amount. A [poisoned] unit that dies in this radius will have the same done to it.\n"
+        return ("For [{duration}_turns:duration], you gain [100_poison:poison] resistance, and absorb 25% of the [poison] duration from each [poisoned] unit in a [{radius}_tile:radius] radius each turn, reducing it by the same amount.\n"
                 "For every [100_turns:duration] of [poison] you absorb, you summon a minion, which has a 50% chance to be a poison-touched giant snake, 25% chance to be a poison drake, and 25% chance to be a poison wyrm.\n"
                 "All are [living] [nature] minions with [poison] immunity and the ability to inflict [poison]. Drakes and wyrms are [dragon] minions with breath weapons that have a range of [{minion_range}_tiles:minion_range].").format(**self.fmt_dict())
 
