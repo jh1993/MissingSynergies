@@ -10573,12 +10573,20 @@ class ChaosCloning(Upgrade):
         self.description = "The first time you summon a minion each turn, you also summon a chaos spawn near that minion, which has the same max HP, [SH:shields], tags, and resistances.\nThe chaos spawn has a melee attack that deals [physical] damage equal to 1/4 of its initial max HP, and melee retaliation dealing [fire] and [lightning] damage equal to 1/8 of its initial max HP.\nThis effect refreshes before the beginning of your turn."
         self.triggered = False
         self.global_triggers[EventOnUnitAdded] = self.on_unit_added
+        # This is necessary to not trigger twice when on minions that are summoned when you enter a realm.
+        self.just_entered = False
     
     def on_pre_advance(self):
-        self.triggered = False
+        if self.just_entered:
+            self.just_entered = False
+        else:
+            self.triggered = False
     
     def on_unit_added(self, evt):
-        if self.triggered or evt.unit.is_player_controlled or are_hostile(evt.unit, self.owner):
+        if evt.unit.is_player_controlled:
+            self.just_entered = True
+            return
+        if self.triggered or are_hostile(evt.unit, self.owner):
             return
         self.triggered = True
         self.owner.level.queue_spell(self.do_summon(evt.unit))
