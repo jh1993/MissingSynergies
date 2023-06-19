@@ -1011,6 +1011,9 @@ class PrismShellSpell(Spell):
         if unit:
             unit.apply_buff(PrismShellBuff(self), self.get_stat("duration"))
 
+    def get_impacted_tiles(self, x, y):
+        return [Point(x, y)]
+
 class CrystalHammerSpell(Spell):
 
     def on_init(self):
@@ -4463,7 +4466,9 @@ class GatheringStormSpell(Spell):
             health = math.floor(cloud_damage*0.2)
             existing.max_hp += health
             existing.deal_damage(-health, Tags.Heal, self)
-            existing.turns_to_death += math.floor(cloud_duration*0.1)
+            # In case of Heart of Winter.
+            if existing.turns_to_death is not None:
+                existing.turns_to_death += math.floor(cloud_duration*0.1)
             return
 
         unit = Unit()
@@ -6438,7 +6443,8 @@ class DeathMetalSpell(Spell):
                     dealt = unit.deal_damage(1, Tags.Physical, self)
                     if dealt:
                         unit.apply_buff(Stun(), 1)
-            elif unit.source is self:
+            # In case of Heart of Winter.
+            elif unit.source is self and unit.turns_to_death is not None:
                 unit.turns_to_death += 1
 
         yield
@@ -13115,8 +13121,8 @@ class PoisonHatcheryBuff(Buff):
         for p in Bolt(self.owner.level, poison.owner, self.owner):
             self.owner.level.show_effect(p.x, p.y, Tags.Poison, minor=True)
             yield
-        duration = math.ceil(poison.turns_left/10)
-        if self.spell.get_stat("full") and random.random() < 0.1:
+        duration = math.ceil(poison.turns_left/4)
+        if self.spell.get_stat("full") and random.random() < 0.25:
             duration = poison.turns_left
         poison.turns_left -= duration
         if poison.turns_left <= 0:
@@ -13165,8 +13171,8 @@ class PoisonHatcherySpell(Spell):
         self.name = "Poison Hatchery"
         self.asset = ["MissingSynergies", "Icons", "poison_hatchery"]
         self.tags = [Tags.Nature, Tags.Dragon, Tags.Enchantment, Tags.Conjuration]
-        self.level = 6
-        self.max_charges = 2
+        self.level = 5
+        self.max_charges = 3
         self.range = 0
 
         self.duration = 10
@@ -13178,12 +13184,12 @@ class PoisonHatcherySpell(Spell):
 
         self.upgrades["radius"] = (3, 2)
         self.upgrades["duration"] = (10, 2)
-        self.upgrades["full"] = (1, 4, "Full Absorption", "This spell now has a 10% chance each time to absorb all of the [poison] duration from each affected unit.")
+        self.upgrades["full"] = (1, 3, "Full Absorption", "This spell now has a 25% chance each time to absorb all of the [poison] duration from each affected unit.")
         self.upgrades["greater"] = (1, 5, "Greater Dragons", "Each drake summoned by this spell now has a 50% chance to be a massive drake, which has more HP, damage, range, and wider breath weapons.\nEach wyrm summoned by this spell now has a 50% chance to be a wyrm broodmother, which has more HP, and a 5% chance to spawn a wyrm each turn.")
         self.upgrades["dragon_mage"] = (1, 6, "Dragon Mage", "Summoned drakes and wyrms can cast Poison Sting with a 3 turn cooldown.\nThis Poison Sting gains all of your upgrades and bonuses.")
 
     def get_description(self):
-        return ("For [{duration}_turns:duration], you gain [100_poison:poison] resistance, and absorb 10% of the [poison] duration from each [poisoned] unit in a [{radius}_tile:radius] radius each turn, reducing it by the same amount. A [poisoned] unit that dies in this radius will have the same done to it.\n"
+        return ("For [{duration}_turns:duration], you gain [100_poison:poison] resistance, and absorb 25% of the [poison] duration from each [poisoned] unit in a [{radius}_tile:radius] radius each turn, reducing it by the same amount. A [poisoned] unit that dies in this radius will have the same done to it.\n"
                 "For every [100_turns:duration] of [poison] you absorb, you summon a minion, which has a 50% chance to be a poison-touched giant snake, 25% chance to be a poison drake, and 25% chance to be a poison wyrm.\n"
                 "All are [living] [nature] minions with [poison] immunity and the ability to inflict [poison]. Drakes and wyrms are [dragon] minions with breath weapons that have a range of [{minion_range}_tiles:minion_range].").format(**self.fmt_dict())
 
