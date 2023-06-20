@@ -6819,13 +6819,11 @@ class CosmicStasisBuff(Buff):
     def on_pre_damaged(self, evt):
         if evt.damage_type != Tags.Ice or evt.damage <= 0 or not are_hostile(evt.unit, self.owner):
             return
-        resisted = max(0, math.floor(evt.damage*min(100, evt.unit.resists[Tags.Ice])/100))
-        if not resisted:
-            return
-        self.owner.level.queue_spell(self.deal_damage(evt.unit, resisted))
+        percentage = 25 + (evt.unit.resists[Tags.Ice]/4 if evt.unit.resists[Tags.Ice] > 0 else 0)
+        self.owner.level.queue_spell(self.deal_damage(evt.unit, math.floor(evt.damage*percentage/100)))
 
     def deal_damage(self, unit, damage):
-        unit.deal_damage(math.floor(damage*self.extension_chance/100), Tags.Arcane, self.spell)
+        unit.deal_damage(damage, Tags.Arcane, self.spell)
         yield
 
     def can_redeal(self, target, source, dtype, already_checked):
@@ -6847,7 +6845,7 @@ class CosmicStasisSpell(Spell):
 
         self.upgrades["duration"] = (5, 3)
         self.upgrades["extension_chance"] = (25, 4, "Extension Chance", "Increase the chance to extend [freeze] duration on enemies by 25%.")
-        self.upgrades["laser"] = (1, 5, "Laser Cooling", "A percentage of all [ice] damage dealt to enemies that is resisted will be redealt as [arcane] damage.\nThe percentage is equal to this spell's chance to extend [freeze] duration per turn.")
+        self.upgrades["laser"] = (1, 5, "Laser Cooling", "25% of all [ice] damage dealt to enemies while Cosmic Stasis is active will be redealt as [arcane] damage.\nThis percentage is increased by 25% of each enemy's [ice] resistance if positive.")
     
     def get_description(self):
         return ("Each turn, the [freeze] duration on each enemy has a [{extension_chance}%:freeze] chance to be extended by [1_turn:duration]. Does not work on enemies that can gain clarity.\n"
