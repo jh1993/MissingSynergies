@@ -896,11 +896,17 @@ class ShadowAssassin(Upgrade):
         self.level = 4
         self.damage = 12
         self.owner_triggers[EventOnMoved] = self.on_moved
+        self.owner_triggers[EventOnUnitAdded] = self.on_unit_added
     
-    def on_applied(self, owner):
-        # Initialize old position
+    def record_location(self):
         self.old_x = self.owner.x
         self.old_y = self.owner.y
+
+    def on_unit_added(self, evt):
+        self.record_location()
+    
+    def on_applied(self, owner):
+        self.record_location()
     
     def get_description(self):
         return ("Whenever you teleport, you deal [{damage}_dark:dark], [{damage}_physical:physical], and [{damage}_poison:poison] damage to a random adjacent enemy. Most forms of movement other than a unit's movement action count as teleportation.\n"
@@ -924,8 +930,7 @@ class ShadowAssassin(Upgrade):
             for dtype in [Tags.Dark, Tags.Physical, Tags.Poison]:
                 target.deal_damage(damage, dtype, self)
 
-        self.old_x = self.owner.x
-        self.old_y = self.owner.y
+        self.record_location()
 
     def can_double_damage(self, target):
         return target.has_buff(BlindBuff) or target.has_buff(Stun) or not self.owner.level.can_see(target.x, target.y, self.old_x, self.old_y) or random.random() >= 2/distance(target, Point(self.old_x, self.old_y))
@@ -13259,6 +13264,62 @@ class PoisonHatcherySpell(Spell):
     def cast_instant(self, x, y):
         self.caster.apply_buff(PoisonHatcheryBuff(self), self.get_stat("duration"))
 
+class BatEscape(Upgrade):
+
+    def on_init(self):
+        self.name = "Bat Escape"
+        self.asset = ["MissingSynergies", "Icons", "bat_escape"]
+        self.tags = [Tags.Translocation, Tags.Dark, Tags.Fire, Tags.Nature]
+        self.level = 4
+        self.radius = 3
+        self.minion_health = 13
+        self.minion_damage = 3
+        self.minion_range = 3
+        self.duration = 3
+        self.owner_triggers[EventOnMoved] = self.on_moved
+        self.owner_triggers[EventOnUnitAdded] = self.on_unit_added
+    
+    def record_location(self):
+        self.old_x = self.owner.x
+        self.old_y = self.owner.y
+
+    def on_unit_added(self, evt):
+        self.record_location()
+    
+    def on_applied(self, owner):
+        self.record_location()
+    
+    def get_description(self):
+        return ("Whenever you teleport, you summon a robin at your previous location, and [blind] all enemies in a [{radius}_tile:radius] burst around that location for [{duration}_turns:duration]. Most forms of movement other than a unit's movement action count as teleportation.\n"
+                "The robin is a [fire] [nature] [living] flying minion with [{minion_health}_HP:minion_health]. It has an ash bolt with a range of [{minion_range}_tiles:minion_range] that randomly deals [{minion_damage}_fire:fire], [{minion_damage}_dark:dark], or [{minion_damage}_poison:poison] damage and inflicts [{duration}_turns:duration] of [blind].").format(**self.fmt_dict())
+    
+    def on_moved(self, evt):
+        if evt.teleport:    
+            self.owner.level.queue_spell(self.do_summon(self.old_x, self.old_y))
+        self.record_location()
+
+    def do_summon(self, x, y):
+
+        unit = Unit()
+        unit.name = "Robin"
+        unit.asset = ["MissingSynergies", "Units", "robin"]
+        unit.max_hp = self.get_stat("minion_health")
+        unit.flying = True
+        unit.tags = [Tags.Living, Tags.Fire, Tags.Dark, Tags.Nature]
+        unit.resists[Tags.Fire] = 50
+        unit.resists[Tags.Dark] = 50
+        duration = self.get_stat("duration")
+        unit.spells = [SimpleRangedAttack(name="Ash Bolt", damage=self.get_stat("minion_damage"), damage_type=[Tags.Fire, Tags.Dark, Tags.Poison], range=self.get_stat("minion_range"), buff=BlindBuff, buff_duration=duration)]
+        self.summon(unit, Point(x, y), radius=5)
+
+        for stage in Burst(self.owner.level, Point(x, y), self.get_stat("radius")):
+            for p in stage:
+                self.owner.level.show_effect(p.x, p.y, random.choice([Tags.Fire, Tags.Dark, Tags.Poison]), minor=True)
+                unit = self.owner.level.get_unit_at(p.x, p.y)
+                if unit and are_hostile(unit, self.owner):
+                    unit.apply_buff(BlindBuff(), duration)
+            yield
+
 all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell])
 
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture, BatEscape])

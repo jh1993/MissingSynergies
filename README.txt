@@ -135,6 +135,7 @@ Level 7:
 Skills:
 
 Level 4:
++ Bat Escape (Fire/Dark/Nature/Translocation)
 + Blood Fodder (Dark/Nature)
 + Cantrip Adept (Sorcery)
 + Chaos Trick (Chaos/Fire/Lightning)
