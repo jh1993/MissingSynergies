@@ -139,6 +139,7 @@ Level 4:
 + Blood Fodder (Dark/Nature)
 + Cantrip Adept (Sorcery)
 + Chaos Trick (Chaos/Fire/Lightning)
++ Eye Bleach (Holy)
 + Flesh Loan (Dark/Nature)
 + Fulgurite Alchemy (Arcane/Lightning)
 + Nuclear Winter (Lightning/Ice/Nature)
