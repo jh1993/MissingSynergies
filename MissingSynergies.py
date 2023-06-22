@@ -13274,7 +13274,7 @@ class BatEscape(Upgrade):
         self.radius = 3
         self.minion_health = 13
         self.minion_damage = 3
-        self.minion_range = 3
+        self.minion_range = 5
         self.duration = 3
         self.owner_triggers[EventOnMoved] = self.on_moved
         self.owner_triggers[EventOnUnitAdded] = self.on_unit_added
