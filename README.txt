@@ -186,12 +186,14 @@ Level 6:
 + Soul Investiture (Dark/Arcane)
 
 Level 7:
++ Antimatter Infusion (Holy/Dark)
 + Ataraxia (Sorcery/Enchantment/Conjuration)
 + Breath of Annihilation (Dragon/Chaos)
 + Dying Star (Fire)
 + Exorbitant Power (Enchantment)
 + Luminous Muse (Holy/Arcane/Conjuration)
 + Redheart Spider (Holy/Nature/Dark/Conjuration)
++ Warp Strike (Arcane/Translocation)
 + Whispers of Oblivion (Dark/Chaos)
 
 ---

@@ -8314,53 +8314,19 @@ class QuantumOverlayBuff(Buff):
     def on_init(self):
         self.name = "Quantum Overlay"
         self.color = Tags.Arcane.color
-        self.stack_type = STACK_REPLACE
-        self.overlays = self.spell.get_stat("overlays")
+        self.stack_type = STACK_DURATION
         self.global_triggers[EventOnDamaged] = self.on_damaged
-        self.group = self.spell.get_stat("group")
-        self.antimatter = self.spell.get_stat("antimatter")
-        if self.spell.get_stat("warp"):
-            self.global_bonuses["requires_los"] = -1
-            self.owner_triggers[EventOnSpellCast] = self.on_spell_cast
 
     def on_damaged(self, evt):
-
-        if evt.unit is self.owner or (self.group and not are_hostile(evt.unit, self.owner)):
-            for _ in range(self.overlays):
-                self.deduct_hp(evt.unit, math.ceil(evt.damage/4))
-        
+        if evt.unit is self.owner or (self.spell.get_stat("group") and not are_hostile(evt.unit, self.owner)):
+            if random.random() < 0.25:
+                self.deduct_hp(evt.unit, evt.damage)
         if not evt.source or not evt.source.owner:
             return
-        
-        if evt.source.owner is not self.owner and (not self.group or are_hostile(evt.source.owner, self.owner)):
+        if evt.source.owner is not self.owner and (not self.spell.get_stat("group") or are_hostile(evt.source.owner, self.owner)):
             return
-
-        for _ in range(self.overlays):
-            self.deduct_hp(evt.unit, math.ceil(evt.damage/2))
-        if self.antimatter:
-            self.deduct_hp(evt.unit, self.spell.get_stat("damage", base=20))
-            self.deduct_hp(evt.source.owner, 1)
-
-    def on_spell_cast(self, evt):
-
-        if self.owner.level.can_see(evt.x, evt.y, self.owner.x, self.owner.y) or not evt.spell.requires_los:
-            return
-
-        bonus_total = self.owner.spell_bonuses[type(evt.spell)].get("requires_los", 0)
-        # Add tag bonuses
-        for tag in evt.spell.tags:
-            bonus_total += self.owner.tag_bonuses[tag].get("requires_los", 0)
-        # Add global bonus
-        bonus_total += self.owner.global_bonuses.get("requires_los", 0)
-        if bonus_total < -1:
-            return
-
-        total_level = evt.spell.level
-        for buff in self.owner.buffs:
-            if not isinstance(buff, Upgrade) or buff.prereq is not evt.spell or isinstance(buff, ShrineBuff):
-                continue
-            total_level += buff.level
-        self.deduct_hp(self.owner, total_level)
+        if random.random() < 0.5:
+            self.deduct_hp(evt.unit, evt.damage)
 
     def deduct_hp(self, unit, hp):
         unit.cur_hp -= hp
@@ -8376,42 +8342,23 @@ class QuantumOverlaySpell(Spell):
         self.level = 6
         self.max_charges = 3
         self.range = 0
-
         self.duration = 5
-        self.overlays = 1
 
         self.upgrades["duration"] = (5, 3)
-        self.upgrades["overlays"] = (1, 5, "Double Overlay", "Quantum Overlay will now deduct HP an additional time, to both you and enemies.")
+        self.upgrades["max_charges"] = (6, 3)
         self.upgrades["group"] = (1, 5, "Group Overlay", "Quantum Overlay now also affects damage dealt to and by your minions.")
-        self.upgrades["antimatter"] = (1, 7, "Antimatter Infusion", "Whenever you deal damage, Quantum Overlay now also deducts [{damage}:damage] HP from the target, and 1 HP from you.\nThe HP deducted from the target benefits from bonuses to [damage].")
-        self.upgrades["warp"] = (1, 4, "Warp Strike", "While Quantum Overlay is active, all of your spells no longer require line of sight.\nWhenever you cast a spell targeting a tile not in line of sight, if that spell does not have blindcasting from any other source, you lose current HP equal to the spell's level plus the total levels of all of its upgrades.\nThe Group Overlay upgrade will not apply this effect to your minions.")
-    
-    def fmt_dict(self):
-        stats = Spell.fmt_dict(self)
-        stats["damage"] = self.get_stat("damage", base=20)
-        return stats
+        self.upgrades["hubris"] = (1, 5, "Utter Hubris", "Quantum Overlay now stacks with itself without limit.")
 
     def get_description(self):
         return ("The existence of another you from a parallel world is partially overlaid onto yours.\n"
-                "Whenever you deal damage, this spell deducts current HP from the target equal to 50% of that damage. Whenever you take damage, this spell deducts current HP from you equal to 25% of that damage. Both percentages round up.\n"
-                "Lasts [{duration}_turns:duration].\n"
-                "Casting this spell while the effect is active will cancel the effect and not consume a charge. This can be done even if the spell has no charges left.").format(**self.fmt_dict())
-
-    def can_pay_costs(self):
-        if self.caster.has_buff(QuantumOverlayBuff) and self.cur_charges == 0:
-            return True
-        return Spell.can_pay_costs(self)
-    
-    def pay_costs(self):
-        if not self.caster.has_buff(QuantumOverlayBuff):
-            Spell.pay_costs(self)
+                "Whenever you deal damage, this spell has a 50% chance to deduct current HP from the target equal to the damage dealt. Whenever you take damage, this spell has a 25% chance to deduct current HP from you equal to the damage dealt.\n"
+                "Lasts [{duration}_turns:duration].").format(**self.fmt_dict())
 
     def cast_instant(self, x, y):
-        existing = self.caster.get_buff(QuantumOverlayBuff)
-        if existing:
-            self.caster.remove_buff(existing)
-        else:
-            self.caster.apply_buff(QuantumOverlayBuff(self), self.get_stat("duration"))
+        buff = QuantumOverlayBuff(self)
+        if self.get_stat("hubris"):
+            buff.stack_type = STACK_INTENSITY
+        self.caster.apply_buff(buff, self.get_stat("duration"))
 
 class FracturedMemories(Upgrade):
 
@@ -13339,6 +13286,71 @@ class EyeBleach(Upgrade):
             u.deal_damage(buff.turns_left, Tags.Holy, self)
             buff.turns_left = 1
 
+class AntimatterInfusion(Upgrade):
+
+    def on_init(self):
+        self.name = "Antimatter Infusion"
+        self.asset = ["MissingSynergies", "Icons", "antimatter_infusion"]
+        self.tags = [Tags.Holy, Tags.Dark]
+        self.level = 7
+        self.damage = 20
+        self.global_triggers[EventOnDamaged] = self.on_damaged
+    
+    def get_description(self):
+        return ("Whenever an ally deals damage to an enemy, that ally has a chance reduce that enemy's current HP by [{damage}:damage], and its own current HP by 1. The chance is equal to that ally's HP percentage.\n"
+                "The self-inflicted HP reduction from this skill is fixed, and cannot be increased using shrines, skills, or buffs.\n"
+                "The HP reduction inflicted on enemies benefits from bonuses to [damage], but is not considered dealing damage.").format(**self.fmt_dict())
+
+    def on_damaged(self, evt):
+        if not evt.source.owner or are_hostile(evt.source.owner, self.owner) or not are_hostile(evt.unit, self.owner):
+            return
+        if random.random() >= evt.source.owner.cur_hp/evt.source.owner.max_hp:
+            return
+        self.deduct_hp(evt.unit, self.get_stat("damage"))
+        self.deduct_hp(evt.source.owner, 1)
+
+    def deduct_hp(self, unit, amount):
+        unit.cur_hp -= amount
+        if unit.cur_hp <= 0:
+            unit.kill()
+
+class WarpStrike(Upgrade):
+
+    def on_init(self):
+        self.name = "Warp Strike"
+        self.asset = ["MissingSynergies", "Icons", "warp_strike"]
+        self.tags = [Tags.Arcane, Tags.Translocation]
+        self.level = 7
+        self.global_bonuses["requires_los"] = -1
+        self.owner_triggers[EventOnSpellCast] = self.on_spell_cast
+        self.description = "All of your spells no longer require line of sight.\nWhenever you cast a spell targeting a tile not in line of sight, if that spell does not have blindcasting from any other source, you lose current HP equal to the spell's level plus the total levels of all of its upgrades."
+
+    def on_spell_cast(self, evt):
+
+        if self.owner.level.can_see(evt.x, evt.y, self.owner.x, self.owner.y) or not evt.spell.requires_los:
+            return
+
+        bonus_total = self.owner.spell_bonuses[type(evt.spell)].get("requires_los", 0)
+        # Add tag bonuses
+        for tag in evt.spell.tags:
+            bonus_total += self.owner.tag_bonuses[tag].get("requires_los", 0)
+        # Add global bonus
+        bonus_total += self.owner.global_bonuses.get("requires_los", 0)
+        if bonus_total < -1:
+            return
+
+        total_level = evt.spell.level
+        for buff in self.owner.buffs:
+            if not isinstance(buff, Upgrade) or buff.prereq is not evt.spell or isinstance(buff, ShrineBuff):
+                continue
+            total_level += buff.level
+        self.deduct_hp(self.owner, total_level)
+
+    def deduct_hp(self, unit, hp):
+        unit.cur_hp -= hp
+        if unit.cur_hp <= 0:
+            unit.kill()
+
 all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell])
 
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture, BatEscape, EyeBleach])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture, BatEscape, EyeBleach, AntimatterInfusion, WarpStrike])
