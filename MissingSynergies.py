@@ -933,7 +933,7 @@ class ShadowAssassin(Upgrade):
         self.record_location()
 
     def can_double_damage(self, target):
-        return target.has_buff(BlindBuff) or target.has_buff(Stun) or not self.owner.level.can_see(target.x, target.y, self.old_x, self.old_y) or random.random() >= 2/distance(target, Point(self.old_x, self.old_y))
+        return target.has_buff(BlindBuff) or target.has_buff(Stun) or not self.owner.level.can_see(target.x, target.y, self.old_x, self.old_y) or random.random() >= 2/max(1, distance(target, Point(self.old_x, self.old_y)))
 
 class PrismShellBuff(Buff):
     def __init__(self, spell):
