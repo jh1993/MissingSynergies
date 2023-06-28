@@ -4058,6 +4058,20 @@ class Scapegoat(Unit):
             self.kill(trigger_death_event=False)
             self.level.show_effect(self.x, self.y, Tags.Translocation)
 
+class EndlessSufferingBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+
+    def on_init(self):
+        self.description = "On death, summon another scapegoat."
+        self.color = Tags.Dark.color
+        self.owner_triggers[EventOnDeath] = self.on_death
+    
+    def on_death(self, evt):
+        self.owner.level.queue_spell(self.spell.summon_scapegoat(self.owner.x, self.owner.y))
+
 class CallScapegoatSpell(Spell):
 
     def on_init(self):
@@ -4073,13 +4087,13 @@ class CallScapegoatSpell(Spell):
         self.upgrades["max_charges"] = (6, 2)
         self.upgrades["minion_health"] = (20, 3)
         self.upgrades["num_summons"] = (2, 3)
-        self.upgrades["shackle"] = (1, 3, "Shackled Fate", "Scapegoats can no longer be killed by damage.\nWhen at least one scapegoat exists, you can now cast this spell on yourself to instead refund a charge after casting and instantly kill all scapegoats.")
+        self.upgrades["endless"] = (1, 6, "Endless Suffering", "Whenever a scapegoat dies, you now immediately summon another scapegoat to replace it.\nWhen at least one scapegoat exists, you can now cast this spell on yourself to instead refund a charge after casting and instantly remove all scapegoats without killing them.")
 
     def can_cast(self, x, y):
         if not Spell.can_cast(self, x, y):
             return False
         if x == self.caster.x and y == self.caster.y:
-            return self.get_stat("shackle") and [u for u in self.caster.level.units if u.source is self]
+            return self.get_stat("endless") and [u for u in self.caster.level.units if u.source is self]
         else:
             return True
 
@@ -4095,26 +4109,24 @@ class CallScapegoatSpell(Spell):
                 if u.source is not self:
                     continue
                 self.caster.level.show_effect(u.x, u.y, Tags.Translocation)
-                u.kill()
+                u.kill(trigger_death_event=False)
             self.cur_charges = min(self.get_stat("max_charges"), self.cur_charges + 1)
             return
-
-        health = self.get_stat("minion_health")
-        shackle = self.get_stat("shackle")
         for _ in range(self.get_stat("num_summons")):
-            unit = Scapegoat()
-            unit.name = "Scapegoat"
-            unit.asset = ["MissingSynergies", "Units", "scapegoat"]
-            unit.tags = [Tags.Living]
-            unit.max_hp = health
-            unit.flying = True
-            unit.buff_immune = True
-            if shackle:
-                buff = Soulbound(self.caster)
-                buff.buff_type = BUFF_TYPE_PASSIVE
-                buff.description = "Cannot die to damage."
-                unit.buffs.append(buff)
-            self.summon(unit, Point(x, y), radius=5, team=TEAM_ENEMY, sort_dist=False)
+            self.caster.level.queue_spell(self.summon_scapegoat(x, y))
+
+    def summon_scapegoat(self, x, y):
+        unit = Scapegoat()
+        unit.name = "Scapegoat"
+        unit.asset = ["MissingSynergies", "Units", "scapegoat"]
+        unit.tags = [Tags.Living]
+        unit.max_hp = self.get_stat("minion_health")
+        unit.flying = True
+        unit.buff_immune = True
+        if self.get_stat("endless"):
+            unit.buffs = [EndlessSufferingBuff(self)]
+        self.summon(unit, Point(x, y), radius=5, team=TEAM_ENEMY)
+        yield
 
 class FrigidFamineBuff(Buff):
 
