@@ -4681,9 +4681,12 @@ class LiquidMetalBlade(Spell):
 class CloudCondensateBuff(Buff):
 
     def __init__(self, spell):
+        self.spell = spell
         Buff.__init__(self)
+    
+    def on_init(self):
         self.name = "Cloud Condensate"
-        self.duration = spell.get_stat("duration")
+        self.duration = self.spell.get_stat("duration")
         self.description = "Each turn, if not inside a thunderstorm or blizzard cloud, create a random cloud on this unit's tile for %i turns." % self.duration
         self.color = Tags.Metallic.color
 
