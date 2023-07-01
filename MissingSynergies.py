@@ -9,7 +9,7 @@ from Shrines import *
 from Consumables import *
 import random, math, os, sys
 
-from mods.Bugfixes.Bugfixes import RemoveBuffOnPreAdvance, MinionBuffAura, drain_max_hp_kill, increase_cooldown
+from mods.Bugfixes.Bugfixes import RemoveBuffOnPreAdvance, MinionBuffAura, drain_max_hp_kill, increase_cooldown, HydraBeam
 import mods.Bugfixes.Bugfixes
 
 try:
@@ -1474,10 +1474,10 @@ class RaiseDracolichSpell(Spell):
             if isinstance(spell, BreathWeapon):
                 if self.get_stat("legacy"):
                     legacy = spell.damage_type
-                dracolich.spells[1] = RaiseDracolichBreath(spell.damage, spell.range, legacy, self.get_stat("ghost"))
+                dracolich.spells[1] = RaiseDracolichBreath(spell.get_stat("damage"), spell.get_stat("range"), legacy, self.get_stat("ghost"))
                 has_breath = True
             elif spell.melee:
-                dracolich.spells[2].damage = spell.damage
+                dracolich.spells[2].damage = spell.get_stat("damage")
                 has_melee = True
         
         breath = dracolich.spells[1]
@@ -2244,16 +2244,12 @@ class EnfleshedBuff(Buff):
     def on_applied(self, owner):
         if self.owner.has_buff(SlimeBuff):
             self.hp = 0
-        self.owner.level.queue_spell(self.modify_unit())
-    
-    def modify_unit(self):
         self.owner.max_hp += self.hp
         self.owner.cur_hp += self.hp
         if Tags.Living not in self.owner.tags:
             self.owner.tags.append(Tags.Living)
         else:
             self.nonliving = False
-        yield
     
     def on_advance(self):
         if are_hostile(self.owner, self.spell.caster):
@@ -2264,16 +2260,11 @@ class EnfleshedBuff(Buff):
             self.owner.kill(damage_event=EventOnDamaged(self.owner, self.hp, Tags.Poison, self.spell))
 
     def on_unapplied(self):
-        # Only remove living tag and added max HP after other queued spells resolve.
-        self.owner.level.queue_spell(self.unmodify_unit())
-    
-    def unmodify_unit(self):
         self.owner.cur_hp -= self.hp
         self.owner.cur_hp = max(1 if self.owner.is_alive() else 0, self.owner.cur_hp)
         drain_max_hp(self.owner, self.hp)
         if self.nonliving and Tags.Living in self.owner.tags:
             self.owner.tags.remove(Tags.Living)
-        yield
     
     def boom(self):
         for stage in Burst(self.owner.level, Point(self.owner.x, self.owner.y), self.spell.get_stat("radius")//2):
@@ -7845,22 +7836,14 @@ class EmpyrealFormBuff(Buff):
             self.global_bonuses["minion_damage"] = 5
     
     def on_applied(self, owner):
-        self.owner.level.queue_spell(self.modify_unit())
-    
-    def modify_unit(self):
         self.owner.max_hp += self.max_hp
         self.owner.deal_damage(-self.max_hp, Tags.Heal, self.spell)
-        yield
 
     def on_unapplied(self):
-        self.owner.level.queue_spell(self.unmodify_unit())
-
-    def unmodify_unit(self):
         self.owner.max_hp = max(0, self.owner.max_hp - self.max_hp)
         self.owner.cur_hp = min(self.owner.cur_hp, self.owner.max_hp)
         if self.owner.max_hp <= 0:
             self.owner.kill()
-        yield
 
     def on_advance(self):
         self.owner.level.queue_spell(self.spell.boom())
@@ -10251,25 +10234,17 @@ class HealthMutation(Buff):
         self.stack_type = STACK_INTENSITY
     
     def on_applied(self, owner):
-        self.owner.level.queue_spell(self.modify_unit())
-    
-    def modify_unit(self):
         if self.buff_type == BUFF_TYPE_BLESS:
             self.owner.max_hp += 30
             self.owner.deal_damage(-30, Tags.Heal, self)
         else:
             drain_max_hp(self.owner, 30)
-        yield
     
     def on_unapplied(self):
-        self.owner.level.queue_spell(self.unmodify_unit())
-
-    def unmodify_unit(self):
         if self.buff_type == BUFF_TYPE_BLESS:
             drain_max_hp(self.owner, 30)
         else:
             self.owner.max_hp += 30
-        yield
 
 class LeapMutation(Buff):
     def __init__(self, damage, leap_range):
@@ -11588,9 +11563,6 @@ class BurnoutReactorBuff(DamageAuraBuff):
         self.owner_triggers[EventOnDeath] = self.on_death
     
     def on_applied(self, owner):
-        self.owner.level.queue_spell(self.modify_unit())
-    
-    def modify_unit(self):
         self.originally_fire = Tags.Fire in self.owner.tags
         if not self.originally_fire:
             self.owner.tags.append(Tags.Fire)
@@ -11598,15 +11570,10 @@ class BurnoutReactorBuff(DamageAuraBuff):
         self.owner.level.event_manager.raise_event(EventOnUnitPreAdded(self.owner), self.owner)
         self.owner.level.event_manager.raise_event(EventOnUnitAdded(self.owner), self.owner)
         self.boom()
-        yield
 
     def on_unapplied(self):
-        self.owner.level.queue_spell(self.unmodify_unit())
-
-    def unmodify_unit(self):
         if not self.originally_fire and Tags.Fire in self.owner.tags:
             self.owner.tags.remove(Tags.Fire)
-        yield
 
     def on_advance(self):
         if self.aura:
@@ -11687,9 +11654,6 @@ class LiquidLightningBuff(Buff):
             self.global_triggers[EventOnPreDamaged] = self.on_pre_damaged
 
     def on_applied(self, owner):
-        self.owner.level.queue_spell(self.modify_unit())
-    
-    def modify_unit(self):
         if Tags.Lightning not in self.owner.tags:
             self.owner.tags.append(Tags.Lightning)
             self.originally_lightning = False
@@ -11705,14 +11669,10 @@ class LiquidLightningBuff(Buff):
         yield
 
     def on_unapplied(self):
-        self.owner.level.queue_spell(self.unmodify_unit())
-
-    def unmodify_unit(self):
         if not self.originally_lightning and Tags.Lightning in self.owner.tags:
             self.owner.tags.remove(Tags.Lightning)
         if self.flip:
             self.owner.stationary = not self.owner.stationary
-        yield
 
     def on_pre_damaged(self, evt):
         if evt.damage <= 0 or not are_hostile(evt.unit, self.spell.caster):
@@ -11790,9 +11750,6 @@ class HeartOfWinterBuff(Buff):
             self.owner_triggers[EventOnDamaged] = self.on_damaged
 
     def on_applied(self, owner):
-        self.owner.level.queue_spell(self.modify_unit())
-    
-    def modify_unit(self):
         if not self.owner.has_buff(OrbBuff):
             self.owner.turns_to_death = None
         self.hp = self.spell.get_stat("damage")*5
@@ -11805,17 +11762,11 @@ class HeartOfWinterBuff(Buff):
             self.originally_ice = True
         self.owner.level.event_manager.raise_event(EventOnUnitPreAdded(self.owner), self.owner)
         self.owner.level.event_manager.raise_event(EventOnUnitAdded(self.owner), self.owner)
-        yield
 
     def on_unapplied(self):
-        # Queue this so currently queued spells resolve before the max HP is reduced.
-        self.owner.level.queue_spell(self.unmodify_unit())
-
-    def unmodify_unit(self):
         drain_max_hp(self.owner, self.hp)
         if not self.originally_ice and Tags.Ice in self.owner.tags:
             self.owner.tags.remove(Tags.Ice)
-        yield
 
     def on_damaged(self, evt):
         if not evt.source or not are_hostile(evt.source.owner, self.owner):
@@ -11882,9 +11833,6 @@ class NonlocalityBuff(Buff):
         self.shield = self.spell.get_stat("shield")
 
     def on_applied(self, owner):
-        self.owner.level.queue_spell(self.modify_unit())
-    
-    def modify_unit(self):
         if Tags.Arcane not in self.owner.tags:
             self.owner.tags.append(Tags.Arcane)
             self.originally_arcane = False
@@ -11897,17 +11845,12 @@ class NonlocalityBuff(Buff):
             self.flip = False
         self.owner.level.event_manager.raise_event(EventOnUnitPreAdded(self.owner), self.owner)
         self.owner.level.event_manager.raise_event(EventOnUnitAdded(self.owner), self.owner)
-        yield
 
     def on_unapplied(self):
-        self.owner.level.queue_spell(self.unmodify_unit())
-
-    def unmodify_unit(self):
         if not self.originally_arcane and Tags.Arcane in self.owner.tags:
             self.owner.tags.remove(Tags.Arcane)
         if self.flip:
             self.owner.stationary = not self.owner.stationary
-        yield
 
     def on_damaged(self, evt):
         if are_hostile(evt.unit, self.owner) and isinstance(evt.source, Spell) and evt.source.caster is self.owner:
@@ -12491,19 +12434,11 @@ class VaingloryBuff(Buff):
         self.hp = 0
     
     def on_applied(self, owner):
-        self.owner.level.queue_spell(self.modify_unit())
-    
-    def modify_unit(self):
         self.hp = math.floor(self.owner.max_hp*self.spell.get_stat("percentage")/100)
         self.owner.max_hp += self.hp
-        yield
     
     def on_unapplied(self):
-        self.owner.level.queue_spell(self.unmodify_unit())
-    
-    def unmodify_unit(self):
         drain_max_hp(self.owner, self.hp)
-        yield
 
 class VainglorySpell(Spell):
 
@@ -13366,6 +13301,96 @@ class WarpStrike(Upgrade):
         if unit.cur_hp <= 0:
             unit.kill()
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell])
+class MimeticHydraBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+    
+    def on_init(self):
+        self.color = Tags.Metallic.color
+        self.owner_triggers[EventOnDeath] = self.on_death
+    
+    def on_applied(self, owner):
+        self.max_lifetime = self.owner.turns_to_death
+        self.description = "On death, splits into two hydras whose combined lifetimes is %i." % self.max_lifetime
+
+    def on_death(self, evt):
+        if self.max_lifetime <= 1:
+            return
+        first = random.randint(1, self.max_lifetime - 1)
+        self.owner.level.queue_spell(self.spell.summon_hydra(target=self.owner, lifetime=first))
+        self.owner.level.queue_spell(self.spell.summon_hydra(target=self.owner, lifetime=self.max_lifetime - first))
+
+class ParticleBeam(HydraBeam):
+
+    def __init__(self, spell, caster):
+        HydraBeam.__init__(self, spell, caster, "Particle Beam", Tags.Physical, SilverSpearSpell)
+        self.cool_down = 0
+        self.requires_los = False
+        self.description += " Melts walls."
+    
+    def per_square_effect(self, x, y):
+        self.caster.level.deal_damage(x, y, self.get_stat("damage"), self.damage_type, self)
+        if self.caster.level.tiles[x][y].is_wall():
+            self.caster.level.make_floor(x, y)
+
+    def can_redeal(self, target, already_checked):
+        should_check = False
+        if Tags.Dark in target.tags or Tags.Arcane in target.tags:
+            should_check = True
+        if self.dragon_mage_spell.get_stat("blessed"):
+            if Tags.Demon in target.tags or Tags.Undead in target.tags:
+                should_check = True
+        if not should_check:
+            return False
+        return not is_immune(target, self.dragon_mage_spell, Tags.Holy, already_checked)
+
+class MimeticHydraSpell(Spell):
+
+    def on_init(self):
+        self.name = "Mimetic Hydra"
+        self.asset = ["MissingSynergies", "Icons", "mimetic_hydra"]
+        self.tags = [Tags.Metallic, Tags.Dragon, Tags.Conjuration]
+        self.level = 6
+        self.max_charges = 2
+
+        self.minion_range = 9
+        self.breath_damage = 7
+        self.minion_health = 16
+        self.minion_duration = 15
+        self.must_target_empty = True
+        self.must_target_walkable = True
+
+        self.upgrades['minion_range'] = (6, 3)
+        self.upgrades['minion_duration'] = (10, 2)
+        self.upgrades['breath_damage'] = (7, 4)
+        self.upgrades["dragon_mage"] = (1, 6, "Dragon Mage", "The hydra will cast Silver Spear on the target of its particle beam.\nThis Silver Spear gains all of your upgrades and bonuses.")
+
+    def get_description(self):
+        return ("Summon a hydra made of shape-memory alloy, a stationary [metallic] [dragon] [construct] minion with [{minion_health}_HP:minion_health] that lasts [{minion_duration}_turns:minion_duration].\n"
+                "The hydra has a particle beam attack that deals [{breath_damage}_physical:physical] damage and melts walls, with a range of [{minion_range}_tiles:minion_range]. It is considered a breath weapon.\n"
+                "When the hydra dies, if its original maximum lifetime was greater than 1 turn, it splits into two hydras, and its original maximum lifetime is randomly split between them.").format(**self.fmt_dict())
+
+    def summon_hydra(self, target, lifetime=None):
+        if lifetime is None:
+            lifetime = self.get_stat("minion_duration")
+        unit = Unit()
+        unit.name = "Mimetic Hydra"
+        unit.asset = ["MissingSynergies", "Units", "mimetic_hydra"]
+        unit.max_hp = self.get_stat("minion_health")
+        unit.stationary = True
+        unit.tags = [Tags.Metallic, Tags.Dragon, Tags.Construct]
+        unit.turns_to_death = lifetime
+        unit.spells = [ParticleBeam(self, unit)]
+        if lifetime > 1:
+            unit.buffs = [MimeticHydraBuff(self)]
+        self.summon(unit, target, radius=5)
+        yield
+    
+    def cast(self, x, y):
+        yield from self.summon_hydra(Point(x, y))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell])
 
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture, BatEscape, EyeBleach, AntimatterInfusion, WarpStrike])

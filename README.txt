@@ -105,6 +105,7 @@ Level 6:
 + Eyes of Chaos (Chaos/Eye/Enchantment)
 + Frigid Famine (Dark/Ice/Enchantment)
 + High Sorcery (Fire/Lightning/Ice/Sorcery)
++ Mimetic Hydra (Metallic/Dragon/Conjuration)
 + Mutant Cyclops (Arcane/Conjuration)
 + Pureglass Knight (Holy/Arcane/Conjuration)
 + Quantum Overlay (Arcane/Chaos/Enchantment)
