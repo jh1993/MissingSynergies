@@ -1656,7 +1656,7 @@ class BreathOfAnnihilation(Upgrade):
         self.name = "Breath of Annihilation"
         self.level = 7
         self.tags = [Tags.Dragon, Tags.Chaos]
-        self.description = ("The breath weapons of your [dragon] minions deal damage in a 90 degree cone if previously narrower.\nWhen one of your [dragon] minions' breath weapon hits an enemy that is resistant to the breath weapon's element, redeal the resisted damage as a random element chosen from [fire], [lightning], [physical], [arcane], and [dark].")
+        self.description = ("The breath weapons of your [dragon] minions deal damage in a 90 degree cone if previously narrower.\nA percentage of damage dealt to enemies by the breath weapons of your [dragon] minions is redealt as a random element chosen from [fire], [lightning], [physical], [arcane], and [dark].\nThe percentage is 25%, plus 1/4 of each enemy's resistance to the breath weapon's damage type if positive.")
         self.global_triggers[EventOnPreDamaged] = self.on_pre_damaged
         self.global_triggers[EventOnSpellCast] = self.on_spell_cast
         self.asset = ["MissingSynergies", "Icons", "breath_of_annihilation"]
@@ -1665,10 +1665,10 @@ class BreathOfAnnihilation(Upgrade):
     def on_pre_damaged(self, evt):
         if evt.damage <= 0 or not are_hostile(self.owner, evt.unit) or not isinstance(evt.source, BreathWeapon) or are_hostile(evt.source.owner, self.owner):
             return
-        resisted = max(0, math.floor(evt.damage*min(100, evt.unit.resists[evt.damage_type])/100))
-        if not resisted:
+        bonus_damage = math.floor(evt.damage*(25 + (evt.unit.resists[evt.damage_type]/4 if evt.unit.resists[evt.damage_type] > 0 else 0))/100)
+        if not bonus_damage:
             return
-        evt.unit.deal_damage(resisted//2, random.choice(self.dtypes), self)
+        evt.unit.deal_damage(bonus_damage, random.choice(self.dtypes), self)
     
     def on_spell_cast(self, evt):
         if are_hostile(evt.caster, self.owner) or Tags.Dragon not in evt.caster.tags or not isinstance(evt.spell, BreathWeapon):
@@ -6856,7 +6856,7 @@ class CosmicStasisSpell(Spell):
 
         self.upgrades["duration"] = (5, 3)
         self.upgrades["extension_chance"] = (25, 4, "Extension Chance", "Increase the chance to extend [freeze] duration on enemies by 25%.")
-        self.upgrades["laser"] = (1, 5, "Laser Cooling", "25% of all [ice] damage dealt to enemies while Cosmic Stasis is active will be redealt as [arcane] damage.\nThis percentage is increased by 25% of each enemy's [ice] resistance if positive.")
+        self.upgrades["laser"] = (1, 5, "Laser Cooling", "25% of all [ice] damage dealt to enemies while Cosmic Stasis is active will be redealt as [arcane] damage.\nThis percentage is increased by 1/4 of each enemy's [ice] resistance if positive.")
     
     def get_description(self):
         return ("Each turn, the [freeze] duration on each enemy has a [{extension_chance}%:freeze] chance to be extended by [1_turn:duration]. Does not work on enemies that can gain clarity.\n"
