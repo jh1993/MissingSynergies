@@ -10646,15 +10646,15 @@ class SuddenDeath(Upgrade):
         self.name = "Sudden Death"
         self.asset = ["MissingSynergies", "Icons", "sudden_death"]
         self.tags = [Tags.Dark]
-        self.level = 5
-        self.damage = 100
+        self.level = 4
+        self.damage = 200
         self.global_triggers[EventOnDamaged] = self.on_damaged
     
     def get_description(self):
-        return ("Whenever an enemy takes damage, it has a 2% chance to take [{damage}_dark:dark] damage.\nThis effect can trigger itself.").format(**self.fmt_dict())
+        return ("Whenever an enemy takes damage, it has a 1% chance to take [{damage}_dark:dark] damage.\nThis effect can trigger itself.").format(**self.fmt_dict())
 
     def on_damaged(self, evt):
-        if not are_hostile(evt.unit, self.owner) or random.random() >= 0.02:
+        if not are_hostile(evt.unit, self.owner) or random.random() >= 0.01:
             return
         evt.unit.deal_damage(self.get_stat("damage"), Tags.Dark, self)
 
@@ -10664,26 +10664,25 @@ class DivineRetribution(Upgrade):
         self.name = "Divine Retribution"
         self.asset = ["MissingSynergies", "Icons", "divine_retribution"]
         self.tags = [Tags.Holy]
-        self.level = 5
+        self.level = 4
         self.global_triggers[EventOnDamaged] = self.on_damaged
         self.max_damage = 0
     
     def get_description(self):
-        return ("Each turn, deal [holy] damage to the enemy with the highest current HP.\nThe damage dealt is equal to the highest damage dealt to any unit in a single hit since the previous activation of this skill, excluding itself.").format(**self.fmt_dict())
+        return ("Each turn, deal [holy] damage to the enemy with the highest current HP.\nThe damage dealt is equal to the highest damage dealt to any unit in a single hit since the previous activation of this skill, including itself.").format(**self.fmt_dict())
 
     def on_advance(self):
         if not self.max_damage:
             return
+        damage = self.max_damage
+        self.max_damage = 0
         enemies = [unit for unit in self.owner.level.units if are_hostile(unit, self.owner)]
         if enemies:
             target = max(enemies, key=lambda unit: unit.cur_hp)
-            target.deal_damage(self.max_damage, Tags.Holy, self)
-        self.max_damage = 0
+            target.deal_damage(damage, Tags.Holy, self)
     
     def on_damaged(self, evt):
-        if evt.source is self:
-            return
-        if evt.damage > self.max_damage:
+        if evt.damage >= self.max_damage:
             self.max_damage = evt.damage
 
 class DamnedBuff(Buff):

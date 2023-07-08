@@ -140,6 +140,7 @@ Level 4:
 + Blood Fodder (Dark/Nature)
 + Cantrip Adept (Sorcery)
 + Chaos Trick (Chaos/Fire/Lightning)
++ Divine Retribution (Holy)
 + Eye Bleach (Holy)
 + Flesh Loan (Dark/Nature)
 + Fulgurite Alchemy (Arcane/Lightning)
@@ -149,6 +150,7 @@ Level 4:
 + Shadow Assassin (Dark/Translocation)
 + Singular Eye (Eye)
 + Slime Instability (Arcane/Chaos)
++ Sudden Death (Dark)
 + Trick Walk (Translocation)
 + Unnatural Vitality (Dark/Nature)
 
@@ -156,7 +158,6 @@ Level 5:
 + Blood Mitosis (Dark)
 + Bombastic Arrival (Fire/Translocation)
 + Chaos Cloning (Chaos)
-+ Divine Retribution (Holy)
 + Draconian Brutality (Dragon/Nature/Translocation)
 + Electrolysis (Lightning/Nature)
 + Forceful Channeling (Sorcery/Conjuration)
@@ -171,7 +172,6 @@ Level 5:
 + Shock Troops (Fire/Lightning)
 + Soul Dregs (Holy/Dark)
 + Speed of Light (Holy/Translocation)
-+ Sudden Death (Dark)
 + Tele-Frag (Metallic/Translocation)
 
 Level 6:
