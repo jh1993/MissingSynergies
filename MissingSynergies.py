@@ -700,7 +700,7 @@ class BladeRushSpell(Spell):
         self.upgrades["dark"] = (1, 4, "Death Blade", "Blade Rush also deals [dark] damage.\nAutomatically cast your Touch of Death at the target after teleporting.", "blade")
         self.upgrades["lightning"] = (1, 4, "Thunder Blade", "Blade Rush also deals [lightning] damage.\nAutomatically cast your Thunder Strike at the target after teleporting.", "blade")
         self.upgrades["arcane"] = (1, 4, "Warp Blade", "Blade Rush also deals [arcane] damage.\nAutomatically cast your Disperse at the target after teleporting.", "blade")
-        self.upgrades["motivation"] = (1, 4, "Motivation", "If you target a tile adjacent to yourself, you will create [{num_targets}:num_targets] to [{double_num_targets}:num_targets] slashes around the target tile in a radius equal to half of this spell's range, each dealing the same damage and damage types; they will not damage you.")
+        self.upgrades["motivation"] = (1, 6, "Motivation", "After dashing, you will now create [{num_targets}:num_targets] to [{double_num_targets}:num_targets] slashes around the target tile in a radius equal to half of this spell's range, each dealing the same damage and damage types; they will not damage you.")
     
     def fmt_dict(self):
         stats = Spell.fmt_dict(self)
@@ -749,22 +749,6 @@ class BladeRushSpell(Spell):
         damage = self.get_stat("damage")
         
         target = Point(x, y)
-        if self.get_stat("motivation") and target in self.caster.level.get_adjacent_points(Point(self.caster.x, self.caster.y), filter_walkable=False):
-            radius = self.get_stat("range")//2
-            ring = [point for point in self.caster.level.get_points_in_ball(target.x, target.y, radius) if distance(point, target) >= radius - 1]
-            if ring:
-                num_targets = self.get_stat("num_targets", base=6)
-                for _ in range(random.choice(list(range(num_targets, num_targets*2 + 1)))):
-                    start = random.choice(ring)
-                    end = random.choice(ring)
-                    for point in self.caster.level.get_points_in_line(start, end):
-                        if point.x == self.caster.x and point.y == self.caster.y:
-                            for dtype in dtypes:
-                                self.caster.level.show_effect(point.x, point.y, dtype)
-                        else:
-                            for dtype in dtypes:
-                                self.caster.level.deal_damage(point.x, point.y, damage, dtype, self)
-                        yield
         
         self.caster.invisible = True
         if dest != Point(self.caster.x, self.caster.y):
@@ -779,6 +763,24 @@ class BladeRushSpell(Spell):
             self.caster.level.deal_damage(x, y, damage, dtype, self)
         if spell:
             self.caster.level.act_cast(self.caster, spell, x, y, pay_costs=False)
+
+        if self.get_stat("motivation"):
+            radius = self.get_stat("range")//2
+            ring = [point for point in self.caster.level.get_points_in_ball(target.x, target.y, radius) if distance(point, target) >= radius - 1]
+            if ring:
+                num_targets = self.get_stat("num_targets", base=6)
+                for _ in range(random.choice(list(range(num_targets, num_targets*2 + 1)))):
+                    start = random.choice(ring)
+                    end = random.choice(ring)
+                    for point in self.caster.level.get_points_in_line(start, end):
+                        if point.x == self.caster.x and point.y == self.caster.y:
+                            for dtype in dtypes:
+                                self.caster.level.show_effect(point.x, point.y, dtype)
+                        else:
+                            for dtype in dtypes:
+                                self.caster.level.deal_damage(point.x, point.y, damage, dtype, self)
+                        if random.random() < 0.5:
+                            yield
 
 class MaskOfTroublesBuff(Buff):
 
