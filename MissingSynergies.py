@@ -7226,7 +7226,7 @@ class PureglassKnightBuff(Buff):
     def on_init(self):
         self.name = "Pureglass"
         self.color = Tags.Glass.color
-        self.description = "Whenever this unit loses SH, it has a 25% chance to summon another knight with 1 SH."
+        self.description = "Whenever this unit loses SH from damage, it has a 25% chance to summon another knight with 1 SH."
         self.shards = self.spell.get_stat("shards")
         self.radius = self.spell.get_stat("minion_range")
         self.phase = self.spell.get_stat("phase")
@@ -7277,7 +7277,7 @@ class PureglassKnightSpell(Spell):
         self.upgrades["minion_health"] = (40, 3)
         self.upgrades["glassify"] = (1, 5, "Glassifying Blade", "The knight's melee attack will inflict [glassify] for [{duration}_turns:duration].")
         self.upgrades["phase"] = (1, 5, "Phase Glass", "The knight's charge attack becomes a teleport attack.")
-        self.upgrades["shards"] = (1, 4, "Broken Shards", "Whenever the knight loses [SH:shields], it shoots out a glass shard at a random enemy in line of sight with range equal to this spell's [minion_range:minion_range], dealing damage equal to this spell's [minion_damage:minion_damage].\nIf you have the Phase Glass upgrade, the shard can pass through walls.")
+        self.upgrades["shards"] = (1, 4, "Broken Shards", "Whenever the knight loses [SH:shields] from damage, it shoots out a glass shard at a random enemy in line of sight with range equal to this spell's [minion_range:minion_range], dealing damage equal to this spell's [minion_damage:minion_damage].\nIf you have the Phase Glass upgrade, the shard can pass through walls.")
 
     def fmt_dict(self):
         stats = Spell.fmt_dict(self)
@@ -7288,7 +7288,7 @@ class PureglassKnightSpell(Spell):
     def get_description(self):
         return ("Summon a [living] [holy] [arcane] [glass] knight. It has fixed 1 HP, but gains [1_SH:shields] per 10 bonus to [minion_health:minion_health] this spell has, rounded up (currently [{shields}_SH:shields]); it can have more than the usual limit of [20_SH:shields].\n"
                 "The knight has a melee attack and a charge attack with [{minion_range}_range:minion_range], both of which deal [{minion_damage}_physical:physical] damage.\n"
-                "Whenever the knight loses [SH:shields], it has a 25% chance to summon another knight with [1_SH:shields].").format(**self.fmt_dict())
+                "Whenever the knight loses [SH:shields] from damage, it has a 25% chance to summon another knight with [1_SH:shields].").format(**self.fmt_dict())
 
     def summon_knight(self, target, minor=False):
         unit = NoShieldLimitUnit()
