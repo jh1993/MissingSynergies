@@ -690,13 +690,13 @@ class BladeRushSpell(Spell):
         self.asset = ["MissingSynergies", "Icons", "blade_rush"]
         
         self.tags = [Tags.Sorcery, Tags.Metallic, Tags.Translocation]
-        self.level = 3
-        self.max_charges = 7
+        self.level = 4
+        self.max_charges = 9
         self.range = 15
         self.damage = 16
         
         self.upgrades["range"] = (5, 2)
-        self.upgrades["max_charges"] = (4, 3)
+        self.upgrades["max_charges"] = (6, 3)
         self.upgrades["dark"] = (1, 4, "Death Blade", "Blade Rush also deals [dark] damage.\nAutomatically cast your Touch of Death at the target after teleporting.", "blade")
         self.upgrades["lightning"] = (1, 4, "Thunder Blade", "Blade Rush also deals [lightning] damage.\nAutomatically cast your Thunder Strike at the target after teleporting.", "blade")
         self.upgrades["arcane"] = (1, 4, "Warp Blade", "Blade Rush also deals [arcane] damage.\nAutomatically cast your Disperse at the target after teleporting.", "blade")
@@ -764,23 +764,37 @@ class BladeRushSpell(Spell):
         if spell:
             self.caster.level.act_cast(self.caster, spell, x, y, pay_costs=False)
 
-        if self.get_stat("motivation"):
-            radius = self.get_stat("range")//2
-            ring = [point for point in self.caster.level.get_points_in_ball(target.x, target.y, radius) if distance(point, target) >= radius - 1]
-            if ring:
-                num_targets = self.get_stat("num_targets", base=6)
-                for _ in range(random.choice(list(range(num_targets, num_targets*2 + 1)))):
-                    start = random.choice(ring)
-                    end = random.choice(ring)
-                    for point in self.caster.level.get_points_in_line(start, end):
-                        if point.x == self.caster.x and point.y == self.caster.y:
-                            for dtype in dtypes:
-                                self.caster.level.show_effect(point.x, point.y, dtype)
-                        else:
-                            for dtype in dtypes:
-                                self.caster.level.deal_damage(point.x, point.y, damage, dtype, self)
-                        if random.random() < 0.5:
-                            yield
+        if not self.get_stat("motivation"):
+            return
+        radius = self.get_stat("range")//2
+        points = list(self.caster.level.get_points_in_ball(target.x, target.y, radius))
+        if not points:
+            return
+        
+        def slash(start, end):
+            while True:
+                if random.random() < 0.1:
+                    break
+                yield True
+            for p in self.caster.level.get_points_in_line(start, end):
+                if p.x == self.caster.x and p.y == self.caster.y:
+                    for dtype in dtypes:
+                        self.caster.level.show_effect(p.x, p.y, dtype)
+                else:
+                    for dtype in dtypes:
+                        self.caster.level.deal_damage(p.x, p.y, damage, dtype, self)
+                yield True
+            yield False
+        
+        num_targets = self.get_stat("num_targets", base=6)
+        slashes = []
+        for _ in range(random.randint(num_targets, num_targets*2)):
+            start = random.choice(points)
+            end = random.choice(points)
+            slashes.append(slash(start, end))
+        while slashes:
+            slashes = [s for s in slashes if next(s)]
+            yield
 
 class MaskOfTroublesBuff(Buff):
 

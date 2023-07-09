@@ -22,7 +22,6 @@ Level 2:
 + Volatile Orb (Chaos/Orb/Conjuration/Sorcery)
 
 Level 3:
-+ Blade Rush (Metallic/Translocation/Sorcery)
 + Call Scapegoat (Dark/Nature/Conjuration)
 + Chaos Concoction (Chaos/Sorcery)
 + Chaos Shuffle (Chaos/Translocation/Sorcery)
@@ -44,6 +43,7 @@ Level 4:
 + Aegis Overload (Metallic/Chaos/Sorcery)
 + Afterlife Echoes (Holy/Dark/Enchantment)
 + Ashen Avatar (Fire/Dark/Nature/Enchantment/Conjuration)
++ Blade Rush (Metallic/Translocation/Sorcery)
 + Brimstone Cluster (Fire/Dark/Nature/Enchantment)
 + Burnout Reactor (Fire/Dark/Enchantment)
 + Divine Gaze (Holy/Eye/Sorcery)
