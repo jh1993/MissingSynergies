@@ -13372,8 +13372,8 @@ class MimeticHydraSpell(Spell):
 
 class ThornShotThorns(Thorns):
 
-    def __init__(self, upgrade):
-        Thorns.__init__(self, upgrade.get_stat("minion_damage"))
+    def __init__(self):
+        Thorns.__init__(self, 3)
         self.stack_type = STACK_NONE
         self.buff_type = BUFF_TYPE_PASSIVE
 
@@ -13384,13 +13384,9 @@ class ThornShot(Upgrade):
         self.asset = ["MissingSynergies", "Icons", "thorn_shot"]
         self.tags = [Tags.Metallic, Tags.Nature]
         self.level = 4
-        self.minion_damage = 3
         self.global_triggers[EventOnSpellCast] = self.on_spell_cast
         self.global_triggers[EventOnUnitAdded] = self.on_unit_added
-    
-    def get_description(self):
-        return ("All of your [living], [nature], and [metallic] minions gain melee retaliation dealing [{minion_damage}_physical:physical] damage.\n"
-                "Whenever a friendly unit uses an attack or spell on an enemy, if it has melee retaliation, that enemy takes damage from the unit's melee retaliation.").format(**self.fmt_dict())
+        self.description = "All of your [living], [nature], and [metallic] minions gain melee retaliation dealing [3_physical:physical] damage. This damage does not benefit from [minion_damage:minion_damage] bonuses.\nWhenever a friendly unit uses an attack or spell on an enemy, if it has melee retaliation, that enemy takes damage from the unit's melee retaliation."
 
     def should_give(self, u):
         return not are_hostile(u, self.owner) and u is not self.owner and [tag for tag in u.tags if tag in [Tags.Living, Tags.Nature, Tags.Metallic]]
@@ -13403,12 +13399,12 @@ class ThornShot(Upgrade):
                     u.remove_buff(existing)
             else:
                 if not existing:
-                    u.apply_buff(ThornShotThorns(self))
+                    u.apply_buff(ThornShotThorns())
 
     def on_unit_added(self, evt):
         if not self.should_give(evt.unit):
             return
-        evt.unit.apply_buff(ThornShotThorns(self))
+        evt.unit.apply_buff(ThornShotThorns())
 
     def on_spell_cast(self, evt):
         if are_hostile(evt.spell.caster, self.owner):
