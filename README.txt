@@ -151,6 +151,7 @@ Level 4:
 + Singular Eye (Eye)
 + Slime Instability (Arcane/Chaos)
 + Sudden Death (Dark)
++ Thorn Shot (Metallic/Nature)
 + Trick Walk (Translocation)
 + Unnatural Vitality (Dark/Nature)
 

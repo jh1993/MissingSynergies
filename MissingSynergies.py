@@ -13370,6 +13370,57 @@ class MimeticHydraSpell(Spell):
     def cast(self, x, y):
         yield from self.summon_hydra(Point(x, y))
 
+class ThornShotThorns(Thorns):
+
+    def __init__(self, upgrade):
+        Thorns.__init__(self, upgrade.get_stat("minion_damage"))
+        self.stack_type = STACK_NONE
+        self.buff_type = BUFF_TYPE_PASSIVE
+
+class ThornShot(Upgrade):
+
+    def on_init(self):
+        self.name = "Thorn Shot"
+        self.asset = ["MissingSynergies", "Icons", "thorn_shot"]
+        self.tags = [Tags.Metallic, Tags.Nature]
+        self.level = 4
+        self.minion_damage = 3
+        self.global_triggers[EventOnSpellCast] = self.on_spell_cast
+        self.global_triggers[EventOnUnitAdded] = self.on_unit_added
+    
+    def get_description(self):
+        return ("All of your [living], [nature], and [metallic] minions gain melee retaliation dealing [{minion_damage}_physical:physical] damage.\n"
+                "Whenever a friendly unit uses an attack or spell on an enemy, if it has melee retaliation, that enemy takes damage from the unit's melee retaliation.").format(**self.fmt_dict())
+
+    def should_give(self, u):
+        return not are_hostile(u, self.owner) and u is not self.owner and [tag for tag in u.tags if tag in [Tags.Living, Tags.Nature, Tags.Metallic]]
+
+    def on_advance(self):
+        for u in self.owner.level.units:
+            existing = u.get_buff(ThornShotThorns)
+            if not self.should_give(u):
+                if existing:
+                    u.remove_buff(existing)
+            else:
+                if not existing:
+                    u.apply_buff(ThornShotThorns(self))
+
+    def on_unit_added(self, evt):
+        if not self.should_give(evt.unit):
+            return
+        evt.unit.apply_buff(ThornShotThorns(self))
+
+    def on_spell_cast(self, evt):
+        if are_hostile(evt.spell.caster, self.owner):
+            return
+        target = self.owner.level.get_unit_at(evt.x, evt.y)
+        if not target or not are_hostile(target, self.owner):
+            return
+        for buff in evt.spell.caster.buffs:
+            if not isinstance(buff, Thorns):
+                continue
+            self.owner.level.queue_spell(buff.do_thorns(target))
+
 all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell])
 
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture, BatEscape, EyeBleach, AntimatterInfusion, WarpStrike])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture, BatEscape, EyeBleach, AntimatterInfusion, WarpStrike, ThornShot])
