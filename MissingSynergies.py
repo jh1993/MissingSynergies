@@ -2618,139 +2618,103 @@ class WarpLensGolemSpell(Spell):
             golem.buffs.append(LensArmorBuff(self))
         self.summon(golem, target=Point(x, y))
 
-class MortalShackleBuff(Stun):
+class MortalityBuff(Buff):
 
     def __init__(self, spell):
         self.spell = spell
-        Stun.__init__(self)
-
-    def on_init(self):
-        self.name = "Mortal Shackle"
-        self.asset = ["MissingSynergies", "Statuses", "mortal_shackle"]
-        self.color = Tags.Metallic.color
-        self.buff_type = BUFF_TYPE_CURSE
-        weakness = self.spell.get_stat("resistance_reduction")
-        self.resists[Tags.Physical] = -weakness
-        self.resists[Tags.Poison] = -weakness
-
-class MortalityBuff(Buff):
+        Buff.__init__(self)
     
     def on_init(self):
         self.name = "Mortality"
         self.color = Tags.Metallic.color
         self.buff_type = BUFF_TYPE_NONE
-        self.owner_triggers[EventOnBuffApply] = self.on_buff_apply
+        self.asset = ["MissingSynergies", "Statuses", "mortality"]
 
-    def on_buff_apply(self, evt):
-        if isinstance(evt.buff, ReincarnationBuff):
-            evt.unit.remove_buff(evt.buff)
-
-class MortalChainmailBuff(StunImmune):
-
-    def __init__(self, spell):
-        self.spell = spell
-        StunImmune.__init__(self)
-
-    def on_init(self):
-        self.name = "Mortal Chainmail"
-        self.asset = ["MissingSynergies", "Statuses", "mortal_chainmail"]
-        self.color = Tags.Metallic.color
-        self.buff_type = BUFF_TYPE_BLESS
-        weakness = self.spell.get_stat("resistance_reduction")
-        self.resists[Tags.Physical] = weakness
-        self.resists[Tags.Poison] = weakness
+    def on_advance(self):
+        if not self.spell.get_stat("pain"):
+            return
+        damage = self.spell.get_stat("damage")
+        if are_hostile(self.owner, self.spell.caster):
+            if random.random() < 0.5:
+                self.owner.deal_damage(damage, Tags.Poison, self.spell)
+            if random.random() < 0.5:
+                self.owner.deal_damage(damage, Tags.Physical, self.spell)
+        else:
+            if random.random() < 0.5:
+                self.owner.deal_damage(-damage, Tags.Heal, self.spell)
 
 class MortalCoilSpell(Spell):
 
     def on_init(self):
         self.name = "Mortal Coil"
         self.asset = ["MissingSynergies", "Icons", "mortal_coil"]
-        self.tags = [Tags.Metallic, Tags.Nature, Tags.Sorcery, Tags.Enchantment]
+        self.tags = [Tags.Metallic, Tags.Nature, Tags.Enchantment]
         self.level = 3
         self.max_charges = 9
         self.range = 9
         self.requires_los = False
-        self.can_target_empty = False
 
-        self.damage = 15
-        self.extra_damage = 2
-        self.resistance_reduction = 25
-        self.fake_lives = 0
+        self.damage = 5
+        self.radius = 4
+        self.lives = 1
 
-        self.upgrades["extra_damage"] = (2, 2, "Extra Damage", "+2 extra damage per reincarnation lost.")
-        self.upgrades["resistance_reduction"] = (25, 2)
-        self.upgrades["fake_lives"] = (2, 3, "Mortal Delusion", "Every target will be affected as if it lost 2 additional reincarnations.\nThis does not allow the spell to chain to more targets, or trigger additional false deaths, but will also not count toward the duration in which the unit cannot gain reincarnations.")
-        self.upgrades["friendly"] = (1, 4, "Life Binding", "Mortal Coil can now also affect your minions, instead healing them for an amount equal to this spell's damage plus extra damage per reincarnation lost, and granting them Chainmail, which increases [physical] and [poison] resistance and provides [stun] immunity for the duration.\nThe target still cannot gain reincarnations for the same duration; this is a separate effect and can't be dispelled.")
-    
-    def can_cast(self, x, y):
-        if not Spell.can_cast(self, x, y):
-            return False
-        unit = self.caster.level.get_unit_at(x, y)
-        if not unit:
-            return False
-        if are_hostile(self.caster, unit):
-            return True
-        else:
-            return self.get_stat("friendly")
+        self.upgrades["radius"] = (3, 3)
+        self.upgrades["lives"] = (1, 3, "Reincarnations", "This spell now adds 1 more reincarnation to affected units before removing them.")
+        self.upgrades["friendly"] = (1, 4, "Life Binding", "Mortal Coil can now also affect your minions.\nWhen affecting a minion with mortality, it is instead healed for [{damage}_HP:heal].")
+        self.upgrades["pain"] = (1, 4, "Mortal Pain", "Each turn, each enemy with mortality has a 50% chance to take [{damage}_poison:poison] damage, and a 50% chance to take [{damage}_physical:physical] damage.\nIf you have the Life Binding upgrade, each turn each ally with mortality has a 50% chance to heal for [{damage}_HP:heal].\nThe direct damage and healing of this spell is now doubled on units that can gain clarity.")
 
     def get_description(self):
-        return ("The target enemy loses all reincarnations, and is Shackled for a duration equal to the number of lives lost, which [stuns] and reduces [physical] and [poison] resistances by [{resistance_reduction}:damage]. For that duration, it cannot gain reincarnations; this is a separate effect and can't be dispelled.\n"
-                "The target then takes [{damage}_physical:physical] and [{damage}_poison:poison] damage. For each life lost, it takes an additional [{extra_damage}_physical:physical] and [{extra_damage}_poison:poison] damage, triggers all on-death effects if successfully Shackled, and the spell chains to a new target in range, prioritizing targets with reincarnations.\n"
-                "Lives cannot be removed from units that can gain clarity.").format(**self.fmt_dict())
+        return ("Each enemy in a [{radius}_tile:radius] radius gains [{lives}:poison] reincarnations, then loses all reincarnations and gains mortality for a duration equal to twice the lives lost. For each life lost, the enemy experiences death once, triggering all on-death effects.\n"
+                "If an enemy already has mortality, or can gain clarity, instead of any of the above effects, it takes [{damage}_poison:poison] and [{damage}_physical:physical] damage; the damage of this spell benefits 10 times from the number of lives this spell can add.\n"
+                "Mortality is considered neither a buff nor a debuff.").format(**self.fmt_dict())
     
-    def chain(self, start, end, already_hit, chains=1):
+    def get_stat(self, attr, base=None):
+        if attr == "damage":
+            return Spell.get_stat(self, attr, base) + self.get_stat("lives")*10
+        return Spell.get_stat(self, attr, base)
 
-        for point in Bolt(self.caster.level, start, end, find_clear=False):
-            self.caster.level.show_effect(point.x, point.y, Tags.Physical, minor=True)
-            self.caster.level.show_effect(point.x, point.y, Tags.Poison, minor=True)
-            yield
-        
-        unit = self.caster.level.get_unit_at(end.x, end.y)
-        if not unit:
-            return
-        lives = 0
-        if not unit.gets_clarity:
-            respawn = unit.get_buff(ReincarnationBuff)
-            if respawn:
-                lives = respawn.lives
-                unit.remove_buff(respawn)
-                unit.apply_buff(MortalityBuff(), lives)
-        effective_lives = lives + self.get_stat("fake_lives")
+    def cast_instant(self, x, y):
 
-        damage = self.get_stat("damage") + effective_lives*self.get_stat("extra_damage")
-        if are_hostile(unit, self.caster):
-            if effective_lives:
-                unit.apply_buff(MortalShackleBuff(self), effective_lives)
-            unit.deal_damage(damage, Tags.Physical, self)
-            unit.deal_damage(damage, Tags.Poison, self)
-        else:
-            if effective_lives:
-                unit.apply_buff(MortalChainmailBuff(self), effective_lives)
-            unit.deal_damage(-damage, Tags.Heal, self)
+        damage = self.get_stat("damage")
+        friendly = self.get_stat("friendly")
+        lives = self.get_stat("lives")
+        pain = self.get_stat("pain")
         
-        if unit.has_buff(MortalShackleBuff) or unit.has_buff(MortalChainmailBuff):
-            for _ in range(lives):
-                self.caster.level.event_manager.raise_event(EventOnDeath(unit, None), unit)
-        
-        if unit.is_alive():
-            already_hit.append(unit)        
-        chains = chains - 1 + lives
-        if not chains:
-            return
-        targets = [target for target in self.caster.level.get_units_in_ball(end, self.get_stat("range")) if target not in already_hit and target is not self.caster]
-        if not self.get_stat("friendly"):
-            targets = [target for target in targets if are_hostile(target, self.caster)]
-        if not targets:
-            return
-        reincarnating_targets = [unit for unit in targets if unit.has_buff(ReincarnationBuff)]
-        if reincarnating_targets:
-            target = random.choice(reincarnating_targets)
-        else:
-            target = random.choice(targets)
-        self.caster.level.queue_spell(self.chain(end, target, already_hit, chains=chains))
-    
-    def cast(self, x, y):
-        yield from self.chain(self.caster, Point(x, y), [])
+        for unit in self.caster.level.get_units_in_ball(Point(x, y), self.get_stat("radius")):
+            if unit.is_player_controlled:
+                continue
+            
+            hostile = are_hostile(unit, self.caster)
+            if not hostile and not friendly:
+                continue
+            has_mortality = unit.gets_clarity or unit.has_buff(MortalityBuff)
+            
+            if not has_mortality:
+                deaths = 0
+                existing = unit.get_buff(ReincarnationBuff)
+                if existing:
+                    existing.lives += lives
+                    deaths = existing.lives
+                else:
+                    buff = ReincarnationBuff(lives)
+                    buff.buff_type = BUFF_TYPE_PASSIVE
+                    unit.apply_buff(buff)
+                    deaths = buff.lives
+                unit.remove_buffs(ReincarnationBuff)
+                unit.apply_buff(MortalityBuff(self), deaths*2)
+                self.caster.level.show_effect(unit.x, unit.y, Tags.Poison)
+                self.caster.level.show_effect(unit.x, unit.y, Tags.Physical)
+                for _ in range(deaths):
+                    self.caster.level.event_manager.raise_event(EventOnDeath(unit, None), unit)
+            else:
+                actual_damage = damage
+                if pain and unit.gets_clarity:
+                    actual_damage *= 2
+                if hostile:
+                    unit.deal_damage(actual_damage, Tags.Poison, self)
+                    unit.deal_damage(actual_damage, Tags.Physical, self)
+                else:
+                    unit.deal_damage(-actual_damage, Tags.Heal, self)
 
 class StandBackBuff(Buff):
 

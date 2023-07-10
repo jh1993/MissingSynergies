@@ -32,7 +32,7 @@ Level 3:
 + Frozen Space (Ice/Translocation/Enchantment)
 + Grudge Reaper (Dark/Conjuration)
 + Heart of Winter (Ice/Enchantment)
-+ Mortal Coil (Nature/Metallic/Enchantment/Sorcery)
++ Mortal Coil (Nature/Metallic/Enchantment)
 + Negentropy (Fire/Ice/Sorcery)
 + Planar Binding (Holy/Translocation/Enchantment)
 + Shield Burst (Arcane/Sorcery)
