@@ -2659,13 +2659,13 @@ class MortalCoilSpell(Spell):
         self.lives = 1
 
         self.upgrades["radius"] = (3, 3)
-        self.upgrades["lives"] = (1, 3, "Reincarnations", "This spell now adds 1 more reincarnation to affected units before removing them.")
+        self.upgrades["lives"] = (1, 3, "Reincarnations", "This spell now adds 1 more reincarnation to affected units before removing them.\nThis spell also gains [10_damage:damage].")
         self.upgrades["friendly"] = (1, 4, "Life Binding", "Mortal Coil can now also affect your minions.\nWhen affecting a minion with mortality, it is instead healed for [{damage}_HP:heal].")
         self.upgrades["pain"] = (1, 4, "Mortal Pain", "Each turn, each enemy with mortality has a 50% chance to take [{damage}_poison:poison] damage, and a 50% chance to take [{damage}_physical:physical] damage.\nIf you have the Life Binding upgrade, each turn each ally with mortality has a 50% chance to heal for [{damage}_HP:heal].\nThe direct damage and healing of this spell is now doubled on units that can gain clarity.")
 
     def get_description(self):
         return ("Each enemy in a [{radius}_tile:radius] radius gains [{lives}:poison] reincarnations, then loses all reincarnations and gains mortality for a duration equal to twice the lives lost. For each life lost, the enemy experiences death once, triggering all on-death effects.\n"
-                "If an enemy already has mortality, or can gain clarity, instead of any of the above effects, it takes [{damage}_poison:poison] and [{damage}_physical:physical] damage; the damage of this spell benefits 10 times from the number of lives this spell can add.\n"
+                "If an enemy already has mortality, or can gain clarity, instead of any of the above effects, it takes [{damage}_poison:poison] and [{damage}_physical:physical] damage.\n"
                 "Mortality is considered neither a buff nor a debuff.").format(**self.fmt_dict())
     
     def get_stat(self, attr, base=None):
