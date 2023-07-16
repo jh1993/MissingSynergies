@@ -1839,24 +1839,6 @@ class TwistedMutationSpell(Spell):
         if self.get_stat("adapt"):
             unit.apply_buff(ChaosAdaptationBuff())
 
-class CustomSpiritBuff(SpiritBuff):
-
-    def __init__(self, spell, tag):
-        self.spell = spell
-        SpiritBuff.__init__(self, tag)
-
-    def on_spell_cast(self, spell_cast_event):
-        hp_gain = self.spell.get_stat("hp_gain")
-        if (self.tag in spell_cast_event.spell.tags 
-            and spell_cast_event.caster.is_player_controlled 
-            and self.owner.level.can_see(self.owner.x, self.owner.y, spell_cast_event.x, spell_cast_event.y)):
-            self.owner.max_hp += hp_gain
-            self.owner.cur_hp += hp_gain
-            self.owner.level.queue_spell(self.effect(spell_cast_event.x, spell_cast_event.y))
-
-    def get_tooltip(self):
-        return "Gain %d max HP whenever witnessing %s spell" % (self.spell.get_stat("hp_gain"), self.tag.name)
-
 def get_spirit_combo(tags):
     if Tags.Fire in tags and Tags.Lightning in tags:
         return "Chaos"
@@ -1906,11 +1888,11 @@ class ElementalChaosSpell(Spell):
         self.minion_health = 36
         self.minion_damage = 11
         self.minion_range = 6
-        self.hp_gain = 5
+        self.minion_duration = 15
 
+        self.upgrades["minion_duration"] = (10, 2)
         self.upgrades["fire_focus"] = (1, 2, "Fire Focus", "The storm spirit is replaced by [{num_summons}:num_summons] fire spirits.", "focus")
         self.upgrades["lightning_focus"] = (1, 2, "Lightning Focus", "The starfire spirit is replaced by [{num_summons}:num_summons] spark spirits.", "focus")
-        self.upgrades["hp_gain"] = (2, 3, "Max HP Gain", "Spirits gain [2:minion_health] more max HP when witnessing spells of their elements.")
         self.upgrades["retroactive"] = (1, 5, "Retroactive Growth", "New spirits you summon will have max HP equal to the average max HP of all existing spirits, if it is greater than the new spirit's initial HP.")
         self.upgrades["power"] = (1, 6, "Elemental Power", "The attacks of hybrid spirits deal damage of both of their elements instead of randomly one of them.\nThe attacks of pure spirits hit twice.")
     
@@ -1920,9 +1902,9 @@ class ElementalChaosSpell(Spell):
         return stats
 
     def get_description(self):
-        return ("Summon a starfire spirit, chaos spirit, and storm spirit near yourself.\n"
+        return ("Summon a starfire spirit, chaos spirit, and storm spirit for [{minion_duration}_turns:minion_duration].\n"
                 "Each spirit has [{minion_health}_HP:minion_health], [4_damage:minion_damage] melee retaliation of their elements, and an attack with [{minion_range}_range:minion_range] and [1_radius:radius] that deals [{minion_damage}_damage:minion_damage] of a random one of their elements.\n"
-                "Each spirit gains [{hp_gain}:minion_health] max HP when witnessing a spell of one of its elements.").format(**self.fmt_dict())
+                "Each spirit gains [5:minion_health] max HP when witnessing a spell of one of its elements.").format(**self.fmt_dict())
     
     def get_spirit(self, tags):
         spirit = Unit()
@@ -1933,9 +1915,10 @@ class ElementalChaosSpell(Spell):
         spirit.tags = tags
         for tag in tags:
             spirit.resists[tag] = 100
-            spirit.buffs.append(CustomSpiritBuff(self, tag))
+            spirit.buffs.append(SpiritBuff(tag))
             spirit.buffs.append(Thorns(4, tag))
         spirit.spells = [CustomSpiritBlast(self, tags)]
+        spirit.turns_to_death = self.get_stat("minion_duration")
         return spirit
     
     def cast_instant(self, x, y):
@@ -5433,6 +5416,7 @@ class AfterlifeEchoesBuff(Buff):
             shade.resists[Tags.Poison] = 100
             shade.flying = True
             shade.spells = [AfterlifeShadeBolt(unit.max_hp//10 + self.spell.get_stat("minion_damage", base=1), self.spell.get_stat("minion_range", base=5))]
+            shade.turns_to_death = self.spell.get_stat("minion_duration", base=10)
             self.spell.summon(shade, target=point, radius=5)
             return
         
@@ -5494,7 +5478,7 @@ class AfterlifeEchoesSpell(Spell):
         self.upgrades["radius"] = (1, 3)
         self.upgrades["duration"] = (15, 2)
         self.upgrades["life"] = (1, 5, "Life Echoes", "When you summon a [living] or [nature] minion, that minion's death explosion will [poison] enemies for a number of turns equal to 50% of its max HP.\nIf an enemy is already [poisoned], any excess duration will be dealt as [poison] damage.", "echo")
-        self.upgrades["spirit"] = (1, 5, "Spirit Echoes", "When you summon a [holy], [demon], or [undead] minion, that minion's death explosion will summon an Afterlife Shade with the same max HP.\nThe Afterlife Shade has an attack with [{minion_range}_range:minion_range] that deals [holy] and [dark] damage equal to [{minion_damage}:minion_damage] plus 10% of its max HP.", "echo")
+        self.upgrades["spirit"] = (1, 5, "Spirit Echoes", "When you summon a [holy], [demon], or [undead] minion, that minion's death explosion will summon an Afterlife Shade with the same max HP for [{minion_duration}_turns:minion_duration].\nThe Afterlife Shade has an attack with [{minion_range}_range:minion_range] that deals [holy] and [dark] damage equal to [{minion_damage}:minion_damage] plus 10% of its max HP.", "echo")
         self.upgrades["elemental"] = (1, 5, "Elemental Echoes", "When you summon a [fire], [lightning], or [ice] minion, that minion's death explosion has a chance to cast Fireball, Lightning Bolt, or Icicle respectively at valid enemy targets.\nA minion with multiple tags will try to cast every qualifying spell independently in random order.\nThe chance to cast is the minion's max HP divided by 40, with an extra guaranteed cast per 40 HP the minion has.\nThese spells gain all of your upgrades and bonuses.", "echo")
         self.upgrades["shattering"] = (1, 5, "Shattering Echoes", "When you summon an [arcane], [metallic], or [glass] minion, that minion's death explosion will summon a Soul Shard on a random tile for every 20 HP and [2_SH:shields] the minion has, rounded up.\nSoul Shards have fixed 1 HP and [1_SH:shields], and teleport to random tiles each turn. They deal [2_physical:physical] or [2_arcane:arcane] damage to enemies that hit them.", "echo")
 
@@ -5502,6 +5486,7 @@ class AfterlifeEchoesSpell(Spell):
         stats = Spell.fmt_dict(self)
         stats["minion_range"] = self.get_stat("minion_range", base=5)
         stats["minion_damage"] = self.get_stat("minion_damage", base=1)
+        stats["minion_duration"] = self.get_stat("minion_duration", base=10)
         return stats
 
     def get_impacted_tiles(self, x, y):
@@ -6700,11 +6685,11 @@ class PrimordialRotSpell(Spell):
 
         self.minion_health = 64
         self.minion_damage = 3
-        self.minion_duration = 10
+        self.minion_duration = 6
         self.max_hp_steal = 4
 
         self.upgrades["minion_health"] = (64, 7)
-        self.upgrades["minion_duration"] = (5, 3)
+        self.upgrades["minion_duration"] = (4, 3)
         self.upgrades["max_hp_steal"] = (4, 4)
         self.add_upgrade(PrimordialWasting())
 
