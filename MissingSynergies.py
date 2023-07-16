@@ -5310,16 +5310,12 @@ class AfterlifeEchoesBuff(Buff):
     def __init__(self, spell):
         self.spell = spell
         Buff.__init__(self)
-    
-    def on_pre_advance(self):
-        self.count = 0
 
     def on_init(self):
         self.name = "Afterlife Echoes"
         self.color = Tags.Dark.color
         self.radius = self.spell.get_stat("radius")
         self.stack_type = STACK_REPLACE
-        self.count = 0
         if self.spell.get_stat("life"):
             self.echo_type = self.ECHO_LIFE
         elif self.spell.get_stat("spirit"):
@@ -5336,9 +5332,6 @@ class AfterlifeEchoesBuff(Buff):
 
         if are_hostile(evt.unit, self.owner) or evt.unit.is_player_controlled or evt.unit.source is self.spell:
             return
-        if self.count >= self.spell.get_stat("num_targets"):
-            return
-        self.count += 1
         self.owner.level.queue_spell(self.boom(evt.unit))
 
     def boom(self, unit):
@@ -5397,14 +5390,15 @@ class AfterlifeEchoesBuff(Buff):
                             target.deal_damage(excess, Tags.Poison, self.spell)
                         target.apply_buff(Poison(), damage)
             yield
-
-        existing = unit.get_buff(ReincarnationBuff)
-        if existing:
-            existing.lives += 1
-        else:
-            unit.apply_buff(ReincarnationBuff())
+        
         point = Point(unit.x, unit.y)
-        unit.kill()
+        if not unit.has_buff(SplittingBuff):
+            existing = unit.get_buff(ReincarnationBuff)
+            if existing:
+                existing.lives += 1
+            else:
+                unit.apply_buff(ReincarnationBuff())
+            unit.kill()
 
         if self.echo_type == self.ECHO_SPIRIT and [tag for tag in [Tags.Holy, Tags.Demon, Tags.Undead] if tag in unit.tags]:
             shade = Unit()
@@ -5472,9 +5466,7 @@ class AfterlifeEchoesSpell(Spell):
 
         self.duration = 15
         self.radius = 2
-        self.num_targets = 5
 
-        self.upgrades["num_targets"] = (5, 4, "Trigger Limit", "Afterlife Echoes can trigger 5 more times per turn.")
         self.upgrades["radius"] = (1, 3)
         self.upgrades["duration"] = (15, 2)
         self.upgrades["life"] = (1, 5, "Life Echoes", "When you summon a [living] or [nature] minion, that minion's death explosion will [poison] enemies for a number of turns equal to 50% of its max HP.\nIf an enemy is already [poisoned], any excess duration will be dealt as [poison] damage.", "echo")
@@ -5493,9 +5485,9 @@ class AfterlifeEchoesSpell(Spell):
         return [Point(self.caster.x, self.caster.y)]
 
     def get_description(self):
-        return ("The first [{num_targets}:num_targets] times each turn you summon a minion from any source other than this spell, that minion gains 1 reincarnation, then immediately dies.\n"
+        return ("For [{duration}_turns:duration], whenever you summon a minion from any source other than this spell, that minion gains 1 reincarnation, then immediately dies.\n"
                 "This death creates an explosion that deals [holy] and [dark] damage to enemies in a [{radius}_tile:radius] burst. The damage dealt is equal to half of the minion's max HP.\n"
-                "Lasts [{duration}_turns:duration].").format(**self.fmt_dict())
+                "Minions that split on death do not gain reincarnations or die, but still trigger all other effects of this spell.").format(**self.fmt_dict())
 
     def cast_instant(self, x, y):
         self.caster.apply_buff(AfterlifeEchoesBuff(self), self.get_stat("duration"))
