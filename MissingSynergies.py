@@ -5391,7 +5391,6 @@ class AfterlifeEchoesBuff(Buff):
                         target.apply_buff(Poison(), damage)
             yield
         
-        point = Point(unit.x, unit.y)
         if not unit.has_buff(SplittingBuff):
             existing = unit.get_buff(ReincarnationBuff)
             if existing:
@@ -5411,7 +5410,7 @@ class AfterlifeEchoesBuff(Buff):
             shade.flying = True
             shade.spells = [AfterlifeShadeBolt(unit.max_hp//10 + self.spell.get_stat("minion_damage", base=1), self.spell.get_stat("minion_range", base=5))]
             shade.turns_to_death = self.spell.get_stat("minion_duration", base=10)
-            self.spell.summon(shade, target=point, radius=5)
+            self.spell.summon(shade, radius=RANGE_GLOBAL, sort_dist=False)
             return
         
         if self.echo_type == self.ECHO_SHATTERING and [tag for tag in [Tags.Arcane, Tags.Metallic, Tags.Glass] if tag in unit.tags]:
@@ -5470,7 +5469,7 @@ class AfterlifeEchoesSpell(Spell):
         self.upgrades["radius"] = (1, 3)
         self.upgrades["duration"] = (15, 2)
         self.upgrades["life"] = (1, 5, "Life Echoes", "When you summon a [living] or [nature] minion, that minion's death explosion will [poison] enemies for a number of turns equal to 50% of its max HP.\nIf an enemy is already [poisoned], any excess duration will be dealt as [poison] damage.", "echo")
-        self.upgrades["spirit"] = (1, 5, "Spirit Echoes", "When you summon a [holy], [demon], or [undead] minion, that minion's death explosion will summon an Afterlife Shade with the same max HP for [{minion_duration}_turns:minion_duration].\nThe Afterlife Shade has an attack with [{minion_range}_range:minion_range] that deals [holy] and [dark] damage equal to [{minion_damage}:minion_damage] plus 10% of its max HP.", "echo")
+        self.upgrades["spirit"] = (1, 5, "Spirit Echoes", "When you summon a [holy], [demon], or [undead] minion, that minion's death explosion will summon an Afterlife Shade with the same max HP for [{minion_duration}_turns:minion_duration] on a random tile.\nThe Afterlife Shade has an attack with [{minion_range}_range:minion_range] that deals [holy] and [dark] damage equal to [{minion_damage}:minion_damage] plus 10% of its max HP.", "echo")
         self.upgrades["elemental"] = (1, 5, "Elemental Echoes", "When you summon a [fire], [lightning], or [ice] minion, that minion's death explosion has a chance to cast Fireball, Lightning Bolt, or Icicle respectively at valid enemy targets.\nA minion with multiple tags will try to cast every qualifying spell independently in random order.\nThe chance to cast is the minion's max HP divided by 40, with an extra guaranteed cast per 40 HP the minion has.\nThese spells gain all of your upgrades and bonuses.", "echo")
         self.upgrades["shattering"] = (1, 5, "Shattering Echoes", "When you summon an [arcane], [metallic], or [glass] minion, that minion's death explosion will summon a Soul Shard on a random tile for every 20 HP and [2_SH:shields] the minion has, rounded up.\nSoul Shards have fixed 1 HP and [1_SH:shields], and teleport to random tiles each turn. They deal [2_physical:physical] or [2_arcane:arcane] damage to enemies that hit them.", "echo")
 
