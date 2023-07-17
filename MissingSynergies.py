@@ -1379,6 +1379,7 @@ class RaiseDracolichBreath(BreathWeapon):
     def per_square_effect(self, x, y):
 
         unit = self.caster.level.get_unit_at(x, y)
+        self.caster.level.queue_spell(self.try_raise(unit))
         self.caster.level.deal_damage(x, y, self.get_stat("damage"), Tags.Dark, self)
         if self.legacy:
             self.caster.level.deal_damage(x, y, self.get_stat("damage")//2, self.legacy, self)
@@ -1394,6 +1395,7 @@ class RaiseDracolichBreath(BreathWeapon):
             elif unit and unit.is_alive():
                 unit.deal_damage(ghost.spells[0].damage, Tags.Dark, self)
         
+    def try_raise(self, unit):
         if unit and not unit.is_alive():
             skeleton = mods.Bugfixes.Bugfixes.raise_skeleton(self.caster, unit, source=self.caster.source, summon=False)
             if not skeleton:
@@ -1402,6 +1404,7 @@ class RaiseDracolichBreath(BreathWeapon):
             summoned = self.caster.source.summon(skeleton, target=unit)
             if summoned and self.legacy:
                 skeleton.apply_buff(TouchedBySorcery(self.legacy, self.caster.source))
+        yield
 
 class RaiseDracolichSoulJar(LichSealSoulSpell):
 
