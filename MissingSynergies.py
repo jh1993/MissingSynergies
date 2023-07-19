@@ -6605,7 +6605,7 @@ class PrimordialRotBuff(Buff):
         self.name = "Primordial Rot"
         self.color = Tags.Dark.color
         self.max_hp_steal = self.spell.get_stat("max_hp_steal")
-        self.description = "Attacks steal %i max HP and deal bonus damage based on max HP." % self.max_hp_steal
+        self.description = "Attacks steal %i max HP and deal bonus damage based on max HP. Has a 10%% chance to die each turn." % self.max_hp_steal
         self.global_triggers[EventOnPreDamaged] = self.on_pre_damaged
     
     def on_pre_damaged(self, evt):
@@ -6630,6 +6630,8 @@ class PrimordialRotBuff(Buff):
 
     def on_advance(self):
         self.spell.update_sprite(self.owner)
+        if random.random() < 0.1:
+            self.owner.kill()
 
     # For my No More Scams mod
     def can_redeal(self, target, source, damage_type, already_checked):
@@ -6648,7 +6650,6 @@ def PrimordialRotUnit(spell, max_hp):
     unit.buffs = [PrimordialRotBuff(spell, spell.caster.get_buff(PrimordialWasting))]
     if max_hp >= 8:
         unit.buffs.append(SplittingBuff(lambda: PrimordialRotUnit(spell, unit.max_hp//2)))
-    unit.turns_to_death = spell.get_stat("minion_duration")
     return unit
 
 class PrimordialWasting(Upgrade):
@@ -6683,15 +6684,14 @@ class PrimordialRotSpell(Spell):
         self.max_hp_steal = 4
 
         self.upgrades["minion_health"] = (64, 7)
-        self.upgrades["minion_duration"] = (4, 3)
         self.upgrades["max_hp_steal"] = (4, 4)
         self.add_upgrade(PrimordialWasting())
 
     def get_description(self):
-        return ("Summon a [nature] [undead] [slime] minion for [{minion_duration}_turns:minion_duration]. It has [{minion_health}_HP:minion_health] and a melee attack that deals [{minion_damage}_dark:dark] damage.\n"
+        return ("Summon a [nature] [undead] [slime] minion with [{minion_health}_HP:minion_health] and a melee attack that deals [{minion_damage}_dark:dark] damage.\n"
                 "The slime's attacks steal [{max_hp_steal}:dark] max HP, and instantly kill targets with less max HP than that; this counts as dying to [dark] damage.\n"
                 "Its melee attacks deal bonus damage equal to 25% of its max HP, and other attacks deal bonus damage equal to 10% of its max HP.\n"
-                "On death, the slime splits into two slimes with half max HP if its initial max HP was at least 8.").format(**self.fmt_dict())
+                "The slime has a 10% chance to die each turn. On death, the slime splits into two slimes with half max HP if its initial max HP was at least 8.").format(**self.fmt_dict())
 
     def update_sprite(self, unit):
         if unit.max_hp >= 256:
