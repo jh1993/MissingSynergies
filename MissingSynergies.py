@@ -7914,14 +7914,17 @@ class IronTurtleAura(DamageAuraBuff):
     def get_tooltip(self):
         return "For every 100 resistance above 100, deal 1 damage of that type to enemies in a %i tile radius per turn. Excess resistances below 100 have a chance to deal damage." % self.radius
 
-    def on_advance(self):
-
-        self.damage_type = []
+    def update_damage_types(self):
         for tag in self.owner.resists.keys():
             if tag == Tags.Heal:
                 continue
             if self.owner.resists[tag] > 100:
                 self.damage_type.append(tag)
+
+    def on_advance(self):
+
+        self.damage_type = []
+        self.update_damage_types()
         if not self.damage_type:
             return
 
@@ -7979,18 +7982,26 @@ class IronTurtleBuff(TurtleBuff):
         for buff in self.owner.buffs:
             if not isinstance(buff, DamageAuraBuff) or buff.damage_dealt <= 0:
                 continue
-            units = [unit for unit in self.owner.level.get_units_in_los(self.owner) if are_hostile(unit, self.owner)]
+            if isinstance(buff, IronTurtleAura):
+                buff.update_damage_types()
+            if not buff.damage_type:
+                continue
+            units = [unit for unit in self.owner.level.get_units_in_ball(self.owner, buff.radius) if are_hostile(unit, self.owner)]
             if not units:
-                return
+                continue
             amount = math.ceil(random.random()*buff.damage_dealt)
             buff.damage_dealt -= amount
-            self.owner.level.queue_spell(self.bolt(random.choice(units), amount))
+            if isinstance(buff.damage_type, Tag):
+                dtypes = [buff.damage_type]
+            else:
+                dtypes = buff.damage_type
+            self.owner.level.queue_spell(self.bolt(random.choice(units), amount, dtypes))
 
-    def bolt(self, target, damage):
+    def bolt(self, target, damage, dtypes):
         for point in Bolt(self.owner.level, self.owner, target, find_clear=False):
-            self.owner.level.show_effect(point.x, point.y, random.choice([Tags.Fire, Tags.Lightning, Tags.Physical]), minor=True)
+            self.owner.level.show_effect(point.x, point.y, random.choice(dtypes), minor=True)
             yield
-        target.deal_damage(damage, random.choice([Tags.Fire, Tags.Lightning, Tags.Physical]), self)
+        target.deal_damage(damage, random.choice(dtypes), self)
 
 class IronTurtleSpell(Spell):
 
@@ -8010,7 +8021,7 @@ class IronTurtleSpell(Spell):
         self.upgrades["radius"] = (3, 4)
         self.upgrades["cleanse"] = (1, 2, "Iron Constitution", "Before the start of each of its turns, each of the iron turtle's debuffs has a 50% chance to be removed.")
         self.upgrades["expert"] = (1, 6, "Defense Expert", "Whenever the iron turtle receives a buff or passive effect that increases its resistances, those resistances are increased by an additional 25 each.")
-        self.upgrades["cannon"] = (1, 4, "Aura Cannon", "All of the iron turtle's damage auras store the total amount of damage they have dealt.\nEach turn, the turtle fires a shot at a random enemy in line of sight for each of its damage auras that still has damage stored, expending a random amount of the stored damage to deal that much [fire], [lightning], or [physical] damage to the target.")
+        self.upgrades["cannon"] = (1, 4, "Aura Cannon", "All of the iron turtle's damage auras store the total amount of damage they have dealt.\nEach turn, the turtle fires a shot at a random enemy in the aura's radius for each of its damage auras that still has damage stored, expending a random amount of the stored damage to deal that much damage of one of the aura's damage types to the target.\nIf an aura has no defined damage types, it will be skipped. The damage types of the turtle's innate aura are the damage types it has more than 100 resistance to.")
 
     def get_description(self):
         return ("Summon a [metallic] [nature] [construct] turtle minion with [{minion_health}_HP:minion_health] and a melee attack that deals [{minion_damage}_physical:physical] damage. It has [100_poison:poison], [100_lightning:lightning], [100_ice:ice], [50_fire:fire], and [50_physical:physical] resistance.\n"
