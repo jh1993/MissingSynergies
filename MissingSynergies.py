@@ -13259,27 +13259,6 @@ class WarpStrike(Upgrade):
         if unit.cur_hp <= 0:
             unit.kill()
 
-class MimeticHydraBuff(Buff):
-
-    def __init__(self, spell):
-        self.spell = spell
-        Buff.__init__(self)
-    
-    def on_init(self):
-        self.color = Tags.Metallic.color
-        self.owner_triggers[EventOnDeath] = self.on_death
-    
-    def on_applied(self, owner):
-        self.max_lifetime = self.owner.turns_to_death
-        self.description = "On death, splits into two hydras whose combined lifetimes is %i." % self.max_lifetime
-
-    def on_death(self, evt):
-        if self.max_lifetime <= 1:
-            return
-        first = random.randint(1, self.max_lifetime - 1)
-        self.owner.level.queue_spell(self.spell.summon_hydra(target=self.owner, lifetime=first))
-        self.owner.level.queue_spell(self.spell.summon_hydra(target=self.owner, lifetime=self.max_lifetime - first))
-
 class ParticleBeam(HydraBeam):
 
     def __init__(self, spell, caster):
@@ -13326,28 +13305,30 @@ class MimeticHydraSpell(Spell):
         self.upgrades["dragon_mage"] = (1, 6, "Dragon Mage", "The hydra will cast Silver Spear on the target of its particle beam.\nThis Silver Spear gains all of your upgrades and bonuses.")
 
     def get_description(self):
-        return ("Summon a hydra made of shape-memory alloy, a stationary [metallic] [dragon] [construct] minion with [{minion_health}_HP:minion_health] that lasts [{minion_duration}_turns:minion_duration].\n"
+        return ("Summon a hydra made of shape-memory alloy, a stationary [metallic] [slime] [dragon] [construct] minion with [{minion_health}_HP:minion_health] that lasts [{minion_duration}_turns:minion_duration].\n"
                 "The hydra has a particle beam attack that deals [{breath_damage}_physical:physical] damage and melts walls, with a range of [{minion_range}_tiles:minion_range]. It is considered a breath weapon.\n"
-                "When the hydra dies, if its original maximum lifetime was greater than 1 turn, it splits into two hydras, and its original maximum lifetime is randomly split between them.").format(**self.fmt_dict())
+                "When the hydra dies, if its original lifetime was greater than 1, it splits into two hydras, each with a random lifetime between 1 and its parent's original lifetime minus 1.").format(**self.fmt_dict())
 
-    def summon_hydra(self, target, lifetime=None):
-        if lifetime is None:
-            lifetime = self.get_stat("minion_duration")
+    def get_hydra(self, lifetime=None):
         unit = Unit()
+        if lifetime is None:
+            unit.turns_to_death = self.get_stat("minion_duration")
+        else:
+            unit.turns_to_death = random.randint(1, lifetime)
         unit.name = "Mimetic Hydra"
         unit.asset = ["MissingSynergies", "Units", "mimetic_hydra"]
         unit.max_hp = self.get_stat("minion_health")
         unit.stationary = True
-        unit.tags = [Tags.Metallic, Tags.Dragon, Tags.Construct]
-        unit.turns_to_death = lifetime
+        unit.tags = [Tags.Metallic, Tags.Slime, Tags.Dragon, Tags.Construct]
         unit.spells = [ParticleBeam(self, unit)]
-        if lifetime > 1:
-            unit.buffs = [MimeticHydraBuff(self)]
-        self.summon(unit, target, radius=5)
-        yield
-    
-    def cast(self, x, y):
-        yield from self.summon_hydra(Point(x, y))
+        if unit.turns_to_death > 1:
+            # Have to evaluate the value now, otherwise lazy evaluation screws this up.
+            new_lifetime = unit.turns_to_death - 1
+            unit.buffs = [SplittingBuff(lambda: self.get_hydra(new_lifetime))]
+        return unit
+
+    def cast_instant(self, x, y):
+        self.summon(self.get_hydra(), target=Point(x, y))
 
 class ThornShotThorns(Thorns):
 
