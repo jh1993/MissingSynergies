@@ -1861,6 +1861,8 @@ class CustomSpiritBlast(SimpleRangedAttack):
     def __init__(self, spell, tags):
         self.power = spell.get_stat("power")
         SimpleRangedAttack.__init__(self, damage=spell.get_stat("minion_damage"), damage_type=tags if len(tags) == 2 else tags[0], range=spell.get_stat("minion_range"), radius=1)
+        if spell.get_stat("direct"):
+            self.damage += spell.get_stat("damage")//2
         self.name = "%s Blast" % get_spirit_combo(tags)
         if self.power and len(tags) == 2:
             self.all_damage_types = True
@@ -1879,23 +1881,22 @@ class CustomSpiritBlast(SimpleRangedAttack):
                 for _ in range(2):
                     self.caster.level.deal_damage(x, y, self.get_stat("damage"), self.damage_type, self)
 
-class ElementalChaosSpell(Spell):
+class ElementalSpiritsSpell(Spell):
 
     def on_init(self):
-        self.name = "Elemental Chaos"
-        self.asset = ["MissingSynergies", "Icons", "elemental_chaos"]
-        self.tags = [Tags.Arcane, Tags.Ice, Tags.Chaos, Tags.Conjuration]
+        self.name = "Elemental Spirits"
+        self.asset = ["MissingSynergies", "Icons", "elemental_spirits"]
+        self.tags = [Tags.Fire, Tags.Lightning, Tags.Arcane, Tags.Ice, Tags.Conjuration]
         self.level = 6
-        self.max_charges = 2
+        self.max_charges = 3
 
         self.minion_health = 36
         self.minion_damage = 11
         self.minion_range = 6
-        self.minion_duration = 15
 
-        self.upgrades["minion_duration"] = (10, 2)
         self.upgrades["fire_focus"] = (1, 2, "Fire Focus", "The storm spirit is replaced by [{num_summons}:num_summons] fire spirits.", "focus")
         self.upgrades["lightning_focus"] = (1, 2, "Lightning Focus", "The starfire spirit is replaced by [{num_summons}:num_summons] spark spirits.", "focus")
+        self.upgrades["direct"] = (1, 3, "Direct Empowerment", "The spirits' damage is now increased by 50% of this spell's [damage] bonuses.\n[Damage] bonuses are usually obtained from Lord skills of the appropriate elements.")
         self.upgrades["retroactive"] = (1, 5, "Retroactive Growth", "New spirits you summon will have max HP equal to the average max HP of all existing spirits, if it is greater than the new spirit's initial HP.")
         self.upgrades["power"] = (1, 6, "Elemental Power", "The attacks of hybrid spirits deal damage of both of their elements instead of randomly one of them.\nThe attacks of pure spirits hit twice.")
     
@@ -1905,9 +1906,9 @@ class ElementalChaosSpell(Spell):
         return stats
 
     def get_description(self):
-        return ("Summon a starfire spirit, chaos spirit, and storm spirit for [{minion_duration}_turns:minion_duration].\n"
+        return ("Summon a starfire spirit, chaos spirit, and storm spirit.\n"
                 "Each spirit has [{minion_health}_HP:minion_health], [4_damage:minion_damage] melee retaliation of their elements, and an attack with [{minion_range}_range:minion_range] and [1_radius:radius] that deals [{minion_damage}_damage:minion_damage] of a random one of their elements.\n"
-                "Each spirit gains [5:minion_health] max HP when witnessing a spell of one of its elements.").format(**self.fmt_dict())
+                "Each spirit gains 5 max HP when witnessing a spell of one of its elements.").format(**self.fmt_dict())
     
     def get_spirit(self, tags):
         spirit = Unit()
@@ -1921,7 +1922,6 @@ class ElementalChaosSpell(Spell):
             spirit.buffs.append(SpiritBuff(tag))
             spirit.buffs.append(Thorns(4, tag))
         spirit.spells = [CustomSpiritBlast(self, tags)]
-        spirit.turns_to_death = self.get_stat("minion_duration")
         return spirit
     
     def cast_instant(self, x, y):
@@ -13403,6 +13403,6 @@ class ThornShot(Upgrade):
                 return True
         return False
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalChaosSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell])
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell])
 
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture, BatEscape, EyeBleach, AntimatterInfusion, WarpStrike, ThornShot])
