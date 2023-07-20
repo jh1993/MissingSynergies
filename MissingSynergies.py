@@ -8669,10 +8669,11 @@ class ReflexArcSpell(Spell):
             yield
         damage = self.get_stat("damage")
         unit = self.caster.level.get_unit_at(x, y)
-        if unit:
-            unit.apply_buff(Poison(), self.get_stat("duration")*10)
-        self.caster.level.deal_damage(x, y, damage, Tags.Lightning, self)
-        self.caster.level.deal_damage(x, y, damage, Tags.Poison, self)
+        if not unit or not are_hostile(unit, self.caster):
+            return
+        unit.apply_buff(Poison(), self.get_stat("duration")*10)
+        unit.deal_damage(damage, Tags.Lightning, self)
+        unit.deal_damage(damage, Tags.Poison, self)
 
 class ReflexArc(Upgrade):
 
@@ -8698,6 +8699,7 @@ class ReflexArc(Upgrade):
 
     def get_description(self):
         return ("Each turn, apply [{poison_duration}_turns:duration] of [poison] and deal [{damage}_lightning:lightning] and [{damage}_poison:poison] damage to a random enemy in line of sight within [{range}_tiles:range] of yourself.\n"
+                "If no enemy can be targeted, instead target a random tile. This will not hurt allies.\n"
                 "This counts as you casting a level 1 [nature] [lightning] [sorcery] spell.\n"
                 "This skill benefits 10 times from bonuses to [duration].").format(**self.fmt_dict())
 
@@ -8706,7 +8708,10 @@ class ReflexArc(Upgrade):
             return
         target = self.spell.get_ai_target()
         if not target:
-            return
+            points = [p for p in self.owner.level.get_points_in_ball(self.owner.x, self.owner.y, self.get_stat("range")) if self.spell.can_cast(p.x, p.y)]
+            if not points:
+                return
+            target = random.choice(points)
         self.owner.level.act_cast(self.owner, self.spell, target.x, target.y)
 
 class DyingStar(Upgrade):
