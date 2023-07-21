@@ -1763,7 +1763,7 @@ class TwistedMutationSpell(Spell):
         self.minion_damage = 3
         self.radius = 4
 
-        self.upgrades["hp_bonus"] = (1, 2, "Twisted Vitality", "The target gains [30_HP:minion_health].\nThis bonus can only be granted once per unit.")
+        self.upgrades["hp_bonus"] = (1, 2, "Twisted Vitality", "The target gains [30_HP:minion_health], which persists after death.\nThis bonus can only be granted once per unit.")
         self.upgrades["on_death"] = (1, 4, "Twisted Remains", "On death, the target spawns a giant spider, green slime, or large toxic worm ball for every 10 max HP it had.")
         self.upgrades["adapt"] = (1, 3, "Chaos Adaptation", "The target gains [50_physical:physical], [50_fire:fire], and [50_lightning:lightning] resistance.\nWhen it takes damage, its resistance to that damage type is increased by a random amount and resistance to another random damage type is decreased by the same amount, without increasing any resistance above 100 or decreasing below 0.")
     
@@ -1771,10 +1771,10 @@ class TwistedMutationSpell(Spell):
         return [Point(x, y)]
 
     def get_description(self):
-        return ("Can only target [living], [nature], or [demon] allies.\n"
-                "The target becomes a [spider], [slime], and [poison] unit.\n"
+        return ("Can only target [living], [nature], or [demon] allies. The target becomes a [spider], [slime], and [poison] unit.\n"
                 "It gains a passive web-weaving ability, [100_poison:poison] resistance, an aura that deals [2_poison:poison] damage to enemies in a [{radius}_tile:radius] radius each turn, and a slime-like ability to randomly gain max HP and spawn mutant slime offshoots.\n"
-                "The mutant slimes have the same max HP as the unit that spawned them, melee attacks that deal [{minion_damage}_poison:poison] damage, and all abilities granted by this spell.").format(**self.fmt_dict())
+                "The mutant slimes have the same max HP as the unit that spawned them, melee attacks that deal [{minion_damage}_poison:poison] damage, and all abilities granted by this spell.\n"
+                "These changes are permanent and persist after death.").format(**self.fmt_dict())
     
     def can_cast(self, x, y):
         if not Spell.can_cast(self, x, y):
@@ -1815,8 +1815,12 @@ class TwistedMutationSpell(Spell):
 
         if self.get_stat("hp_bonus") and not hasattr(unit, "twisted_vitality_buffed"):
             unit.max_hp += 30
+            buff = unit.get_buff(ReincarnationBuff)
+            if buff:
+                buff.max_hp += 30
             unit.deal_damage(-30, Tags.Heal, self)
             unit.twisted_vitality_buffed = True
+        
         if Tags.Spider not in unit.tags:
             unit.tags.append(Tags.Spider)
             buff = SpiderBuff()
@@ -1825,7 +1829,9 @@ class TwistedMutationSpell(Spell):
         
         if Tags.Slime not in unit.tags:
             unit.tags.append(Tags.Slime)
-            buff = SlimeBuff(lambda: self.get_mutant_slime(unit.max_hp))
+            # Must do this to avoid lazy evaluation.
+            hp = unit.max_hp
+            buff = SlimeBuff(lambda: self.get_mutant_slime(hp))
             buff.buff_type = BUFF_TYPE_PASSIVE
             unit.apply_buff(buff)
         
@@ -6231,6 +6237,9 @@ class GrudgeReaperBuff(Soulbound):
                 return
         self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
         self.owner.kill(trigger_death_event=False)
+
+    def on_advance(self):
+        pass
 
     def on_pre_advance(self):
         if not self.guardian.is_alive():
@@ -12313,7 +12322,7 @@ class SlimeInstability(Upgrade):
         self.asset = ["MissingSynergies", "Icons", "slime_instability"]
         self.tags = [Tags.Chaos, Tags.Arcane]
         self.level = 4
-        self.description = "Whenever you summon a [slime] minion, it immediately acts once.\nEach turn, each of your [slime] minions has a 25% chance to merge with another random adjacent slime summoned by the same source, sacrificing itself to add its current and max HP to the other slime.\nThis may cause the other slime to split into more than two slimes on its turn."
+        self.description = "Whenever you summon a [slime] minion, it immediately acts once.\nEach turn, each of your [slime] minions has a 25% chance to merge with another random adjacent slime summoned by the same source, adding its current and max HP to the other slime; this does not count as dying.\nThis may cause the other slime to split into more than two slimes on its turn."
         self.global_triggers[EventOnUnitAdded] = self.on_unit_added
     
     def on_unit_added(self, evt):
@@ -12344,7 +12353,7 @@ class SlimeInstability(Upgrade):
             other.max_hp += unit.max_hp
             other.deal_damage(-unit.cur_hp, Tags.Heal, self)
             self.owner.level.show_effect(unit.x, unit.y, Tags.Poison)
-            unit.kill()
+            unit.kill(trigger_death_event=False)
 
 class OrbPonderanceBuff(Buff):
 
