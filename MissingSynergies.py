@@ -2244,7 +2244,7 @@ class EnfleshedBuff(Buff):
             self.owner_triggers[EventOnDeath] = lambda evt: self.owner.level.queue_spell(self.boom())
 
     def on_applied(self, owner):
-        if self.owner.has_buff(SlimeBuff):
+        if Tags.Slime in self.owner.tags:
             self.hp = 0
         self.owner.max_hp += self.hp
         self.owner.cur_hp += self.hp
@@ -2312,7 +2312,7 @@ class MalignantGrowthSpell(Spell):
         return ("Enemies in a [{radius}_tile:radius] radius are enfleshed. They become [living], lose [100_poison:poison] resistance, and gain [{hp_bonus}:living] max HP; the HP bonus is equal to 5 times the [damage] of this spell.\n"
                 "Each turn, enfleshed enemies take [poison] damage equal to 5% of their max HP.\n"
                 "If an enfleshed unit's current HP drops to an amount equal to or below the max HP it gained from enfleshment, it dies instantly at the end of its turn; this is treated as killed by [poison] damage equal to the enfleshed amount.\n"
-                "This spell cannot increase the max HP of units that split like slimes.").format(**self.fmt_dict())
+                "This spell cannot increase the max HP of [slime] units.").format(**self.fmt_dict())
 
     def cast_instant(self, x, y):
         friendly = self.get_stat("friendly")
@@ -3700,7 +3700,7 @@ class ChaosConcoctionSpell(Spell):
     def get_description(self):
         return ("Splash all units in a [{radius}_tile:radius] burst with caustic gel, hitting each unit 1 to [{max_hits}:num_targets] times.\n"
                 "When affecting an enemy, each hit deals [{damage}_poison:poison], [{damage}_fire:fire], [{damage}_lightning:lightning], or [{damage}_physical:physical] damage, and removes a random buff.\n"
-                "When affecting an ally, each hit removes a random debuff. If the ally is a [slime], each hit will also increase the ally's current and max HP by [{damage}:heal].").format(**self.fmt_dict())
+                "When affecting an ally, each hit removes a random debuff. If the ally is a [slime], each hit will also increase the ally's current and max HP by [{damage}:heal], up to 10% of its splitting threshold.").format(**self.fmt_dict())
 
     def hit(self, x, y, damage, catalyst=False):
         tag = random.choice([Tags.Poison, Tags.Fire, Tags.Lightning, Tags.Physical])
@@ -3709,9 +3709,11 @@ class ChaosConcoctionSpell(Spell):
             self.caster.level.show_effect(x, y, tag)
             return
         if unit.team == TEAM_PLAYER:
-            if Tags.Slime in unit.tags:
-                unit.max_hp += damage
-                unit.deal_damage(-damage, Tags.Heal, self)
+            buff = unit.get_buff(SlimeBuff)
+            if buff:
+                amount = min(damage, buff.to_split//10)
+                unit.max_hp += amount
+                unit.deal_damage(-amount, Tags.Heal, self)
                 if catalyst:
                     existing = unit.get_buff(ChaosCatalystBuff)
                     if existing:
@@ -6643,7 +6645,7 @@ def PrimordialRotUnit(spell, max_hp):
     unit.max_hp = max_hp
     unit.asset = ["MissingSynergies", "Units", ""]
     spell.update_sprite(unit)
-    unit.tags = [Tags.Dark, Tags.Nature, Tags.Undead, Tags.Slime]
+    unit.tags = [Tags.Dark, Tags.Nature, Tags.Undead]
     unit.resists[Tags.Poison] = 100
     unit.resists[Tags.Physical] = 50
     unit.spells = [SimpleMeleeAttack(damage=spell.get_stat("minion_damage"), damage_type=Tags.Dark)]
@@ -6657,7 +6659,7 @@ class PrimordialWasting(Upgrade):
     def on_init(self):
         self.name = "Primordial Wasting"
         self.level = 4
-        self.description = "The slime's attacks permanently inflict wasting, which deals [dark] damage each turn equal to the amount of max HP the target has lost since the debuff was inflicted.\nThis is treated as damage dealt by your Wastefire spell."
+        self.description = "The spirit's attacks permanently inflict wasting, which deals [dark] damage each turn equal to the amount of max HP the target has lost since the debuff was inflicted.\nThis is treated as damage dealt by your Wastefire spell."
     
     def on_applied(self, owner):
         self.spell = WastefireSpell()
@@ -6688,10 +6690,10 @@ class PrimordialRotSpell(Spell):
         self.add_upgrade(PrimordialWasting())
 
     def get_description(self):
-        return ("Summon a [nature] [undead] [slime] minion with [{minion_health}_HP:minion_health] and a melee attack that deals [{minion_damage}_dark:dark] damage.\n"
-                "The slime's attacks steal [{max_hp_steal}:dark] max HP, and instantly kill targets with less max HP than that; this counts as dying to [dark] damage.\n"
+        return ("Summon a [nature] [undead] spirit of rot with [{minion_health}_HP:minion_health] and a melee attack that deals [{minion_damage}_dark:dark] damage.\n"
+                "The spirit's attacks steal [{max_hp_steal}:dark] max HP, and instantly kill targets with less max HP than that; this counts as dying to [dark] damage.\n"
                 "Its melee attacks deal bonus damage equal to 25% of its max HP, and other attacks deal bonus damage equal to 10% of its max HP.\n"
-                "The slime has a 10% chance to die each turn. On death, the slime splits into two slimes with half max HP if its initial max HP was at least 8.").format(**self.fmt_dict())
+                "The spirit has a 10% chance to die each turn. On death, the spirit splits into two spirits with half max HP if its initial max HP was at least 8.").format(**self.fmt_dict())
 
     def update_sprite(self, unit):
         if unit.max_hp >= 256:
@@ -11960,6 +11962,39 @@ class BloodMitosis(Upgrade):
     def on_damaged(self, evt):
         self.damage_taken += evt.damage
 
+class ScrapBuff(Buff):
+
+    def __init__(self, upgrade, amount):
+        self.upgrade = upgrade
+        self.amount = amount
+        Buff.__init__(self)
+        self.update_name()
+        self.color = Tags.Metallic.color
+    
+    def on_attempt_apply(self, owner):
+        existing = owner.get_buff(ScrapBuff)
+        if existing:
+            existing.amount += self.amount
+            existing.update_name()
+            return False
+        else:
+            return True
+
+    def update_name(self):
+        self.name = "Scrap %i" % self.amount
+
+    def on_advance(self):
+        targets = [u for u in self.owner.level.get_units_in_ball(self.owner, self.upgrade.get_stat("range")) if are_hostile(u, self.owner) and self.owner.level.can_see(u.x, u.y, self.owner.x, self.owner.y)]
+        if not targets:
+            return
+        amounts = {}
+        for t in targets:
+            amounts[t] = 0
+        for _ in range(self.amount):
+            amounts[random.choice(targets)] += 1
+        self.owner.level.queue_spell(send_bolts(lambda p: self.owner.level.show_effect(p.x, p.y, Tags.Physical, minor=True), lambda t: t.deal_damage(amounts[t], Tags.Physical, self.upgrade), self.owner, targets))
+        self.owner.remove_buff(self)
+
 class ScrapBurst(Upgrade):
     
     def on_init(self):
@@ -11967,36 +12002,17 @@ class ScrapBurst(Upgrade):
         self.asset = ["MissingSynergies", "Icons", "scrap_burst"]
         self.tags = [Tags.Metallic]
         self.level = 5
-        self.radius = 6
-        self.damage = 5
-        self.global_triggers[EventOnDeath] = self.on_death
+        self.range = 10
+        self.global_triggers[EventOnDamaged] = self.on_damaged
 
     def get_description(self):
-        return ("Whenever one of your [metallic] minions dies, it explodes into a number of scrap pieces equal to 10% of its max HP, rounded up, each targeting a random enemy or another [metallic] minion in a [{radius}_tile:radius] burst.\n"
-                "If targeting an enemy, that enemy takes [{damage}_physical:physical] damage.\n"
-                "If targeting a [metallic] minion, that minion gains [{damage}:heal] current and max HP.").format(**self.fmt_dict())
+        return ("Whenever one of your [metallic] minions takes damage, you gain a random amount of scrap between 1 and the damage it took.\n"
+                "Each turn, you split all your scrap randomly among all enemies in line of sight within a range of [{range}_tiles:range]. Each enemy takes [physical] damage equal to the amount of scrap shot at it.").format(**self.fmt_dict())
 
-    def on_death(self, evt):
+    def on_damaged(self, evt):
         if are_hostile(evt.unit, self.owner) or Tags.Metallic not in evt.unit.tags:
             return
-        targets = [u for u in self.owner.level.get_units_in_ball(evt.unit, self.get_stat("radius")) if are_hostile(u, self.owner) or Tags.Metallic in u.tags]
-        targets = [u for u in targets if u is not evt.unit and self.owner.level.can_see(u.x, u.y, evt.unit.x, evt.unit.y)]
-        if not targets:
-            return
-        damage = self.get_stat("damage")
-        for _ in range(math.ceil(evt.unit.max_hp/10)):
-            target = random.choice(targets)
-            self.owner.level.queue_spell(self.bolt(evt.unit, target, damage))
-
-    def bolt(self, origin, target, damage):
-        for p in Bolt(self.owner.level, origin, target):
-            self.owner.level.show_effect(p.x, p.y, Tags.Physical, minor=True)
-            yield
-        if are_hostile(target, self.owner):
-            target.deal_damage(damage, Tags.Physical, self)
-        else:
-            target.max_hp += damage
-            target.deal_damage(-damage, Tags.Heal, self)
+        self.owner.apply_buff(ScrapBuff(self, random.randint(1, evt.damage)))
 
 class HeatTrickSpell(Spell):
 
@@ -12297,7 +12313,7 @@ class SlimeInstability(Upgrade):
         self.asset = ["MissingSynergies", "Icons", "slime_instability"]
         self.tags = [Tags.Chaos, Tags.Arcane]
         self.level = 4
-        self.description = "Whenever you summon a [slime] minion, it immediately acts once.\nEach turn, each of your [slime] minions has a 25% chance to merge with another random adjacent slime summoned by the same source, sacrificing itself to add its current and max HP to the other slime.\nThis may cause the other slime to split into more than two slimes on its turn.\nOnly works with slimes that split automatically upon reaching twice their initial max HP."
+        self.description = "Whenever you summon a [slime] minion, it immediately acts once.\nEach turn, each of your [slime] minions has a 25% chance to merge with another random adjacent slime summoned by the same source, sacrificing itself to add its current and max HP to the other slime.\nThis may cause the other slime to split into more than two slimes on its turn."
         self.global_triggers[EventOnUnitAdded] = self.on_unit_added
     
     def on_unit_added(self, evt):
@@ -12314,7 +12330,7 @@ class SlimeInstability(Upgrade):
     def on_advance(self):
         if all([u.team == TEAM_PLAYER for u in self.owner.level.units]):
             return
-        units = [unit for unit in self.owner.level.units if Tags.Slime in unit.tags and unit.has_buff(SlimeBuff) and not are_hostile(unit, self.owner)]
+        units = [unit for unit in self.owner.level.units if Tags.Slime in unit.tags and not are_hostile(unit, self.owner)]
         if not units:
             return
         random.shuffle(units)
@@ -13321,7 +13337,7 @@ class MimeticHydraSpell(Spell):
         self.upgrades["dragon_mage"] = (1, 6, "Dragon Mage", "The hydra will cast Silver Spear on the target of its particle beam.\nThis Silver Spear gains all of your upgrades and bonuses.")
 
     def get_description(self):
-        return ("Summon a hydra made of shape-memory alloy, a stationary [metallic] [slime] [dragon] [construct] minion with [{minion_health}_HP:minion_health] that lasts [{minion_duration}_turns:minion_duration].\n"
+        return ("Summon a hydra made of shape-memory alloy, a stationary [metallic] [dragon] [construct] minion with [{minion_health}_HP:minion_health] that lasts [{minion_duration}_turns:minion_duration].\n"
                 "The hydra has a particle beam attack that deals [{breath_damage}_physical:physical] damage and melts walls, with a range of [{minion_range}_tiles:minion_range]. It is considered a breath weapon.\n"
                 "When the hydra dies, if its original lifetime was greater than 1, it splits into two hydras, each with a random lifetime between 1 and its parent's original lifetime minus 1.").format(**self.fmt_dict())
 
@@ -13335,7 +13351,7 @@ class MimeticHydraSpell(Spell):
         unit.asset = ["MissingSynergies", "Units", "mimetic_hydra"]
         unit.max_hp = self.get_stat("minion_health")
         unit.stationary = True
-        unit.tags = [Tags.Metallic, Tags.Slime, Tags.Dragon, Tags.Construct]
+        unit.tags = [Tags.Metallic, Tags.Dragon, Tags.Construct]
         unit.spells = [ParticleBeam(self, unit)]
         if unit.turns_to_death > 1:
             # Have to evaluate the value now, otherwise lazy evaluation screws this up.
