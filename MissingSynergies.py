@@ -13428,6 +13428,86 @@ class ThornShot(Upgrade):
                 return True
         return False
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell])
+class OverchannelSpell(Spell):
+
+    def on_init(self):
+        self.name = "Overchannel"
+        self.asset = ["MissingSynergies", "Icons", "overchannel"]
+        self.tags = [Tags.Arcane]
+        self.level = 4
+        self.max_charges = 10
+        self.repeats = 1
+        self.range = RANGE_GLOBAL
+        self.requires_los = False
+
+        self.upgrades["max_charges"] = (5, 2)
+        self.upgrades["repeats"] = (1, 3, "Repeats", "Per-turn channeling effects will be repeated 1 additional time when you cast this spell.")
+        self.upgrades["auto"] = (1, 7, "Auto-Channel", "When you cast this spell, you will gain auto-channeling for [{duration}_turns:duration].\nWhile auto-channeling is active, taking an action other than passing your turn will not interrupt your channeling.\nChanneling a different spell will still interrupt the previous one, but casting the same spell again will cause you to channel multiple instances of the spell simultaneously; each instance has its own independent duration.")
+        self.add_upgrade(ChannelFinisher())
+
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["duration"] = self.get_stat("duration", base=5)
+        return stats
+
+    def can_cast(self, x, y):
+        if not Spell.can_cast(self, x, y):
+            return False
+        channel = self.caster.get_buff(ChannelBuff)
+        if not channel:
+            return False
+        return channel.spell.__self__.can_cast(x, y)
+    
+    def get_impacted_tiles(self, x, y):
+        channel = self.caster.get_buff(ChannelBuff)
+        if not channel:
+            return [Point(x, y)]
+        return channel.spell.__self__.get_impacted_tiles(x, y)
+
+    def get_description(self):
+        return ("Can only be cast if you are channeling a spell, and only target tiles targetable by the channeled spell.\n"
+                "Retarget your channeled spell to the target tile, and immediately trigger its per-turn effects [{repeats}_times:arcane].\n"
+                "Casting this spell does not interrupt channeling.").format(**self.fmt_dict())
+
+    def cast_instant(self, x, y):
+        repeats = self.get_stat("repeats")
+        target = Point(x, y)
+        for buff in list(self.caster.buffs):
+            if not isinstance(buff, ChannelBuff):
+                continue
+            buff.spell_target = target
+            buff.passed = True
+            for _ in range(repeats):
+                self.caster.level.queue_spell(buff.spell(buff.spell_target.x, buff.spell_target.y, channel_cast=True))
+        if self.get_stat("auto"):
+            self.caster.apply_buff(AutoChannelingBuff(), self.get_stat("duration", base=5), prepend=True)
+
+class AutoChannelingBuff(Buff):
+
+    def on_init(self):
+        self.name = "Auto-Channeling"
+        self.color = Tags.Arcane.color
+    
+    def on_advance(self):
+        for buff in list(self.owner.buffs):
+            if not isinstance(buff, ChannelBuff):
+                continue
+            buff.passed = True
+
+class ChannelFinisher(Upgrade):
+
+    def on_init(self):
+        self.name = "Channel Finisher"
+        self.level = 3
+        self.description = "Whenever you stop channeling a spell, you now immediately repeat that spell's per-turn effects as if you have cast Overchannel."
+        self.owner_triggers[EventOnBuffRemove] = self.on_buff_remove
+    
+    def on_buff_remove(self, evt):
+        if not isinstance(evt.buff, ChannelBuff):
+            return
+        for _ in range(self.prereq.get_stat("repeats")):
+            self.owner.level.queue_spell(evt.buff.spell(evt.buff.spell_target.x, evt.buff.spell_target.y, channel_cast=True))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell])
 
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture, BatEscape, EyeBleach, AntimatterInfusion, WarpStrike, ThornShot])

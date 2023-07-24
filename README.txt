@@ -55,6 +55,7 @@ Level 4:
 + Lucky Gnome (Dark/Nature/Arcane/Conjuration)
 + Malignant Growth (Nature/Enchantment)
 + Nonlocality (Arcane/Translocation/Enchantment)
++ Overchannel (Arcane)
 + Poison Hatchery (Dragon/Nature/Enchantment/Conjuration)
 + Prism Shell (Holy/Ice/Enchantment)
 + Psychedelic Spores (Arcane/Nature/Sorcery)
