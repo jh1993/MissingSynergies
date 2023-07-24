@@ -9,7 +9,7 @@ from Shrines import *
 from Consumables import *
 import random, math, os, sys
 
-from mods.Bugfixes.Bugfixes import RemoveBuffOnPreAdvance, MinionBuffAura, drain_max_hp_kill, increase_cooldown, HydraBeam
+from mods.Bugfixes.Bugfixes import RemoveBuffOnPreAdvance, MinionBuffAura, drain_max_hp_kill, increase_cooldown, HydraBeam, FreezeDependentBuff
 import mods.Bugfixes.Bugfixes
 
 try:
@@ -9745,7 +9745,7 @@ class TeleFrag(Upgrade):
             return
         evt.unit.deal_damage(self.get_stat("max_charges"), Tags.Physical, self)
 
-class ThermalGradientBuff(Buff):
+class ThermalGradientBuff(FreezeDependentBuff):
 
     def on_init(self):
         self.name = "Thermal Gradient"
@@ -9753,11 +9753,6 @@ class ThermalGradientBuff(Buff):
         self.buff_type = BUFF_TYPE_CURSE
         self.asset = ["MissingSynergies", "Statuses", "amplified_fire"]
         self.resists[Tags.Fire] = -100
-
-    def on_pre_advance(self):
-        freeze = self.owner.get_buff(FrozenBuff)
-        if freeze:
-            self.turns_left = max(self.turns_left, freeze.turns_left)
 
 class ThermalImbalanceBuff(DamageAuraBuff):
 
@@ -9813,7 +9808,7 @@ class ThermalImbalanceSpell(Spell):
         self.upgrades["duration"] = (5, 3)
         self.upgrades["radius"] = (3, 2)
         self.upgrades["entropy"] = (1, 3, "Thermal Entropy", "Each turn, enemies inside this spell's radius also take [2_fire:fire] or [2_ice:ice] damage.\nThis damage is fixed, and cannot be increased using shrines, skills, or buffs.")
-        self.upgrades["gradient"] = (1, 5, "Thermal Gradient", "When an enemy inside this spell's radius is [frozen], before it takes [fire] damage from this spell, it loses [100_fire:fire] resistance for a duration equal to the [freeze] duration.\nWhenever the remaining duration of [freeze] on an enemy is refreshed or extended, the remaining duration of thermal gradient will be lengthened to match if it is shorter.")
+        self.upgrades["gradient"] = (1, 5, "Thermal Gradient", "When an enemy inside this spell's radius is [frozen], before it takes [fire] damage from this spell, it loses [100_fire:fire] resistance for a duration equal to the [freeze] duration.\nWhenever the remaining duration of [freeze] on an enemy is refreshed or extended, the remaining duration of thermal gradient will be lengthened to match if it is shorter.\nIf thermal gradient is removed prematurely and the enemy is still [frozen], it will automatically reapply itself.")
 
     def get_description(self):
         return ("Thermal energy becomes imbalanced in a radius of [{radius}_tiles:radius] around yourself.\n"
@@ -13508,6 +13503,94 @@ class ChannelFinisher(Upgrade):
         for _ in range(self.prereq.get_stat("repeats")):
             self.owner.level.queue_spell(evt.buff.spell(evt.buff.spell_target.x, evt.buff.spell_target.y, channel_cast=True))
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell])
+class CloudbenderBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+    
+    def on_init(self):
+        self.name = "Cloudbender"
+        self.color = Tags.Ice.color
+        self.resists[Tags.Lightning] = 100
+        self.resists[Tags.Ice] = 100
+    
+    def on_applied(self, owner):
+        damage = self.spell.get_stat("damage", base=5)
+        if random.choice([True, False]):
+            cloud = StormCloud(self.owner, damage*2)
+        else:
+            cloud = BlizzardCloud(self.owner, damage)
+        cloud.source = self.spell
+        cloud.duration = self.spell.get_stat("duration")
+        self.owner.level.add_obj(cloud, self.owner.x, self.owner.y)
+
+    def on_advance(self):
+
+        cloud = self.owner.level.tiles[self.owner.x][self.owner.y].cloud
+        if not isinstance(cloud, StormCloud) and not isinstance(cloud, BlizzardCloud):
+            self.owner.remove_buff(self)
+            return
+        
+        total = 0
+        aura = self.spell.get_stat("aura")
+        points = list(self.owner.level.get_points_in_ball(self.owner.x, self.owner.y, self.spell.get_stat("radius")))
+        random.shuffle(points)
+        for p in points:
+            cloud = self.owner.level.tiles[p.x][p.y].cloud
+            if not isinstance(cloud, StormCloud) and not isinstance(cloud, BlizzardCloud):
+                continue
+            cloud.duration += 1
+            total += 1
+            if not aura:
+                continue
+            unit = self.owner.level.get_unit_at(p.x, p.y)
+            if not unit or not are_hostile(unit, self.owner):
+                continue
+            if isinstance(cloud, BlizzardCloud):
+                unit.deal_damage(3, Tags.Lightning, self.spell)
+            else:
+                unit.deal_damage(3, Tags.Ice, self.spell)
+        
+        if not total or not self.spell.get_stat("eye"):
+            return
+        targets = [u for u in self.owner.level.get_units_in_los(self.owner) if are_hostile(u, self.owner)]
+        if not targets:
+            return
+        for tag in [Tags.Lightning, Tags.Ice]:
+            self.owner.level.queue_spell(self.bolt(random.choice(targets), total, tag))
+
+    def bolt(self, target, damage, tag):
+        for p in Bolt(self.owner.level, self.owner, target):
+            self.owner.level.show_effect(p.x, p.y, tag, minor=True)
+            yield
+        target.deal_damage(damage, tag, self.spell)
+
+class CloudbenderSpell(Spell):
+
+    def on_init(self):
+        self.name = "Cloudbender"
+        self.asset = ["MissingSynergies", "Icons", "cloudbender"]
+        self.tags = [Tags.Lightning, Tags.Ice, Tags.Nature, Tags.Enchantment]
+        self.level = 3
+        self.max_charges = 3
+        self.range = 0
+        self.radius = 7
+        self.duration = 5
+
+        self.upgrades["max_charges"] = (3, 2)
+        self.upgrades["radius"] = (3, 2)
+        self.upgrades["aura"] = (1, 3, "Storm Aura", "Each turn, this spell now deals [3_lightning:lightning] damage to enemies within its radius inside blizzard clouds. Enemies inside thunderstorm clouds instead take [3_ice:ice] damage.\nThis damage is fixed, and cannot be increased using shrines, skills, or buffs.")
+        self.upgrades["eye"] = (1, 4, "Eyes of the Storm", "Each turn, this spell now deals [lightning] damage to a random enemy in line of sight, and [ice] damage to a random enemy in line of sight; the same enemy may be hit twice.\nThe damage is equal to the number of thunderstorm and blizzard clouds in this spell's radius.")
+
+    def get_description(self):
+        return ("Gain [100_lightning:lightning] and [100_ice:ice] resistance, and create a thunderstorm or blizzard cloud on your own tile for [{duration}_turns:duration].\n"
+                "Each turn, thunderstorm and blizzard clouds within [{radius}_tiles:radius] of you have their remaining durations extended by [1_turn:duration].\n"
+                "This effect ends at the end of your turn if you are not inside a thunderstorm or blizzard cloud.").format(**self.fmt_dict())
+
+    def cast_instant(self, x, y):
+        self.caster.apply_buff(CloudbenderBuff(self))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell, CloudbenderSpell])
 
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture, BatEscape, EyeBleach, AntimatterInfusion, WarpStrike, ThornShot])

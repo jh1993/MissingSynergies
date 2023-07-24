@@ -25,6 +25,7 @@ Level 3:
 + Call Scapegoat (Dark/Nature/Conjuration)
 + Chaos Concoction (Chaos/Sorcery)
 + Chaos Shuffle (Chaos/Translocation/Sorcery)
++ Cloudbender (Lightning/Ice/Nature/Enchantment)
 + Coolant Spray (Ice/Nature/Enchantment)
 + Cult of Darkness (Dark/Enchantment/Conjuration)
 + Eternal Bomber (Holy/Conjuration/Sorcery)
