@@ -51,6 +51,7 @@ Level 4:
 + Electric Net (Nature/Lightning/Sorcery)
 + Essence Leech (Arcane/Dark/Enchantment)
 + Gene Harvest (Chaos/Nature/Enchantment)
++ Guru Meditation (Arcane/Nature/Enchantment)
 + Iron Turtle (Metallic/Nature/Conjuration)
 + Karmic Loan (Holy/Enchantment)
 + Lucky Gnome (Dark/Nature/Arcane/Conjuration)
@@ -176,6 +177,7 @@ Level 5:
 + Soul Dregs (Holy/Dark)
 + Speed of Light (Holy/Translocation)
 + Tele-Frag (Metallic/Translocation)
++ Time Skip (Arcane)
 
 Level 6:
 + Abyssal Insight (Dark/Eye)

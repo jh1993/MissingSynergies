@@ -6757,56 +6757,64 @@ class UnnaturalVitality(Upgrade):
                 continue
             unit.apply_buff(UnnaturalVitalityBuff())
 
-class CosmicStasisBuff(Buff):
+class CosmicStasisBuff(FrozenBuff):
 
     def __init__(self, spell):
         self.spell = spell
-        Buff.__init__(self)
-    
-    def on_init(self):
+        FrozenBuff.__init__(self)
         self.name = "Cosmic Stasis"
-        self.color = Tags.Ice.color
-        self.stack_type = STACK_REPLACE
-        self.extension_chance = self.spell.get_stat("extension_chance")
-        self.global_triggers[EventOnBuffRemove] = self.on_buff_remove
-        self.laser = False
-        if self.spell.get_stat("laser"):
-            self.laser = True
-            self.global_triggers[EventOnPreDamaged] = self.on_pre_damaged
+        self.buff_type = BUFF_TYPE_BLESS
+        self.resists[Tags.Ice] = 100
+        self.resists[Tags.Fire] = 100
+        self.resists[Tags.Physical] = 100
+        self.resists[Tags.Arcane] = 100
         self.to_refreeze = []
+        self.global_triggers[EventOnBuffRemove] = self.on_buff_remove
+
+    def on_init(self):
+        # Must put this here, else it won't register.
+        # Can't put it before __init__, else it'll be overwritten.
+        self.conversions[Tags.Ice][Tags.Arcane] = 0.5
+
+    def on_applied(self, owner):
+        pass
 
     def on_advance(self):
-        for unit in self.owner.level.units:
-            if not are_hostile(unit, self.owner) or unit.gets_clarity or random.random() >= self.extension_chance/100:
+
+        if self.spell.get_stat("everlasting"):
+            for unit in self.owner.level.units:
+                if not are_hostile(unit, self.owner) or unit.gets_clarity or random.random() >= 0.5:
+                    continue
+                freeze = unit.get_buff(FrozenBuff)
+                if freeze:
+                    freeze.turns_left += 1
+        
+        if not self.spell.get_stat("turret"):
+            return
+        spells = [spell for spell in self.owner.spells if Tags.Sorcery in spell.tags and Tags.Ice in spell.tags and spell.can_pay_costs()]
+        random.shuffle(spells)
+        for spell in spells:
+            target = spell.get_ai_target()
+            if not target:
                 continue
-            freeze = unit.get_buff(FrozenBuff)
-            if freeze:
-                freeze.turns_left += 1
+            self.owner.level.act_cast(self.owner, spell, target.x, target.y)
+            break
 
     def on_buff_remove(self, evt):
         if not isinstance(evt.buff, FrozenBuff) or not evt.buff.turns_left:
             return
         if not are_hostile(evt.unit, self.owner) or not evt.unit.is_alive():
             return
-        if evt.buff.turns_left:
-            evt.unit.deal_damage(evt.buff.turns_left*2, Tags.Arcane, self.spell)
         self.to_refreeze.append(evt.unit)
 
     def on_pre_advance(self):
+        if not self.spell.get_stat("everlasting"):
+            return
         for unit in self.to_refreeze:
             unit.apply_buff(FrozenBuff(), 1)
         self.to_refreeze = []
 
-    def on_pre_damaged(self, evt):
-        if evt.damage_type != Tags.Ice or evt.damage <= 0 or not are_hostile(evt.unit, self.owner):
-            return
-        percentage = 25 + (evt.unit.resists[Tags.Ice]/4 if evt.unit.resists[Tags.Ice] > 0 else 0)
-        self.owner.level.queue_spell(self.deal_damage(evt.unit, math.floor(evt.damage*percentage/100)))
-
-    def deal_damage(self, unit, damage):
-        unit.deal_damage(damage, Tags.Arcane, self.spell)
-        yield
-
+    # This is needed because No More Scams only checks skills for redeals.
     def can_redeal(self, target, source, dtype, already_checked):
         if not self.laser or dtype != Tags.Ice:
             return
@@ -6819,19 +6827,19 @@ class CosmicStasisSpell(Spell):
         self.asset = ["MissingSynergies", "Icons", "cosmic_stasis"]
         self.tags = [Tags.Arcane, Tags.Ice, Tags.Enchantment]
         self.level = 5
-        self.max_charges = 3
+        self.max_charges = 5
         self.range = 0
         self.duration = 5
-        self.extension_chance = 25
 
-        self.upgrades["duration"] = (5, 3)
-        self.upgrades["extension_chance"] = (25, 4, "Extension Chance", "Increase the chance to extend [freeze] duration on enemies by 25%.")
-        self.upgrades["laser"] = (1, 5, "Laser Cooling", "25% of all [ice] damage dealt to enemies while Cosmic Stasis is active will be redealt as [arcane] damage.\nThis percentage is increased by 1/4 of each enemy's [ice] resistance if positive.")
+        self.upgrades["duration"] = 3
+        self.upgrades['max_charges'] = (3, 2)
+        self.upgrades["everlasting"] = (1, 4, "Everlasting Freeze", "Each turn, the [freeze] duration on each enemy has a 50% chance to be extended by [1_turn:duration]. Does not work on enemies that can gain clarity.\nWhen an enemy is unfrozen before the [freeze] expires naturally, that enemy will be [frozen] again for [1_turn:duration] before the start of your next turn.")
+        self.upgrades["turret"] = (1, 5, "Frozen Turret", "While this spell is active, each turn you will automatically cast a random one of your [ice] [sorcery] spells at a random valid enemy target, consuming charges as usual.")
     
     def get_description(self):
-        return ("Each turn, the [freeze] duration on each enemy has a [{extension_chance}%:freeze] chance to be extended by [1_turn:duration]. Does not work on enemies that can gain clarity.\n"
-                "When an enemy is unfrozen before the [freeze] expires naturally, that enemy takes [arcane] damage equal to twice the remaining [freeze] duration, and will be [frozen] again for [1_turn:duration] before the start of your next turn.\n"
-                "Lasts [{duration}_turns:duration].").format(**self.fmt_dict())
+        return ("[Freeze] yourself for [{duration}_turns:duration].\n"
+                "For the duration, you gain [100_ice:ice], [100_fire:fire], [100_physical:physical], and [100_arcane:arcane] resistance.\n"
+                "Half of all [ice] damage dealt to enemies during this time will be redealt as [arcane] damage.").format(**self.fmt_dict())
 
     def cast_instant(self, x, y):
         self.caster.apply_buff(CosmicStasisBuff(self), self.get_stat("duration"))
@@ -13591,6 +13599,76 @@ class CloudbenderSpell(Spell):
     def cast_instant(self, x, y):
         self.caster.apply_buff(CloudbenderBuff(self))
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell, CloudbenderSpell])
+class GuruMeditationBuff(Stun):
 
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture, BatEscape, EyeBleach, AntimatterInfusion, WarpStrike, ThornShot])
+    def __init__(self, spell):
+        self.spell = spell
+        Stun.__init__(self)
+        self.name = "Guru Meditation"
+        self.buff_type = BUFF_TYPE_BLESS
+        self.color = Tags.Arcane.color
+    
+    def on_applied(self, owner):
+        for spell in self.owner.spells:
+            if spell is self.spell or Tags.Enchantment not in spell.tags or spell.range != 0 or not spell.can_pay_costs() or not spell.can_cast(self.owner.x, self.owner.y):
+                continue
+            self.owner.level.act_cast(self.owner, spell, self.owner.x, self.owner.y)
+
+    def on_advance(self):
+        if self.spell.get_stat("screen"):
+            self.owner.add_shields(1)
+        for _ in range(self.spell.get_stat("repeats")):
+            for buff in list(self.owner.buffs):
+                if buff.buff_type != BUFF_TYPE_BLESS and buff.buff_type != BUFF_TYPE_PASSIVE or buff is self:
+                    continue
+                buff.on_pre_advance()
+                buff.on_advance()
+
+class GuruMeditationSpell(Spell):
+
+    def on_init(self):
+        self.name = "Guru Meditation"
+        self.asset = ["MissingSynergies", "Icons", "guru_meditation"]
+        self.tags = [Tags.Arcane, Tags.Nature, Tags.Enchantment]
+        self.level = 4
+        self.max_charges = 5
+        self.duration = 5
+        self.range = 0
+        self.repeats = 1
+
+        self.upgrades["duration"] = 3
+        self.upgrades['max_charges'] = (3, 2)
+        self.upgrades["repeats"] = (1, 4, "Repeats", "Per-turn effects of your buffs and skills will be repeated 1 additional time per turn.")
+        self.upgrades["screen"] = (1, 3, "Blue Screen", "While active, you now gain [1_SH:shields] per turn.")
+
+    def get_description(self):
+        return ("Cast all of your self-targeted [enchantment] spells other than this spell, then [stun] yourself for [{duration}_turns:duration].\n"
+                "For the duration, all of the per-turn effects of your buffs and skills other than this spell repeat [{repeats}_times:arcane] per turn.").format(**self.fmt_dict())
+
+    def cast_instant(self, x, y):
+        self.caster.apply_buff(GuruMeditationBuff(self), self.get_stat("duration"))
+
+class TimeSkip(Upgrade):
+
+    def on_init(self):
+        self.name = "Time Skip"
+        self.asset = ["MissingSynergies", "Icons", "time_skip"]
+        self.tags = [Tags.Arcane]
+        self.level = 5
+        self.description = "Whenever you are [stunned], [frozen], [petrified], [glassified], or otherwise incapacitated, each enemy is [stunned] for a random duration between 0 and your incapacitated duration."
+        self.owner_triggers[EventOnBuffApply] = self.on_buff_apply
+    
+    def on_buff_apply(self, evt):
+        if not isinstance(evt.buff, Stun):
+            return
+        for unit in list(self.owner.level.units):
+            if not are_hostile(unit, self.owner):
+                continue
+            duration = random.randint(0, evt.buff.turns_left)
+            if duration <= 0:
+                continue
+            unit.apply_buff(Stun(), duration)
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell, CloudbenderSpell, GuruMeditationSpell])
+
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture, BatEscape, EyeBleach, AntimatterInfusion, WarpStrike, ThornShot, TimeSkip])
