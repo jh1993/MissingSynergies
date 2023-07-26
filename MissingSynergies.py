@@ -1969,7 +1969,12 @@ class RuinBuff(Buff):
         self.stack_type = STACK_INTENSITY
         self.owner_triggers[EventOnDamaged] = self.on_damaged
         self.owner_triggers[EventOnUnitAdded] = self.on_unit_added
+        for tag in [Tags.Fire, Tags.Ice, Tags.Lightning, Tags.Physical, Tags.Holy, Tags.Dark, Tags.Arcane, Tags.Poison]:
+            self.resists[tag] = -10
     
+    def on_advance(self):
+        self.owner.shields = max(0, self.owner.shields - 1)
+
     def on_unit_added(self, evt):
         self.owner.remove_buff(self)
     
@@ -2016,10 +2021,9 @@ class RuinousImpactSpell(Spell):
         self.add_upgrade(FountOfPreservation())
 
     def get_description(self):
-        return ("Deal [fire], [lightning], [physical], and [dark] damage in a massive burst that covers the whole level, ignoring walls. The damage is [{damage}:damage] at the point of impact and destroys walls. After a unit is hit, it loses each buff and [SH:shields] and gain a stack of Ruin.\n"
-                "For every tile away from the point of impact, the damage and chance to destroy walls, remove buffs and [SH:shields], and apply Ruin is reduced by 1%.\n"
-                "Ruin not considered a debuff and can only be removed when you enter a new realm. Whenever a unit takes damage, it loses the same amount of current HP per stack of Ruin.\n"
-                "The caster is not immune to this spell. Use with extreme caution.").format(**self.fmt_dict())
+        return ("Deal [fire], [lightning], [physical], and [dark] damage in a massive burst that covers the whole level, ignoring walls. The damage is [{damage}:damage] at the point of impact and destroys walls. After a unit is hit, it is inflicted with a stack of Ruin.\n"
+                "For every tile away from the point of impact, the damage and chance to destroy walls and apply Ruin is reduced by 1%.\n"
+                "Ruin not considered a debuff and can only be removed when you enter a new realm. Each stack of Ruin reduces all resistances by 10 and removes [1_SH:shields] per turn. Whenever a unit takes damage, it loses the same amount of current HP per stack of Ruin.").format(**self.fmt_dict())
     
     def get_impacted_tiles(self, x, y):
         points = []
@@ -2047,13 +2051,6 @@ class RuinousImpactSpell(Spell):
                 unit = self.caster.level.get_unit_at(point.x, point.y)
                 if not unit:
                     continue
-                for _ in range(unit.shields):
-                    if random.random() < mult:
-                        unit.shields -= 1
-                for buff in list(unit.buffs):
-                    if buff.buff_type != BUFF_TYPE_BLESS or random.random() >= mult:
-                        continue
-                    unit.remove_buff(buff)
                 if random.random() < mult:
                     unit.apply_buff(RuinBuff())
             stagenum += 1
