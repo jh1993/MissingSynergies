@@ -2189,9 +2189,16 @@ class TransienceBuff(Buff):
         self.description = "Immune to debuffs, but has a %i%% chance to disappear without dying after each turn." % self.chance
     
     def on_advance(self):
-        if random.random() < self.chance/100:
-            self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
-            self.owner.kill(trigger_death_event=False)
+        if random.random() >= self.chance/100:
+            return
+        buff = self.owner.get_buff(ReincarnationBuff)
+        if buff and buff.lives > 0:
+            buff.lives -= 1
+            if buff.lives <= 0:
+                self.owner.remove_buff(buff)
+            return
+        self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
+        self.owner.kill(trigger_death_event=False)
 
 class GenesisSpell(Spell):
 
@@ -2218,7 +2225,8 @@ class GenesisSpell(Spell):
     def get_description(self):
         return ("Channel to summon [{num_summons}:num_summons] lesser gods near the target tile each turn for [{max_channel}_turns:duration], each of which may be an Aesir or a Titan, chosen at random.\n"
                 "Aesirs are [lightning] units, while Titans are [fire] units; both are [living] and [holy].\n"
-                "Aesirs and Titans have very high HP and powerful attacks, but their presences are transient. They are immune to debuffs, but titans have a [{vanish_chance}%_chance:chaos] to disappear after each turn and aesirs have half that; this does not count as dying.").format(**self.fmt_dict())
+                "Aesirs and Titans have very high HP and powerful attacks, but their presences are transient. They are immune to debuffs, but titans have a [{vanish_chance}%_chance:chaos] to disappear after each turn and aesirs have half that; this does not count as dying.\n"
+                "If these summoned units have reincarnation, each reincarnation will be consumed to prevent them from disappearing once.").format(**self.fmt_dict())
 
     def cast(self, x, y, channel_cast=False):
 
