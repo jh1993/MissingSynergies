@@ -2016,9 +2016,9 @@ class RuinousImpactSpell(Spell):
         self.add_upgrade(FountOfPreservation())
 
     def get_description(self):
-        return ("Deal [fire], [lightning], [physical], and [dark] damage in a massive burst that covers the whole level, ignoring walls. The initial damage is [{damage}:damage] at the point of impact and destroys walls.\n"
-                "After dealing damage, permanently inflict a stack of Ruin on all affected units, which is not considered a debuff and can only be removed when you enter a new realm. Whenever a unit takes damage, it loses the same amount of current HP per stack of Ruin.\n"
-                "For every tile away from the point of impact, the damage and chance to destroy walls and apply Ruin is reduced by 1%.\n"
+        return ("Deal [fire], [lightning], [physical], and [dark] damage in a massive burst that covers the whole level, ignoring walls. The damage is [{damage}:damage] at the point of impact and destroys walls. After a unit is hit, it loses each buff and [SH:shields] and gain a stack of Ruin.\n"
+                "For every tile away from the point of impact, the damage and chance to destroy walls, remove buffs and [SH:shields], and apply Ruin is reduced by 1%.\n"
+                "Ruin not considered a debuff and can only be removed when you enter a new realm. Whenever a unit takes damage, it loses the same amount of current HP per stack of Ruin.\n"
                 "The caster is not immune to this spell. Use with extreme caution.").format(**self.fmt_dict())
     
     def get_impacted_tiles(self, x, y):
@@ -2035,19 +2035,27 @@ class RuinousImpactSpell(Spell):
         epicenter = self.get_stat("epicenter")
         stagenum = 0
         for stage in Burst(self.caster.level, Point(x, y), 60, ignore_walls=True):
-            damage = math.ceil(max_damage*(1 - 0.01*stagenum))
+            mult = 1 - 0.01*stagenum
+            damage = math.ceil(max_damage*mult)
             if epicenter:
                 damage += max_damage//(stagenum + 1)
             for point in stage:
                 for dtype in [Tags.Fire, Tags.Lightning, Tags.Physical, Tags.Dark]:
                     self.caster.level.deal_damage(point.x, point.y, damage, dtype, self)
-                if random.random() >= 1 - 0.01*stagenum:
-                    continue
-                unit = self.caster.level.get_unit_at(point.x, point.y)
-                if unit:
-                    unit.apply_buff(RuinBuff())
-                if self.caster.level.tiles[point.x][point.y].is_wall():
+                if random.random() < mult and self.caster.level.tiles[point.x][point.y].is_wall():
                     self.caster.level.make_floor(point.x, point.y)
+                unit = self.caster.level.get_unit_at(point.x, point.y)
+                if not unit:
+                    continue
+                for _ in range(unit.shields):
+                    if random.random() < mult:
+                        unit.shields -= 1
+                for buff in list(unit.buffs):
+                    if buff.buff_type != BUFF_TYPE_BLESS or random.random() >= mult:
+                        continue
+                    unit.remove_buff(buff)
+                if random.random() < mult:
+                    unit.apply_buff(RuinBuff())
             stagenum += 1
             yield
 
@@ -2178,12 +2186,12 @@ class TransienceBuff(Buff):
     
     def on_init(self):
         self.color = Tags.Chaos.color
-        self.description = "Immune to debuffs, but has a %i%% chance to die after each turn." % self.chance
+        self.description = "Immune to debuffs, but has a %i%% chance to disappear without dying after each turn." % self.chance
     
     def on_advance(self):
         if random.random() < self.chance/100:
             self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
-            self.owner.kill()
+            self.owner.kill(trigger_death_event=False)
 
 class GenesisSpell(Spell):
 
@@ -2199,18 +2207,18 @@ class GenesisSpell(Spell):
         self.minion_health = 182
         self.minion_damage = 32
         self.num_summons = 2
-        self.death_chance = 100
+        self.vanish_chance = 100
         self.max_channel = 10
 
         self.upgrades["max_channel"] = (5, 2)
         self.upgrades["num_summons"] = (1, 4)
-        self.upgrades["death_chance"] = (-50, 6, "Lasting Presence", "Each unit summoned by Genesis now has a 50% chance to not die each turn.")
-        self.upgrades["greater"] = (1, 7, "Greater Gods", "Each unit summoned by Genesis now has a 10% chance to instead be Odin, Aesir Immortal or Chronos, Titan Immortal.")
+        self.upgrades["vanish_chance"] = (-50, 6, "Lasting Presence", "Each unit summoned by Genesis now has a 50% chance to not disappear each turn.")
+        self.upgrades["greater"] = (1, 7, "Greater Gods", "Each aesir summoned by Genesis now has a 10% chance to instead be Odin, Aesir Immortal.\nEach titan summoned by Genesis how has a 10% chance to instead be Chronos, Titan Immortal.")
     
     def get_description(self):
         return ("Channel to summon [{num_summons}:num_summons] lesser gods near the target tile each turn for [{max_channel}_turns:duration], each of which may be an Aesir or a Titan, chosen at random.\n"
                 "Aesirs are [lightning] units, while Titans are [fire] units; both are [living] and [holy].\n"
-                "Aesirs and Titans have very high HP and powerful attacks, but their presences are transient. They are immune to debuffs, but have a [{death_chance}%_chance:chaos] to die after each turn.").format(**self.fmt_dict())
+                "Aesirs and Titans have very high HP and powerful attacks, but their presences are transient. They are immune to debuffs, but titans have a [{vanish_chance}%_chance:chaos] to disappear after each turn and aesirs have half that; this does not count as dying.").format(**self.fmt_dict())
 
     def cast(self, x, y, channel_cast=False):
 
@@ -2219,13 +2227,15 @@ class GenesisSpell(Spell):
             return
         
         greater = self.get_stat("greater")
-        chance = self.get_stat("death_chance")
+        chance = self.get_stat("vanish_chance")
         for _ in range(self.get_stat("num_summons")):
-            unit = random.choice([Aesir, Titan])()
+            flip = random.choice([True, False])
             if greater and random.random() < 0.1:
-                unit = random.choice([AesirLord, TitanLord])()
+                unit = AesirLord() if flip else TitanLord()
+            else:
+                unit = Aesir() if flip else Titan()
             apply_minion_bonuses(self, unit)
-            unit.buffs.append(TransienceBuff(chance))
+            unit.buffs.append(TransienceBuff(chance/(2 if flip else 1)))
             unit.debuff_immune = True
             self.summon(unit, target=Point(x, y), radius=5, sort_dist=False)
         yield
@@ -13438,14 +13448,13 @@ class OverchannelSpell(Spell):
         self.asset = ["MissingSynergies", "Icons", "overchannel"]
         self.tags = [Tags.Arcane]
         self.level = 4
-        self.max_charges = 10
+        self.max_charges = 6
         self.repeats = 1
         self.range = RANGE_GLOBAL
         self.requires_los = False
 
-        self.upgrades["max_charges"] = (5, 2)
-        self.upgrades["repeats"] = (1, 3, "Repeats", "Per-turn channeling effects will be repeated 1 additional time when you cast this spell.")
-        self.upgrades["auto"] = (1, 7, "Auto-Channel", "When you cast this spell, you will gain auto-channeling for [{duration}_turns:duration].\nWhile auto-channeling is active, taking an action other than passing your turn will not interrupt your channeling.\nChanneling a different spell will still interrupt the previous one, but casting the same spell again will cause you to channel multiple instances of the spell simultaneously; each instance has its own independent duration.")
+        self.upgrades["max_charges"] = (6, 3)
+        self.upgrades["repeats"] = (1, 4, "Repeats", "Per-turn channeling effects will be repeated 1 additional time when you cast this spell.")
         self.add_upgrade(ChannelFinisher())
 
     def fmt_dict(self):
@@ -13482,20 +13491,6 @@ class OverchannelSpell(Spell):
             buff.passed = True
             for _ in range(repeats):
                 self.caster.level.queue_spell(buff.spell(buff.spell_target.x, buff.spell_target.y, channel_cast=True))
-        if self.get_stat("auto"):
-            self.caster.apply_buff(AutoChannelingBuff(), self.get_stat("duration", base=5), prepend=True)
-
-class AutoChannelingBuff(Buff):
-
-    def on_init(self):
-        self.name = "Auto-Channeling"
-        self.color = Tags.Arcane.color
-    
-    def on_advance(self):
-        for buff in list(self.owner.buffs):
-            if not isinstance(buff, ChannelBuff):
-                continue
-            buff.passed = True
 
 class ChannelFinisher(Upgrade):
 
