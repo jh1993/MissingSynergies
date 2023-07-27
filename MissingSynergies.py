@@ -1967,39 +1967,30 @@ class RuinBuff(Buff):
         self.color = Tags.Dark.color
         self.buff_type = BUFF_TYPE_NONE
         self.stack_type = STACK_INTENSITY
-        self.owner_triggers[EventOnDamaged] = self.on_damaged
-        self.owner_triggers[EventOnUnitAdded] = self.on_unit_added
         for tag in [Tags.Fire, Tags.Ice, Tags.Lightning, Tags.Physical, Tags.Holy, Tags.Dark, Tags.Arcane, Tags.Poison]:
-            self.resists[tag] = -10
+            self.resists[tag] = -100
     
     def on_advance(self):
+        if all(u.team == TEAM_PLAYER for u in self.owner.level.units):
+            self.owner.remove_buff(self)
+            return
         self.owner.shields = max(0, self.owner.shields - 1)
-
-    def on_unit_added(self, evt):
-        self.owner.remove_buff(self)
-    
-    def on_damaged(self, evt):
-        self.owner.level.queue_spell(self.remove_hp(evt.damage))
-
-    def remove_hp(self, hp):
-        self.owner.cur_hp -= hp
-        if self.owner.cur_hp <= 0:
-            self.owner.kill()
-        yield
 
 class FountOfPreservation(Upgrade):
 
     def on_init(self):
         self.name = "Fount of Preservation"
         self.level = 4
-        self.description = "Whenever you use a mana potion, remove a stack of Ruin from yourself."
+        self.description = "Whenever you use a mana potion, remove a random number of Ruin stack from yourself, between 1 and maximum."
         self.owner_triggers[EventOnSpellCast] = self.on_spell_cast
     
     def on_spell_cast(self, evt):
         if not isinstance(evt.spell, SpellCouponSpell):
             return
-        buff = self.owner.get_buff(RuinBuff)
-        if buff:
+        buffs = [buff for buff in self.owner.buffs if isinstance(buff, RuinBuff)]
+        if not buffs:
+            return
+        for buff in buffs[:random.randint(1, len(buffs))]:
             self.owner.remove_buff(buff)
 
 class RuinousImpactSpell(Spell):
@@ -2023,7 +2014,7 @@ class RuinousImpactSpell(Spell):
     def get_description(self):
         return ("Deal [fire], [lightning], [physical], and [dark] damage in a massive burst that covers the whole level, ignoring walls. The damage is [{damage}:damage] at the point of impact and destroys walls. After a unit is hit, it is inflicted with a stack of Ruin.\n"
                 "For every tile away from the point of impact, the damage and chance to destroy walls and apply Ruin is reduced by 1%.\n"
-                "Ruin not considered a debuff and can only be removed when you enter a new realm. Each stack of Ruin reduces all resistances by 10 and removes [1_SH:shields] per turn. Whenever a unit takes damage, it loses the same amount of current HP per stack of Ruin.").format(**self.fmt_dict())
+                "Ruin not considered a debuff and is only removed when there are no enemies in the realm. Each stack of Ruin reduces all resistances by 100 and removes [1_SH:shields] per turn.").format(**self.fmt_dict())
     
     def get_impacted_tiles(self, x, y):
         points = []
@@ -2035,6 +2026,7 @@ class RuinousImpactSpell(Spell):
         return points
 
     def cast(self, x, y):
+        self.caster.level.show_effect(0, 0, Tags.Sound_Effect, 'death_boss')
         max_damage = self.get_stat("damage")
         epicenter = self.get_stat("epicenter")
         stagenum = 0
@@ -2046,12 +2038,12 @@ class RuinousImpactSpell(Spell):
             for point in stage:
                 for dtype in [Tags.Fire, Tags.Lightning, Tags.Physical, Tags.Dark]:
                     self.caster.level.deal_damage(point.x, point.y, damage, dtype, self)
-                if random.random() < mult and self.caster.level.tiles[point.x][point.y].is_wall():
+                if random.random() >= mult:
+                    continue
+                if self.caster.level.tiles[point.x][point.y].is_wall():
                     self.caster.level.make_floor(point.x, point.y)
                 unit = self.caster.level.get_unit_at(point.x, point.y)
-                if not unit:
-                    continue
-                if random.random() < mult:
+                if unit:
                     unit.apply_buff(RuinBuff())
             stagenum += 1
             yield
@@ -2211,19 +2203,18 @@ class GenesisSpell(Spell):
         self.minion_health = 182
         self.minion_damage = 32
         self.num_summons = 2
-        self.vanish_chance = 100
         self.max_channel = 10
 
         self.upgrades["max_channel"] = (5, 2)
         self.upgrades["num_summons"] = (1, 4)
-        self.upgrades["vanish_chance"] = (-50, 6, "Lasting Presence", "Each unit summoned by Genesis now has a 50% chance to not disappear each turn.")
+        self.upgrades["reincarnation"] = (1, 6, "Reincarnation", "Each unit summoned by Genesis now gains 1 reincarnation.")
         self.upgrades["greater"] = (1, 7, "Greater Gods", "Each aesir summoned by Genesis now has a 10% chance to instead be Odin, Aesir Immortal.\nEach titan summoned by Genesis how has a 10% chance to instead be Chronos, Titan Immortal.")
     
     def get_description(self):
         return ("Channel to summon [{num_summons}:num_summons] lesser gods near the target tile each turn for [{max_channel}_turns:duration], each of which may be an Aesir or a Titan, chosen at random.\n"
                 "Aesirs are [lightning] units, while Titans are [fire] units; both are [living] and [holy].\n"
-                "Aesirs and Titans have very high HP and powerful attacks, but their presences are transient. They are immune to debuffs, but titans have a [{vanish_chance}%_chance:chaos] to disappear after each turn and aesirs have half that; this does not count as dying.\n"
-                "If these summoned units have reincarnation, each reincarnation will be consumed to prevent them from disappearing once.").format(**self.fmt_dict())
+                "Aesirs and Titans have very high HP and powerful attacks, but their presences are transient. They are immune to debuffs, but titans have a 100% to disappear after each turn and aesirs have 50%; this does not count as dying.\n"
+                "If a summoned unit has reincarnation, each life will be consumed to prevent it from disappearing once.").format(**self.fmt_dict())
 
     def cast(self, x, y, channel_cast=False):
 
@@ -2232,15 +2223,19 @@ class GenesisSpell(Spell):
             return
         
         greater = self.get_stat("greater")
-        chance = self.get_stat("vanish_chance")
+        reincarnation = self.get_stat("reincarnation")
         for _ in range(self.get_stat("num_summons")):
             flip = random.choice([True, False])
             if greater and random.random() < 0.1:
                 unit = AesirLord() if flip else TitanLord()
+                if reincarnation:
+                    unit.buffs[0].lives += 1
             else:
                 unit = Aesir() if flip else Titan()
+                if reincarnation:
+                    unit.buffs = [ReincarnationBuff(1)]
             apply_minion_bonuses(self, unit)
-            unit.buffs.append(TransienceBuff(chance/(2 if flip else 1)))
+            unit.buffs.append(TransienceBuff(50 if flip else 100))
             unit.debuff_immune = True
             self.summon(unit, target=Point(x, y), radius=5, sort_dist=False)
         yield
@@ -6223,6 +6218,7 @@ class ParlorTrickSpell(Spell):
                 if reincarnation:
                     hp = reincarnation.max_hp
                 if random.random() < (self.caster.max_hp - hp)/self.caster.max_hp:
+                    self.caster.level.show_effect(0, 0, Tags.Sound_Effect, 'death_boss')
                     unit.kill(trigger_death_event=False)
 
         if self.get_stat("endless") and self.can_cast(x, y) and self.cur_charges > 0 and random.random() < 0.75:
