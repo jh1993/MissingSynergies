@@ -1899,7 +1899,9 @@ class ElementalSpiritsSpell(Spell):
         self.minion_health = 36
         self.minion_damage = 11
         self.minion_range = 6
+        self.minion_duration = 15
 
+        self.upgrades["minion_duration"] = (10, 2)
         self.upgrades["fire_focus"] = (1, 2, "Fire Focus", "The storm spirit is replaced by [{num_summons}:num_summons] fire spirits.", "focus")
         self.upgrades["lightning_focus"] = (1, 2, "Lightning Focus", "The starfire spirit is replaced by [{num_summons}:num_summons] spark spirits.", "focus")
         self.upgrades["direct"] = (1, 3, "Direct Empowerment", "The spirits' damage is now increased by 50% of this spell's [damage] bonuses.\n[Damage] bonuses are usually obtained from Lord skills of the appropriate elements.")
@@ -1912,7 +1914,7 @@ class ElementalSpiritsSpell(Spell):
         return stats
 
     def get_description(self):
-        return ("Summon a starfire spirit, chaos spirit, and storm spirit.\n"
+        return ("Summon a starfire spirit, chaos spirit, and storm spirit for [{minion_duration}_turns:minion_duration].\n"
                 "Each spirit has [{minion_health}_HP:minion_health], [4_damage:minion_damage] melee retaliation of their elements, and an attack with [{minion_range}_range:minion_range] and [1_radius:radius] that deals [{minion_damage}_damage:minion_damage] of a random one of their elements.\n"
                 "Each spirit gains 5 max HP when witnessing a spell of one of its elements.").format(**self.fmt_dict())
     
@@ -1928,6 +1930,7 @@ class ElementalSpiritsSpell(Spell):
             spirit.buffs.append(SpiritBuff(tag))
             spirit.buffs.append(Thorns(4, tag))
         spirit.spells = [CustomSpiritBlast(self, tags)]
+        spirit.turns_to_death = self.get_stat("minion_duration")
         return spirit
     
     def cast_instant(self, x, y):
