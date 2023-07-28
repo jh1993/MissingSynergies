@@ -12047,16 +12047,16 @@ class HeatTrickSpell(Spell):
         self.asset = ["MissingSynergies", "Icons", "heat_trick"]
         self.tags = [Tags.Ice, Tags.Fire, Tags.Sorcery]
         self.level = 5
-        self.max_charges = 12
+        self.max_charges = 3
 
         self.range = 9
         self.damage = 50
         self.duration = 5
-        self.radius = 2
+        self.radius = 4
 
         self.upgrades["damage"] = (30, 2)
         self.upgrades["duration"] = (3, 2)
-        self.upgrades["radius"] = (1, 3)
+        self.upgrades["radius"] = (2, 3)
         self.upgrades["storm"] = (1, 3, "Storm Trick", "Heat Trick also pretends to deal [ice] and [lightning] damage.")
 
     def get_impacted_tiles(self, x, y):
