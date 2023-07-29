@@ -6790,18 +6790,22 @@ class CosmicStasisBuff(FrozenBuff):
         # Can't put it before __init__, else it'll be overwritten.
         self.conversions[Tags.Ice][Tags.Arcane] = 0.5
 
-    def on_applied(self, owner):
-        pass
-
     def on_advance(self):
 
-        if self.spell.get_stat("everlasting"):
-            for unit in self.owner.level.units:
-                if not are_hostile(unit, self.owner) or unit.gets_clarity or random.random() >= 0.5:
-                    continue
-                freeze = unit.get_buff(FrozenBuff)
-                if freeze:
-                    freeze.turns_left += 1
+        everlasting = self.spell.get_stat("everlasting")
+        enduring = self.spell.get_stat("enduring")
+
+        for unit in self.owner.level.units:
+            if random.random() >= 0.5:
+                continue
+            if not are_hostile(unit, self.owner):
+                if enduring and Tags.Ice in unit.tags and unit.turns_to_death is not None:
+                    unit.turns_to_death += 1
+            else:
+                if everlasting and not unit.gets_clarity:
+                    freeze = unit.get_buff(FrozenBuff)
+                    if freeze:
+                        freeze.turns_left += 1
         
         if not self.spell.get_stat("turret"):
             return
@@ -6847,7 +6851,8 @@ class CosmicStasisSpell(Spell):
 
         self.upgrades["duration"] = 3
         self.upgrades['max_charges'] = (3, 2)
-        self.upgrades["everlasting"] = (1, 4, "Everlasting Freeze", "Each turn, the [freeze] duration on each enemy has a 50% chance to be extended by [1_turn:duration]. Does not work on enemies that can gain clarity.\nWhen an enemy is unfrozen before the [freeze] expires naturally, that enemy will be [frozen] again for [1_turn:duration] before the start of your next turn.")
+        self.upgrades["everlasting"] = (1, 4, "Everlasting Freeze", "While this spell is active, each turn the [freeze] duration on each enemy has a 50% chance to be extended by [1_turn:duration]. Does not work on enemies that can gain clarity.\nWhen an enemy is unfrozen before the [freeze] expires naturally, that enemy will be [frozen] again for [1_turn:duration] before the start of your next turn.")
+        self.upgrades["enduring"] = (1, 3, "Enduring Ice", "While this spell is active, each turn each of your temporary [ice] minions has a 50% chance of having its duration extended by [1_turn:duration].")
         self.upgrades["turret"] = (1, 5, "Frozen Turret", "While this spell is active, each turn you will automatically cast a random one of your [ice] [sorcery] spells at a random valid enemy target, consuming charges as usual.")
     
     def get_description(self):
@@ -9644,7 +9649,7 @@ class WeepingMedusaStoneForm(PetrifyBuff):
         self.transform_asset_name = os.path.join("..", "..", "mods", "MissingSynergies", "Units", "weeping_medusa_statue")
         self.duration = spell.get_stat("duration")
         self.caustic = spell.get_stat("caustic")
-    
+
     def on_pre_advance(self):
         if all([u.has_buff(BlindBuff) or u.has_buff(Stun) for u in self.owner.level.get_units_in_los(self.owner) if are_hostile(u, self.owner)]):
             self.owner.remove_buff(self)
@@ -13618,10 +13623,16 @@ class GuruMeditationBuff(Stun):
             self.owner.add_shields(1)
         for _ in range(self.spell.get_stat("repeats")):
             for buff in list(self.owner.buffs):
-                if buff.buff_type != BUFF_TYPE_BLESS and buff.buff_type != BUFF_TYPE_PASSIVE or buff is self:
+                if (buff.buff_type != BUFF_TYPE_BLESS and buff.buff_type != BUFF_TYPE_PASSIVE) or buff is self:
                     continue
                 buff.on_pre_advance()
                 buff.on_advance()
+        if not self.spell.get_stat("extension"):
+            return
+        for buff in list(self.owner.buffs):
+            if buff.buff_type != BUFF_TYPE_BLESS or buff.turns_left <= 0 or buff is self or random.random() >= 0.5:
+                continue
+            buff.turns_left += 1
 
 class GuruMeditationSpell(Spell):
 
@@ -13639,6 +13650,7 @@ class GuruMeditationSpell(Spell):
         self.upgrades['max_charges'] = (3, 2)
         self.upgrades["repeats"] = (1, 4, "Repeats", "Per-turn effects of your buffs and skills will be repeated 1 additional time per turn.")
         self.upgrades["screen"] = (1, 3, "Blue Screen", "While active, you now gain [1_SH:shields] per turn.")
+        self.upgrades["extension"] = (1, 3, "Buff Extension", "While active, each turn each of your other buffs has a 50% chance of having its duration extended by [1_turn:duration].")
 
     def get_description(self):
         return ("Cast all of your self-targeted [enchantment] spells other than this spell, then [stun] yourself for [{duration}_turns:duration].\n"
