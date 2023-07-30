@@ -3384,7 +3384,7 @@ class AshenAvatarBuff(BlindBuff):
     def on_death(self, evt):
         if Tags.Fire not in evt.unit.tags:
             return
-        if evt.unit.source is self.spell:
+        if isinstance(evt.unit.source, AshenAvatarSpell):
             return
         phantom = GhostFire()
         phantom.name = "Ashen Phantom"
@@ -5358,7 +5358,7 @@ class AfterlifeEchoesBuff(Buff):
 
     def on_unit_added(self, evt):
 
-        if are_hostile(evt.unit, self.owner) or evt.unit.is_player_controlled or evt.unit.source is self.spell:
+        if are_hostile(evt.unit, self.owner) or evt.unit.is_player_controlled or isinstance(evt.unit.source, AfterlifeEchoesSpell):
             return
         self.owner.level.queue_spell(self.boom(evt.unit))
 
@@ -5624,8 +5624,6 @@ class CultOfDarknessBuff(Buff):
             unit = Cultist()
             apply_minion_bonuses(self.spell, unit)
             self.spell.summon(unit, radius=RANGE_GLOBAL, sort_dist=False)
-
-
     
     def raise_skeleton(self, unit):
         skeleton = mods.Bugfixes.Bugfixes.raise_skeleton(self.owner, unit, self.spell, summon=False)
