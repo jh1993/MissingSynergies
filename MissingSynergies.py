@@ -5358,7 +5358,7 @@ class AfterlifeEchoesBuff(Buff):
 
     def on_unit_added(self, evt):
 
-        if are_hostile(evt.unit, self.owner) or evt.unit.is_player_controlled or isinstance(evt.unit.source, AfterlifeEchoesSpell) or not unit.is_alive():
+        if are_hostile(evt.unit, self.owner) or evt.unit.is_player_controlled or isinstance(evt.unit.source, AfterlifeEchoesSpell) or not evt.unit.is_alive():
             return
         self.owner.level.queue_spell(self.boom(evt.unit))
 
