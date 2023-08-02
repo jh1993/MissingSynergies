@@ -10527,7 +10527,7 @@ class ChaosCloning(Upgrade):
         self.asset = ["MissingSynergies", "Icons", "chaos_cloning"]
         self.tags = [Tags.Chaos]
         self.level = 5
-        self.description = "The first time you summon a minion each turn, you also summon a chaos spawn near that minion, which has the same max HP, [SH:shields], tags, and resistances.\nThe chaos spawn has a melee attack that deals [physical] damage equal to 1/4 of its initial max HP, and melee retaliation dealing [fire] and [lightning] damage equal to 1/8 of its initial max HP.\nThis effect refreshes before the beginning of your turn."
+        self.description = "The first time you summon a minion each turn, you also summon a chaos spawn near that minion, which has the same max HP, [SH:shields], tags, and resistances.\nThe chaos spawn has a melee attack that deals [physical] damage equal to 1/4 of its initial max HP, and melee retaliation dealing [fire] and [lightning] damage equal to 1/8 of its initial max HP.\nDoes not work with [orb] minions."
         self.triggered = False
         self.global_triggers[EventOnUnitAdded] = self.on_unit_added
         # This is necessary to not trigger twice when on minions that are summoned when you enter a realm.
@@ -10543,7 +10543,7 @@ class ChaosCloning(Upgrade):
         if evt.unit.is_player_controlled:
             self.just_entered = True
             return
-        if self.triggered or are_hostile(evt.unit, self.owner):
+        if self.triggered or are_hostile(evt.unit, self.owner) or evt.unit.has_buff(OrbBuff):
             return
         self.triggered = True
         self.owner.level.queue_spell(self.do_summon(evt.unit))
