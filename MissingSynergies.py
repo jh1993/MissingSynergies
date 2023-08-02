@@ -1970,14 +1970,10 @@ class RuinBuff(Buff):
         self.color = Tags.Dark.color
         self.buff_type = BUFF_TYPE_NONE
         self.stack_type = STACK_INTENSITY
-        self.owner_triggers[EventOnUnitAdded] = self.on_unit_added
         for tag in [Tags.Fire, Tags.Ice, Tags.Lightning, Tags.Physical, Tags.Holy, Tags.Dark, Tags.Arcane, Tags.Poison]:
             self.resists[tag] = -100
-    
-    def on_unit_added(self, evt):
-        self.owner.remove_buff(self)
 
-    def on_advance(self):
+    def on_pre_advance(self):
         if all(u.team == TEAM_PLAYER for u in self.owner.level.units):
             self.owner.remove_buff(self)
             return
@@ -2021,7 +2017,7 @@ class RuinousImpactSpell(Spell):
     def get_description(self):
         return ("Deal [fire], [lightning], [physical], and [dark] damage in a massive burst that covers the whole level, ignoring walls. The damage is [{damage}:damage] at the point of impact and destroys walls. After a unit is hit, it is inflicted with a stack of Ruin.\n"
                 "For every tile away from the point of impact, the damage and chance to destroy walls and apply Ruin is reduced by 1%.\n"
-                "Ruin not considered a debuff and is only removed when there are no enemies in the realm or when you enter a new realm. Each stack of Ruin reduces all resistances by 100 and removes [1_SH:shields] per turn.").format(**self.fmt_dict())
+                "Ruin not considered a debuff and is only removed when there are no enemies in the realm. Each stack of Ruin reduces all resistances by 100 and removes [1_SH:shields] per turn.").format(**self.fmt_dict())
     
     def get_impacted_tiles(self, x, y):
         points = []
@@ -12738,29 +12734,23 @@ class ExorbitantPower(Upgrade):
         self.asset = ["MissingSynergies", "Icons", "exorbitant_power"]
         self.tags = [Tags.Enchantment]
         self.level = 7
-        self.description = "Whenever an ally, including you, gains a stacking buff, all of that unit's existing stacks of that buff have their durations increased to match the duration of the new stack if the latter is higher.\nThe turn after you finish a realm, you now lose all of your stackable buffs."
+        self.description = "Whenever an ally, including you, gains a stacking buff, all of that unit's existing stacks of that buff have their durations increased to match the duration of the new stack if the latter is higher.\nWhen you finish a realm, you now lose all of your stackable buffs."
         self.global_triggers[EventOnBuffApply] = self.on_buff_apply
         self.owner_triggers[EventOnUnitAdded] = self.on_unit_added
         self.triggered = False
 
-    def on_advance(self):
+    def on_pre_advance(self):
         if self.triggered:
             return
         if not all(u.team == TEAM_PLAYER for u in self.owner.level.units):
             return
         self.triggered = True
-        self.remove_stacks()
-
-    def on_unit_added(self, evt):
-        # Just in case the player is standing on a portal when the level ends, and immediately goes to the next level.
-        if not self.triggered:
-            self.remove_stacks()
-        self.triggered = False
-
-    def remove_stacks(self):
         for buff in list(self.owner.buffs):
             if buff.buff_type == BUFF_TYPE_BLESS and buff.stack_type == STACK_INTENSITY:
                 self.owner.remove_buff(buff)
+
+    def on_unit_added(self, evt):
+        self.triggered = False
 
     def on_buff_apply(self, evt):
         if evt.buff.stack_type != STACK_INTENSITY or not evt.buff.turns_left or are_hostile(evt.unit, self.owner):
