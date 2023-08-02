@@ -79,7 +79,6 @@ class WormwoodSpell(Spell):
 
         self.upgrades["radius"] = (3, 2)
         self.upgrades["duration"] = (3, 3)
-        self.upgrades["damage"] = (33, 3)
         self.upgrades["max_charges"] = (1, 2)
         self.upgrades["judgment"] = (1, 5, "Bitter Judgment", "When affecting a target already afflicted with Bitter Curse, the target takes additional [poison] damage equals to 5 times the remainiing duration of Bitter Curse.")
 
@@ -1970,8 +1969,14 @@ class RuinBuff(Buff):
         self.color = Tags.Dark.color
         self.buff_type = BUFF_TYPE_NONE
         self.stack_type = STACK_INTENSITY
+        self.owner_triggers[EventOnDamaged] = self.on_damaged
         for tag in [Tags.Fire, Tags.Ice, Tags.Lightning, Tags.Physical, Tags.Holy, Tags.Dark, Tags.Arcane, Tags.Poison]:
-            self.resists[tag] = -100
+            self.resists[tag] = -50
+
+    def on_damaged(self, evt):
+        self.owner.cur_hp -= evt.damage//2
+        if self.owner.cur_hp <= 0:
+            self.owner.kill()
 
     def on_pre_advance(self):
         if all(u.team == TEAM_PLAYER for u in self.owner.level.units):
@@ -2017,7 +2022,7 @@ class RuinousImpactSpell(Spell):
     def get_description(self):
         return ("Deal [fire], [lightning], [physical], and [dark] damage in a massive burst that covers the whole level, ignoring walls. The damage is [{damage}:damage] at the point of impact and destroys walls. After a unit is hit, it is inflicted with a stack of Ruin.\n"
                 "For every tile away from the point of impact, the damage and chance to destroy walls and apply Ruin is reduced by 1%.\n"
-                "Ruin not considered a debuff and is only removed when there are no enemies in the realm. Each stack of Ruin reduces all resistances by 100 and removes [1_SH:shields] per turn.").format(**self.fmt_dict())
+                "Ruin not considered a debuff and is only removed when there are no enemies in the realm. Each stack of Ruin reduces all resistances by 50, removes [1_SH:shields] per turn, and reduces current HP equal to 50% of damage taken whenever the victim takes damage.").format(**self.fmt_dict())
     
     def get_impacted_tiles(self, x, y):
         points = []
@@ -10675,7 +10680,7 @@ class DivineRetribution(Upgrade):
         self.max_damage = 0
     
     def get_description(self):
-        return ("Each turn, deal [holy] damage to the enemy with the highest current HP.\nThe damage dealt is equal to the highest damage dealt to any unit in a single hit since the previous activation of this skill, including itself.").format(**self.fmt_dict())
+        return ("Each turn, deal [holy] damage to the enemy with the highest current HP.\nThe damage dealt is equal to the highest damage dealt to any unit in a single hit since the previous activation of this skill, excluding itself.").format(**self.fmt_dict())
 
     def on_advance(self):
         if not self.max_damage:
@@ -10688,7 +10693,7 @@ class DivineRetribution(Upgrade):
             target.deal_damage(damage, Tags.Holy, self)
     
     def on_damaged(self, evt):
-        if evt.damage >= self.max_damage:
+        if evt.damage >= self.max_damage and evt.source is not self:
             self.max_damage = evt.damage
 
 class DamnedBuff(Buff):
