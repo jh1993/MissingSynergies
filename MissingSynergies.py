@@ -1974,7 +1974,7 @@ class RuinBuff(Buff):
             self.resists[tag] = -50
 
     def on_damaged(self, evt):
-        self.owner.cur_hp -= evt.damage//2
+        self.owner.cur_hp -= math.ceil(evt.damage/2)
         if self.owner.cur_hp <= 0:
             self.owner.kill()
 
@@ -2022,7 +2022,7 @@ class RuinousImpactSpell(Spell):
     def get_description(self):
         return ("Deal [fire], [lightning], [physical], and [dark] damage in a massive burst that covers the whole level, ignoring walls. The damage is [{damage}:damage] at the point of impact and destroys walls. After a unit is hit, it is inflicted with a stack of Ruin.\n"
                 "For every tile away from the point of impact, the damage and chance to destroy walls and apply Ruin is reduced by 1%.\n"
-                "Ruin not considered a debuff and is only removed when there are no enemies in the realm. Each stack of Ruin reduces all resistances by 50, removes [1_SH:shields] per turn, and reduces current HP equal to 50% of damage taken whenever the victim takes damage.").format(**self.fmt_dict())
+                "Ruin not considered a debuff and is only removed when there are no enemies in the realm. Each stack of Ruin reduces all resistances by 50, removes [1_SH:shields] per turn, and reduces current HP equal to 50% of damage taken, rounded up, whenever the victim takes damage.").format(**self.fmt_dict())
     
     def get_impacted_tiles(self, x, y):
         points = []
@@ -12957,7 +12957,9 @@ class RealityFeintBuff(Soulbound):
         self.asset = None
     
     def on_self_damage(self, damage):
-        if self.owner.cur_hp <= 0:
+        # Only activate if the owner's killed flag isn't true, because the owner may survive damage
+        # then get killed instantly without taking damage.
+        if self.owner.cur_hp <= 0 and not self.owner.killed:
             self.owner.cur_hp = 1
 
     def feint(self):
