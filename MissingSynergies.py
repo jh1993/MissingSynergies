@@ -4312,78 +4312,51 @@ class StormProtectionBuff(Buff):
         self.resists[Tags.Lightning] = (100 - self.owner.resists[Tags.Lightning]) if self.owner.resists[Tags.Lightning] < 100 else 0
         self.resists[Tags.Ice] = (100 - self.owner.resists[Tags.Ice]) if self.owner.resists[Tags.Ice] < 100 else 0
 
-class StormElementalBuff(Buff):
+class StormSerpentBuff(DamageAuraBuff):
 
     def __init__(self, spell):
         self.spell = spell
-        self.radius = spell.get_stat("radius")*2
-        self.protection = spell.get_stat("protection")
-        self.aggregate = spell.get_stat("aggregate")
-        self.disperse = spell.get_stat("disperse")
-        Buff.__init__(self)
+        DamageAuraBuff.__init__(self, 3, [Tags.Lightning, Tags.Ice], self.spell.get_stat("radius"))
+        self.source = self.spell
+        self.name = "Storm Aura"
     
     def on_init(self):
-        self.name = "Storm Arc"
-        self.color = Tags.Lightning.color
-        self.description = "Each turn, storm energy arcs to each elemental ally in line of sight within %i tiles, dealing lightning and ice damage in a beam equal to 10%% of the ally's max HP." % self.radius
-        self.global_triggers[EventOnDeath] = self.on_death
-    
-    def on_advance(self):
-        units = [unit for unit in self.owner.level.get_units_in_ball(self.owner, self.radius) if Tags.Elemental in unit.tags and self.owner.level.can_see(unit.x, unit.y, self.owner.x, self.owner.y) and not are_hostile(unit, self.owner) and unit is not self]
-        if not units:
-            return
-        random.shuffle(units)
-        if self.protection:
-            self.owner.apply_buff(RemoveBuffOnPreAdvance(StormProtectionBuff))
-            for unit in units:
-                unit.apply_buff(StormProtectionBuff())
-        for unit in units:
-            self.owner.level.queue_spell(self.beam(unit))
-
-    def beam(self, unit):
-        damage = unit.max_hp//10
-        for point in list(Bolt(self.owner.level, self.owner, unit))[:-1]:
-            self.owner.level.deal_damage(point.x, point.y, damage, Tags.Lightning, self)
-            self.owner.level.deal_damage(point.x, point.y, damage, Tags.Ice, self)
-        yield
+        self.owner_triggers[EventOnDeath] = self.on_death
 
     def on_death(self, evt):
 
-        if evt.unit is self.owner and self.disperse:
-            damage = self.spell.get_stat("damage")
-            duration = self.spell.get_stat("duration")
-            points = [point for point in self.owner.level.get_points_in_ball(self.owner.x, self.owner.y, self.spell.get_stat("radius")) if self.owner.level.can_see(self.owner.x, self.owner.y, point.x, point.y)]
-            random.shuffle(points)
-            for p in points:
-                existing = self.owner.level.tiles[p.x][p.y].cloud
-                if isinstance(existing, BlizzardCloud):
-                    self.owner.level.deal_damage(p.x, p.y, 10 + damage, Tags.Lightning, self.spell)
-                elif isinstance(existing, StormCloud):
-                    self.owner.level.deal_damage(p.x, p.y, 10 + damage, Tags.Ice, self.spell)
-                    unit = self.owner.level.get_unit_at(p.x, p.y)
-                    if unit:
-                        unit.apply_buff(FrozenBuff(), 1)
-                if random.choice([True, False]):
-                    cloud = BlizzardCloud(self.spell.caster)
-                    cloud.damage += damage
-                else:
-                    cloud = StormCloud(self.spell.caster)
-                    cloud.damage += 2*damage
-                cloud.duration += duration
-                cloud.source = self.spell
-                self.owner.level.add_obj(cloud, p.x, p.y)
+        if not self.spell.get_stat("disperse"):
             return
-    
-        if self.aggregate and Tags.Elemental in evt.unit.tags and evt.unit is not self.owner and distance(evt.unit, self.owner) <= self.radius and self.owner.level.can_see(self.owner.x, self.owner.y, evt.unit.x, evt.unit.y):
-            self.owner.max_hp += evt.unit.max_hp//5
-            self.owner.cur_hp += evt.unit.max_hp//5
+
+        damage = self.spell.get_stat("damage", base=5)
+        duration = self.spell.get_stat("duration", base=5)
+        points = [point for point in self.owner.level.get_points_in_ball(self.owner.x, self.owner.y, self.spell.get_stat("radius")) if self.owner.level.can_see(self.owner.x, self.owner.y, point.x, point.y)]
+        random.shuffle(points)
+        for p in points:
+            existing = self.owner.level.tiles[p.x][p.y].cloud
+            if isinstance(existing, BlizzardCloud):
+                self.owner.level.deal_damage(p.x, p.y, damage + 5, Tags.Lightning, self.spell)
+            elif isinstance(existing, StormCloud):
+                self.owner.level.deal_damage(p.x, p.y, damage + 5, Tags.Ice, self.spell)
+                unit = self.owner.level.get_unit_at(p.x, p.y)
+                if unit:
+                    unit.apply_buff(FrozenBuff(), 1)
+            if random.choice([True, False]):
+                cloud = BlizzardCloud(self.spell.caster)
+                cloud.damage = damage
+            else:
+                cloud = StormCloud(self.spell.caster)
+                cloud.damage = 2*damage
+            cloud.duration = duration
+            cloud.source = self.spell
+            self.owner.level.add_obj(cloud, p.x, p.y)
 
 class GatheringStormSpell(Spell):
 
     def on_init(self):
         self.name = "Gathering Storm"
         self.asset = ["MissingSynergies", "Icons", "gathering_storm"]
-        self.tags = [Tags.Lightning, Tags.Ice, Tags.Conjuration]
+        self.tags = [Tags.Lightning, Tags.Ice, Tags.Nature, Tags.Conjuration]
         self.level = 5
         self.max_charges = 4
         self.range = 8
@@ -4393,9 +4366,8 @@ class GatheringStormSpell(Spell):
 
         self.upgrades["radius"] = (2, 4)
         self.upgrades["minion_range"] = (4, 2)
-        self.upgrades["protection"] = (1, 3, "Storm Protection", "Each turn, [elemental] allies within the storm elemental's arcing distance gain [lightning] and [ice] resistances enough to put these resistances at 100.\nThis effect is removed at the start of the storm elemental's next turn.")
-        self.upgrades["aggregate"] = (1, 5, "Elemental Aggregate", "When an [elemental] unit other than the storm elemental dies within the storm elemental's arcing distance, the storm elemental's max and current HP are increased by 20% of the dead elemental's HP.")
-        self.upgrades["disperse"] = (1, 5, "Storm Dispersal", "When the storm elemental dies, it creates thunderstorm and blizzard clouds in an area around itself with radius equal to this spell's radius.\nIf a tile is already occupied by a blizzard cloud, the unit on it takes [{cloud_damage}_lightning:lightning] damage.\nIf a tile is already occupied by a thunderstorm cloud, the unit on it takes [{cloud_damage}_ice:ice] damage and is [frozen] for [1_turn:duration].")
+        self.upgrades["disperse"] = (1, 5, "Storm Dispersal", "When the storm serpent dies, it creates thunderstorm and blizzard clouds in an area around itself with radius equal to this spell's radius.\nIf a tile is already occupied by a blizzard cloud, the unit on it takes [{damage}_lightning:lightning] damage.\nIf a tile is already occupied by a thunderstorm cloud, the unit on it takes [{damage}_ice:ice] damage.")
+        self.upgrades["mage"] = (1, 6, "Storm Mage", "The storm serpent can cast your Lightning Storm and Blizzard spells, each with a cooldown of [8_turns:cooldown].\nThese spells gain all of your upgrades and bonuses.")
 
     def can_cast(self, x, y):
         if not Spell.can_cast(self, x, y):
@@ -4407,13 +4379,13 @@ class GatheringStormSpell(Spell):
 
     def fmt_dict(self):
         stats = Spell.fmt_dict(self)
-        stats["cloud_damage"] = self.get_stat("damage", base=5)*2
-        stats["double_radius"] = self.get_stat("radius")*2
+        stats["damage"] = self.get_stat("damage", base=10)
         return stats
 
     def get_description(self):
-        return ("Consume all thunderstorm and blizzard clouds within [{radius}_tiles:radius] of the target tile to summon a flying immobile storm elemental with max HP and duration based on the damage, strikechance, and duration of clouds consumed, or teleport an existing storm elemental and boost its HP and duration.\n"
-                "The storm elemental has a beam attack with [{minion_range}_range:minion_range] that deals [lightning] and [ice] damage equal to 10% of its max HP. Each turn, storm energy arcs from the storm elemental to each [elemental] ally in LOS within [{double_radius}_tiles:radius], dealing [lightning] and [ice] damage equal to 10% of the ally's max HP to units in between.").format(**self.fmt_dict())
+        return ("Consume all thunderstorm and blizzard clouds within [{radius}_tiles:radius] of the target tile to summon a flying storm serpent with max HP and duration based on the damage, strikechance, and duration of clouds consumed, or teleport an existing storm serpent and boost its HP and duration.\n"
+                "The storm serpent is a [lightning] [ice] [nature] minion with a beam attack that deals [lightning] and [ice] damage equal to 10% of its max HP at a range of [{minion_range}_tile:minion_range].\n"
+                "Each turn, the storm serpent deals fixed [3_lightning:lightning] or [3_ice:ice] damage to enemies in [{radius}_tiles:radius].").format(**self.fmt_dict())
 
     def cast(self, x, y):
 
@@ -4472,19 +4444,31 @@ class GatheringStormSpell(Spell):
             return
 
         unit = Unit()
-        unit.name = "Storm Elemental"
-        unit.asset = ["MissingSynergies", "Units", "storm_elemental"]
+        unit.name = "Storm Serpent"
+        unit.asset = ["MissingSynergies", "Units", "storm_serpent"]
         unit.unique = True
-        unit.tags = [Tags.Lightning, Tags.Ice, Tags.Elemental]
+        unit.tags = [Tags.Lightning, Tags.Ice, Tags.Nature]
         unit.resists[Tags.Lightning] = 100
         unit.resists[Tags.Ice] = 100
+        unit.resists[Tags.Poison] = 100
         unit.resists[Tags.Physical] = 50
-        unit.stationary = True
         unit.flying = True
         unit.max_hp = math.floor(cloud_damage*0.2)
         unit.turns_to_death = math.floor(cloud_duration*0.1)
         unit.spells = [StormBeam(self.get_stat("minion_range"))]
-        unit.buffs = [StormElementalBuff(self)]
+        unit.buffs = [StormSerpentBuff(self)]
+        
+        if self.get_stat("mage"):
+            for spell in [StormSpell(), BlizzardSpell()]:
+                spell.cool_down = 8
+                spell.max_charges = 0
+                spell.cur_charges = 0
+                spell.caster = unit
+                spell.owner = unit
+                spell.statholder = self.caster
+                spell.get_description = lambda: ""
+                unit.spells.insert(0, spell)
+
         self.summon(unit, target=Point(x, y))
 
 class CurseOfRustBuff(Buff):

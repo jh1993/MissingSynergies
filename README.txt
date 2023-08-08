@@ -81,7 +81,7 @@ Level 5:
 + Drought (Fire/Nature/Enchantment)
 + Flesh Sacrifice (Dark/Conjuration)
 + Fleshburst Zombie (Dark/Nature/Conjuration)
-+ Gathering Storm (Lightning/Ice/Conjuration)
++ Gathering Storm (Lightning/Ice/Nature/Conjuration)
 + Golden Trickster (Holy/Arcane/Metallic/Chaos/Conjuration)
 + Heat Trick (Ice/Fire/Sorcery)
 + Irradiate (Arcane/Nature/Enchantment)
