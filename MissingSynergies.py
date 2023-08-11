@@ -276,26 +276,6 @@ class ShiveringVenom(Upgrade):
         if isinstance(evt.buff, Poison) or isinstance(evt.buff, FrozenBuff):
             evt.unit.apply_buff(ShiveringVenomBuff(self))
 
-class ElectrolyzedBuff(Buff):
-
-    def __init__(self, upgrade):
-        self.upgrade = upgrade
-        Buff.__init__(self)
-    
-    def on_init(self):
-        self.name = "Electrolyzed"
-        self.asset = ["MissingSynergies", "Statuses", "electrolyzed"]
-        self.color = Tags.Lightning.color
-        self.buff_type = BUFF_TYPE_CURSE
-        self.stack_type = STACK_REPLACE
-        self.owner_triggers[EventOnDeath] = self.on_death
-
-    def on_applied(self, owner):
-        self.upgrade.electrolyze(self.owner, 2)
-    
-    def on_death(self, evt):
-        self.upgrade.electrolyze(self.owner, 1)
-
 class Electrolysis(Upgrade):
 
     def on_init(self):
@@ -303,49 +283,37 @@ class Electrolysis(Upgrade):
         self.asset = ["MissingSynergies", "Icons", "electrolysis"]
         self.tags = [Tags.Lightning, Tags.Nature]
         self.level = 5
-        self.duration = 10
+        self.damage = 10
         self.radius = 6
         self.global_triggers[EventOnDamaged] = self.on_damaged
 
-    def fmt_dict(self):
-        stats = Upgrade.fmt_dict(self)
-        stats["total_duration"] = self.get_stat("duration") + self.get_stat("damage")
-        return stats
-
     def get_description(self):
-        return ("If a [poisoned:poison] enemy takes [lightning] damage from a source other than this skill, it is electrolyzed, reducing its [poison] duration by half. On death, remove all poison from an electrolyzed enemy.\n"
-                "For every 10 turns of poison removed this way, rounded up, a bolt of toxic lightning is shot from the electrolyzed enemy toward a random enemy within a [{radius}_tile:radius] burst. An enemy can be hit by multiple bolts, and the electrolyzed enemy can also be hit.\n"
-                "An enemy hit by a bolt is [acidified:poison], losing [100_poison:poison] resistance.\n"
-                "If the hit enemy is already [acidified:poison], it is instead [poisoned:poison] for [{total_duration}_turns:duration]. This duration benefits from bonuses to both [duration] and [damage].\n"
-                "If this would increase its [poison] duration by less than [{total_duration}_turns:duration], the remainder is dealt as [lightning] damage.\n").format(**self.fmt_dict())
+        return ("Whenever a [poisoned] enemy takes [lightning] damage, it has a chance to consume all [poison] and shoot out toxic lightning bolts at random enemies in a [{radius}_tile:radius] burst, including itself.\n"
+                "The trigger chance is equal to the enemy's percentage of missing HP. The number of bolts is equal to the consumed [poison] duration divided by 20, rounded up.\n"
+                "Each bolt [acidifies:poison] the target, reducing [poison] resistance by 100, or deals [{damage}_lightning:lightning] damage if the target is already [acidified:poison]. Either way, it then deals [{damage}_poison:poison] damage.").format(**self.fmt_dict())
     
     def on_damaged(self, evt):
-        if not are_hostile(self.owner, evt.unit) or not evt.unit.has_buff(Poison):
+        if not are_hostile(self.owner, evt.unit) or evt.damage_type != Tags.Lightning:
             return
-        if evt.damage_type != Tags.Lightning or evt.source is self:
+        unit = evt.unit
+        if random.random() < unit.cur_hp/unit.max_hp:
             return
-        evt.unit.apply_buff(ElectrolyzedBuff(self))
-
-    def electrolyze(self, unit, div):
-
         poison = unit.get_buff(Poison)
         if not poison:
             return
         
-        amount = poison.turns_left//div
-        if div == 2:
-            poison.turns_left -= amount
+        unit.remove_buff(poison)
         radius = self.get_stat('radius')
-        duration = self.get_stat("duration") + self.get_stat("damage")
+        damage = self.get_stat("damage")
         
-        for _ in range(math.ceil(amount/10)):
+        for _ in range(math.ceil(poison.turns_left/20)):
             targets = [t for t in self.owner.level.get_units_in_ball(unit, radius) if are_hostile(t, self.owner)]
             targets = [t for t in targets if self.owner.level.can_see(t.x, t.y, unit.x, unit.y)]
             if not targets:
                 return
-            self.owner.level.queue_spell(self.bolt(unit, random.choice(targets), duration))
+            self.owner.level.queue_spell(self.bolt(unit, random.choice(targets), damage))
 
-    def bolt(self, origin, target, duration):
+    def bolt(self, origin, target, damage):
         for point in Bolt(self.owner.level, origin, target, find_clear=False):
             self.owner.level.show_effect(point.x, point.y, Tags.Lightning, minor=True)
             self.owner.level.show_effect(point.x, point.y, Tags.Poison, minor=True)
@@ -353,13 +321,8 @@ class Electrolysis(Upgrade):
         if not target.has_buff(Acidified):
             target.apply_buff(Acidified())
         else:
-            excess = 0
-            poison = target.get_buff(Poison)
-            if poison:
-                excess = min(poison.turns_left, duration)
-            if excess:
-                target.deal_damage(excess, Tags.Lightning, self)
-            target.apply_buff(Poison(), duration)
+            target.deal_damage(damage, Tags.Lightning, self)
+        target.deal_damage(damage, Tags.Poison, self)
 
 class SpaceChillBuff(Buff):
 
