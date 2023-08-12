@@ -1849,6 +1849,15 @@ class CustomSpiritBlast(SimpleRangedAttack):
                 for _ in range(2):
                     self.caster.level.deal_damage(x, y, self.get_stat("damage"), self.damage_type, self)
 
+class ElementalSpiritsDirectEmpowerment(Upgrade):
+
+    def on_init(self):
+        self.name = "Direct Empowerment"
+        self.level = 4
+        self.spell_bonuses[ElementalSpiritsSpell]["damage"] = 8
+        self.spell_bonuses[ElementalSpiritsSpell]["direct"] = 1
+        self.description = "The spirits' damage is now increased by 50% of this spell's [damage] bonuses."
+
 class ElementalSpiritsSpell(Spell):
 
     def on_init(self):
@@ -1862,13 +1871,14 @@ class ElementalSpiritsSpell(Spell):
         self.minion_damage = 11
         self.minion_range = 6
         self.minion_duration = 15
+        self.damage = 0
 
         self.upgrades["minion_duration"] = (10, 2)
         self.upgrades["fire_focus"] = (1, 2, "Fire Focus", "The storm spirit is replaced by [{num_summons}:num_summons] fire spirits.", "focus")
         self.upgrades["lightning_focus"] = (1, 2, "Lightning Focus", "The starfire spirit is replaced by [{num_summons}:num_summons] spark spirits.", "focus")
-        self.upgrades["direct"] = (1, 3, "Direct Empowerment", "The spirits' damage is now increased by 50% of this spell's [damage] bonuses.\n[Damage] bonuses are usually obtained from Lord skills of the appropriate elements.")
         self.upgrades["retroactive"] = (1, 5, "Retroactive Growth", "New spirits you summon will have max HP equal to the average max HP of all existing spirits, if it is greater than the new spirit's initial HP.")
         self.upgrades["power"] = (1, 6, "Elemental Power", "The attacks of hybrid spirits deal damage of both of their elements instead of randomly one of them.\nThe attacks of pure spirits hit twice.")
+        self.add_upgrade(ElementalSpiritsDirectEmpowerment())
     
     def fmt_dict(self):
         stats = Spell.fmt_dict(self)
