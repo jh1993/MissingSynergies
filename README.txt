@@ -28,7 +28,7 @@ Level 3:
 + Cloudbender (Lightning/Ice/Nature/Enchantment)
 + Coolant Spray (Ice/Nature/Enchantment)
 + Cult of Darkness (Dark/Enchantment/Conjuration)
-+ Eternal Bomber (Holy/Conjuration/Sorcery)
++ Eternal Bomber (Holy/Conjuration)
 + Eye of the Tyrant (Dragon/Eye/Enchantment)
 + Frozen Space (Ice/Translocation/Enchantment)
 + Grudge Reaper (Dark/Conjuration)

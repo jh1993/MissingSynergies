@@ -7278,6 +7278,7 @@ class TransientBomberBuff(Buff):
         Buff.__init__(self)
 
     def on_init(self):
+        self.name = "Transient Bomber"
         self.radius = self.spell.get_stat("radius")
         self.phase = self.spell.get_stat("phase")
         self.owner_triggers[EventOnDeath] = lambda evt: self.owner.level.queue_spell(self.boom())
@@ -7291,7 +7292,7 @@ class TransientBomberBuff(Buff):
                     if not unit or not are_hostile(unit, self.owner):
                         self.owner.level.show_effect(point.x, point.y, tag)
                     else:
-                        unit.deal_damage(damage if tag == Tags.Holy else damage//2, tag, self.spell)
+                        unit.deal_damage(damage if tag == Tags.Holy else damage//2, tag, self)
             yield
 
 class TransientBomberExplosion(Spell):
@@ -7326,6 +7327,7 @@ class EternalBomberBuff(Buff):
         Buff.__init__(self)
     
     def on_init(self):
+        self.name = "Eternal Bomber"
         self.color = Tags.Holy.color
         self.radius = self.spell.get_stat("radius")
         self.phase = self.spell.get_stat("phase")
@@ -7361,7 +7363,7 @@ class EternalBomberBuff(Buff):
                 if not unit or not are_hostile(unit, self.owner):
                     self.owner.level.show_effect(point.x, point.y, Tags.Holy)
                 else:
-                    unit.deal_damage(self.owner.max_hp, Tags.Holy, self.spell)
+                    unit.deal_damage(self.owner.max_hp, Tags.Holy, self)
             yield
 
     def on_advance(self):
@@ -7385,39 +7387,32 @@ class EternalBomberSpell(Spell):
     def on_init(self):
         self.name = "Eternal Bomber"
         self.asset = ["MissingSynergies", "Icons", "eternal_bomber"]
-        self.tags = [Tags.Holy, Tags.Conjuration, Tags.Sorcery]
+        self.tags = [Tags.Holy, Tags.Conjuration]
         self.level = 3
-        self.max_charges = 8
+        self.max_charges = 4
         self.range = 12
         self.must_target_empty = True
         self.must_target_walkable = True
 
-        self.minion_health = 4
-        self.minion_damage = 4
-        self.damage = 4
+        self.minion_health = 12
         self.radius = 2
-        self.num_summons = 3
+        self.num_summons = 2
 
         self.upgrades["radius"] = (2, 4)
-        self.upgrades["num_summons"] = (2, 3, "Max Bombers", "You can have 2 additional eternal bombers at a time.")
+        self.upgrades["num_summons"] = (1, 3, "Max Bombers", "You can have 1 additional eternal bomber at a time.")
         self.upgrades["extra"] = (1, 4, "Extra Bomber", "When you cast this spell, an additional transient bomber will also be summoned near the target.")
         self.add_upgrade(EternalBomberPhaseBomber())
 
     def get_impacted_tiles(self, x, y):
         return [p for stage in Burst(self.caster.level, Point(x, y), self.get_stat('radius'), ignore_walls=self.get_stat("phase")) for p in stage]
 
-    def fmt_dict(self):
-        stats = Spell.fmt_dict(self)
-        stats["total_hp"] = self.get_stat("minion_health") + self.get_stat("minion_damage") + self.get_stat("damage")
-        return stats
-
     def get_description(self):
-        return ("Summon an immobile eternal bomber with [{total_hp}_HP:minion_health], which counts as spell damage and benefits from bonuses to [minion_health:minion_health], [minion_damage:minion_damage], and [damage]. It dies after 1 turn, and on death it deals [holy] damage equal to its max HP to enemies in a [{radius}_tile:radius] burst. If the eternal bomber dies without reincarnations, summon another eternal bomber on a random tile if you have less than [{num_summons}:num_summons]; else summon a transient bomber.\n"
+        return ("Summon an immobile eternal bomber with [{minion_health}_HP:minion_health]. It dies after 1 turn, and on death it deals [holy] damage equal to its max HP to enemies in a [{radius}_tile:radius] burst. If it dies without reincarnations, summon another eternal bomber on a random tile if you have less than [{num_summons}:num_summons]; else summon a transient bomber.\n"
                 "Each turn, the eternal bomber loses all reincarnations to summon a transient bomber per life lost. Transient bombers have the same HP and no special abilities, but they are mobile and their explosions also deal half [arcane] and [fire] damage.").format(**self.fmt_dict())
 
     def summon_bomber(self, target=None, minor=False):
         unit = Unit()
-        unit.max_hp = self.get_stat("minion_health") + self.get_stat("minion_damage") + self.get_stat("damage")
+        unit.max_hp = self.get_stat("minion_health")
         if not minor:
             unit.name = "Eternal Bomber"
             unit.asset_name = "holy_bomber"
