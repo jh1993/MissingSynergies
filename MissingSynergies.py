@@ -1526,6 +1526,11 @@ class EyeOfTheTyrantBuff(Spells.ElementalEyeBuff):
                 self.element = self.breath_element
                 return
 
+    def on_advance(self):
+        # Update element dynamically.
+        self.on_applied(self.owner)
+        Spells.ElementalEyeBuff.on_advance(self)
+
     def on_shoot(self, target):
         unit = self.owner.level.get_unit_at(target.x, target.y)
         if unit:
@@ -9461,14 +9466,25 @@ class LuminousMuseAria(Spell):
         return Spell.can_cast(self, x, y)
 
     def get_description(self):
-        return "Grants its summoner 1 SH, up to a max of %i, based on current HP." % self.get_shield_max()
+        return "Sets the wizard's SH to %i if less. This number is based on this unit's current HP." % self.get_shield_max()
 
     def cast(self, x, y):
         for p in Bolt(self.caster.level, self.caster, self.caster.source.owner):
             self.caster.level.show_effect(p.x, p.y, Tags.Holy, minor=True)
             self.caster.level.show_effect(p.x, p.y, Tags.Arcane, minor=True)
             yield
-        self.caster.source.owner.add_shields(1)
+        self.caster.source.owner.shields = max(self.get_shield_max(), self.caster.source.owner.shields)
+
+class LuminousMuseTeleportyBuff(Buff):
+
+    def on_init(self):
+        self.color = Tags.Holy.color
+        self.description = "Each turn, has a chance to randomly teleport up to 4 tiles away, equal to the percentage of this unit's missing HP."
+    
+    def on_advance(self):
+        if random.random() < self.owner.cur_hp/self.owner.max_hp:
+            return
+        randomly_teleport(self.owner, 4)
 
 class LuminousMuse(Upgrade):
 
@@ -9484,8 +9500,9 @@ class LuminousMuse(Upgrade):
     
     def get_description(self):
         return ("Begin each level accompanied by the Luminous Muse, a flying [holy] [arcane] minion with [{minion_health}_HP:minion_health]. It cannot be killed by damage as long as you live, and if somehow killed, will be resurrected on your next turn.\n"
-                "The Luminous Muse can grant you [1_SH:shields] per turn, up to a maximum equal to the square root of 10% of its current HP, rounded down.\n"
-                "If the Luminous Muse cannot grant you any more [SH:shields], it will use an attack that has unlimited range and ignores line of sight, dealing [{minion_damage}_holy:holy] and [{minion_damage}_arcane:arcane] damage. The damage of this attack is increased by a value equal to its missing HP.").format(**self.fmt_dict())
+                "The Luminous Muse can set your [SH:shields] to the square root of 10% of its current HP, rounded down, if your [SH:shields] is less than that.\n"
+                "If the Muse cannot increase your [SH:shields], it will use an attack with unlimited range and ignores line of sight, dealing [{minion_damage}_holy:holy] and [{minion_damage}_arcane:arcane] damage, each increased by its missing HP.\n"
+                "Each turn, the Muse has a chance to randomly teleport up to [4_tiles:range] away, equal to its percentage of missing HP.").format(**self.fmt_dict())
 
     def do_summon(self):
         unit = Unit()
@@ -9501,7 +9518,7 @@ class LuminousMuse(Upgrade):
         buff = Soulbound(self.owner)
         buff.description = "Cannot die to damage when its summoner is alive. Automatically resurrects if dead."
         buff.color = Tags.Holy.color
-        unit.buffs = [buff]
+        unit.buffs = [buff, LuminousMuseTeleportyBuff()]
         if self.summon(unit, radius=RANGE_GLOBAL):
             self.minion = unit
     
