@@ -4109,13 +4109,10 @@ class FrigidFamineBuff(Buff):
         self.global_triggers[EventOnPreDamaged] = self.on_pre_damaged
 
     def on_advance(self):
+        if all(u.team == TEAM_PLAYER for u in self.owner.level.units):
+            return
         for unit in list(self.owner.level.units):
-            dealt = unit.deal_damage(1, random.choice([Tags.Dark, Tags.Ice]), self.spell, penetration=unit.resists[Tags.Heal] if self.starvation and are_hostile(unit, self.owner) and unit.resists[Tags.Heal] > 0 else 0)
-            if dealt and self.wendigo:
-                self.counter += 1
-                if self.counter >= 100:
-                    self.summon_wendigo()
-                    self.counter -= 100
+            unit.deal_damage(1, random.choice([Tags.Dark, Tags.Ice]), self.spell, penetration=unit.resists[Tags.Heal] if self.starvation and are_hostile(unit, self.owner) and unit.resists[Tags.Heal] > 0 else 0)
     
     def summon_wendigo(self):
         unit = Yeti()
@@ -4129,18 +4126,24 @@ class FrigidFamineBuff(Buff):
         self.spell.summon(unit, target=self.owner, radius=RANGE_GLOBAL, sort_dist=False)
 
     def on_pre_damaged(self, evt):
-        if evt.damage_type != Tags.Heal or evt.damage >= 0 or evt.source is self.spell:
+        if evt.damage_type != Tags.Heal or evt.damage >= 0:
             return
-        targets = list(self.owner.level.units)
-        if not targets:
+        if self.wendigo and evt.unit.source is not self.spell:
+            self.counter -= evt.damage
+        if evt.source is self.spell:
             return
-        targets = targets[:random.randint(1, len(targets))]
+        if all(u.team == TEAM_PLAYER for u in self.owner.level.units):
+            return
+        targets = self.owner.level.units[:random.randint(1, len(self.owner.level.units))]
         amounts = {}
         for t in targets:
             amounts[t] = 0
         for _ in range(-evt.damage):
             amounts[random.choice(targets)] += 1
         random.shuffle(targets)
+        self.owner.level.queue_spell(self.deal_damage(targets, amounts))
+
+    def deal_damage(self, targets, amounts):
         for target in targets:
             amount = amounts[target]
             if are_hostile(target, self.owner):
@@ -4150,9 +4153,18 @@ class FrigidFamineBuff(Buff):
                     target.deal_damage(-amount, Tags.Heal, self.spell)
                 else:
                     target.deal_damage(amount, random.choice([Tags.Dark, Tags.Ice]), self.spell)
+        while self.counter >= 200:
+            self.summon_wendigo()
+            self.counter -= 200
+        yield
 
     def on_unapplied(self):
-        if self.wendigo and random.random() < self.counter/100:
+        if not self.wendigo:
+            return
+        while self.counter >= 200:
+            self.summon_wendigo()
+            self.counter -= 200
+        if random.random() < self.counter/200:
             self.summon_wendigo()
 
 class FrigidFamineSpell(Spell):
@@ -4166,8 +4178,8 @@ class FrigidFamineSpell(Spell):
         self.duration = 10
         self.range = 0
 
-        self.upgrades["ration"] = (1, 3, "Rationing", "When this spell would damage an ally as a result of a unit being healed, it now has a chance to instead heal the ally, equal to the ally's percentage of missing HP.\nThis healing cannot trigger Frigid Famine damage again.")
-        self.upgrades["wendigo"] = (1, 5, "Summon Wendigo", "For every 100 damage dealt by this spell's per-turn effect, summon a wendigo at a random location.\nWendigos are [undead] minions with life-draining melee attacks and auras that deal [1_ice:ice] or [1_dark:dark] damage.\nWhen the effect expires, any accumulated damage will give a chance to summon a wendigo.")
+        self.upgrades["ration"] = (1, 3, "Rationing", "When this spell would damage an ally as a result of a unit being healed, it now has a chance to instead heal the ally, equal to the ally's percentage of missing HP.\nThis healing cannot trigger Frigid Famine damage again, but can trigger Summon Wendigo.")
+        self.upgrades["wendigo"] = (1, 5, "Summon Wendigo", "For every 200 healing attempted during this spell's effect, summon a wendigo at a random location. Healing to wendigos does not count.\nWendigos are [ice] [undead] minions with life-draining melee attacks and auras that deal [1_ice:ice] or [1_dark:dark] damage.\nWhen the effect expires, any accumulated healing will give a chance to summon a wendigo.")
         self.upgrades["starvation"] = (1, 4, "Starvation", "The damage dealt by this spell penetrates enemy resistances by an amount equal to each enemy's healing penalty.\nHealing penalty prevents healing but does not prevent attempted healing from being converted into damage by this spell; it is usually inflicted by the [poison] debuff.")
         self.upgrades["duration"] = (10, 2)
 
