@@ -13276,7 +13276,7 @@ class AntimatterInfusion(Upgrade):
         self.global_triggers[EventOnDamaged] = self.on_damaged
     
     def get_description(self):
-        return ("Whenever an ally deals damage to an enemy, that ally has a chance reduce that enemy's current HP by [{damage}:damage], and its own current HP by 1. The chance is equal to that ally's current HP divided by max HP or 100, whichever is higher.\n"
+        return ("Whenever an ally deals damage to an enemy, that ally has a chance to reduce that enemy's current HP by [{damage}:damage], and its own current HP by 1. The chance is equal to that ally's current HP divided by max HP or 100, whichever is higher.\n"
                 "The self-inflicted HP reduction from this skill is fixed, and cannot be increased using shrines, skills, or buffs.\n"
                 "The HP reduction inflicted on enemies benefits from bonuses to [damage], but is not considered dealing damage.").format(**self.fmt_dict())
 
