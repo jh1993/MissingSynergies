@@ -6229,7 +6229,7 @@ class GrudgeReaperBuff(Soulbound):
         self.spell = spell
         Soulbound.__init__(self, target)
         self.color = Tags.Demon.color
-        self.description = "Cannot be killed when the target of its grudge is alive. Vanishes when the target dies."
+        self.description = "Cannot be killed when the target of its grudge is alive. Vanishes when the target dies without reincarnations."
 
     def on_death(self, evt):
         if evt.unit is not self.guardian or self.reincarnation:
@@ -6237,7 +6237,9 @@ class GrudgeReaperBuff(Soulbound):
         if self.insatiable and Point(evt.unit.x, evt.unit.y) not in self.owner.level.get_adjacent_points(Point(self.owner.x, self.owner.y), filter_walkable=False):
             units = [unit for unit in self.owner.level.units if are_hostile(unit, self.spell.caster)]
             if units:
-                self.guardian = random.choice(units)
+                target = random.choice(units)
+                self.guardian = target
+                self.reincarnation = target.get_buff(ReincarnationBuff)
                 return
         self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
         self.owner.kill(trigger_death_event=False)
@@ -6260,6 +6262,7 @@ class GrudgeReaperBuff(Soulbound):
         self.owner.level.act_move(self.owner, dest.x, dest.y, teleport=True)
 
 class HatredBuff(Buff):
+
     def on_init(self):
         self.name = "Hatred"
         self.asset = ["MissingSynergies", "Statuses", "amplified_dark"]
@@ -6318,13 +6321,33 @@ class GrudgeReaperSpell(Spell):
         self.upgrades["insatiable"] = (1, 4, "Insatiable Grudge", "If the target of the reaper's grudge dies while not adjacent to the reaper, the reaper will redirect its grudge toward another random enemy instead of vanishing.")
 
     def get_description(self):
-        return ("Summon a demonic spirit next to yourself that bears a grudge against the target unit. It cannot be killed by damage while the target is alive, but vanishes without counting as dying when the target dies.\n"
-                "The reaper has a melee attack that deals [{minion_damage}_dark:dark] damage, which can only be used against the target of its grudge.").format(**self.fmt_dict())
+        return ("Summon a demonic spirit next to yourself that bears a grudge against the target unit. It cannot be killed by damage while the target is alive, but vanishes without counting as dying when the target dies without reincarnations.\n"
+                "The reaper has a melee attack that deals [{minion_damage}_dark:dark] damage, which can only be used against the target of its grudge.\n"
+                "If a reaper already exists, instead redirect its grudge to the new target.").format(**self.fmt_dict())
+
+    def can_cast(self, x, y):
+        if not Spell.can_cast(self, x, y):
+            return False
+        target = self.caster.level.get_unit_at(x, y)
+        return target and target.source is not self
 
     def cast_instant(self, x, y):
 
         target = self.caster.level.get_unit_at(x, y)
         if not target:
+            return
+        
+        existing = None
+        for unit in self.caster.level.units:
+            if unit.source is self:
+                existing = unit
+                break
+        if existing:
+            buff = existing.get_buff(GrudgeReaperBuff)
+            if not buff:
+                return
+            buff.guardian = target
+            buff.reincarnation = target.get_buff(ReincarnationBuff)
             return
         
         def can_harm(unit, other):
@@ -6336,6 +6359,7 @@ class GrudgeReaperSpell(Spell):
             return Unit.can_harm(unit, other)
         
         unit = Reaper()
+        unit.unique = True
         unit.name = "Grudge Reaper"
         unit.asset = ["MissingSynergies", "Units", "grudge_reaper"]
         unit.tags.append(Tags.Demon)
