@@ -3359,10 +3359,8 @@ class AshenAvatarBuff(BlindBuff):
             return
         if not evt.unit.is_alive():
             return
-        if evt.unit.has_buff(BlindBuff):
-            evt.unit.apply_buff(Poison(), math.ceil(evt.damage*self.big_mult))
-        else:
-            evt.unit.apply_buff(BlindBuff(), math.ceil(evt.damage*self.small_mult))
+        evt.unit.apply_buff(Poison(), math.ceil(evt.damage*self.big_mult))
+        evt.unit.apply_buff(BlindBuff(), math.ceil(evt.damage*self.small_mult))
 
     def on_death(self, evt):
         if Tags.Fire not in evt.unit.tags:
@@ -3410,7 +3408,7 @@ class AshenAvatarSpell(Spell):
 
     def get_description(self):
         return ("Become the avatar of ash for [{duration}_turns:duration], during which you are [blind], gain [{resists}_fire:fire], [{resists}_dark:dark], and [{resists}_poison:poison] resistance, and the following benefits.\n"
-                "All [fire] damage will [blind] enemies for a duration equal to [{small_mult}%:duration] of the damage. If the enemy is already [blind], instead inflict [poison] with a duration equal to [{big_mult}%:duration] of the damage.\n"
+                "All [fire] damage will [blind] enemies for a duration equal to [{small_mult}%:duration] of the damage and [poison] enemies for a duration equal to [{big_mult}%:duration] of the damage.\n"
                 "Whenever a [fire] unit other than an ashen phantom dies, summon an ashen phantom near it with the same max HP for [{minion_duration}_turns:minion_duration]; the phantom is a [fire] [dark] [nature] [undead]. Each phantom has an ash bolt with [{minion_range}_range:minion_range] that randomly deals [fire], [dark], or [poison] damage equal to [{minion_damage}:minion_damage] plus [{small_mult}%:minion_damage] of its initial max HP, and [blinds:blind] for [1_turn:duration].").format(**self.fmt_dict())
     
     def cast_instant(self, x, y):
