@@ -1837,7 +1837,9 @@ class CustomSpiritBlast(SimpleRangedAttack):
 
     def __init__(self, spell, tags):
         self.power = spell.get_stat("power")
-        SimpleRangedAttack.__init__(self, damage=spell.get_stat("minion_damage"), damage_type=tags if len(tags) == 2 else tags[0], range=spell.get_stat("minion_range"), radius=1)
+        # Can't just do damage_type=tags because that would make damage type change dynamically based on the spirit's tags,
+        # which could result in invalid damage types.
+        SimpleRangedAttack.__init__(self, damage=spell.get_stat("minion_damage"), damage_type=tags[:2] if len(tags) == 2 else tags[0], range=spell.get_stat("minion_range"), radius=1)
         if spell.get_stat("direct"):
             self.damage += spell.get_stat("damage")//2
         self.name = "%s Blast" % get_spirit_combo(tags)
