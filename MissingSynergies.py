@@ -11694,7 +11694,6 @@ class LiquidLightningBuff(Buff):
             self.flip = False
         self.owner.level.event_manager.raise_event(EventOnUnitPreAdded(self.owner), self.owner)
         self.owner.level.event_manager.raise_event(EventOnUnitAdded(self.owner), self.owner)
-        yield
 
     def on_unapplied(self):
         if not self.originally_lightning and Tags.Lightning in self.owner.tags:
