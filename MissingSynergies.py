@@ -2270,8 +2270,9 @@ class EnfleshedBuff(Buff):
             self.owner.kill(damage_event=EventOnDamaged(self.owner, self.hp, Tags.Poison, self.spell))
 
     def on_unapplied(self):
+        alive = self.owner.is_alive()
         self.owner.cur_hp -= self.hp
-        self.owner.cur_hp = max(1 if self.owner.is_alive() else 0, self.owner.cur_hp)
+        self.owner.cur_hp = max(1 if alive else 0, self.owner.cur_hp)
         drain_max_hp(self.owner, self.hp)
         if self.nonliving and Tags.Living in self.owner.tags:
             self.owner.tags.remove(Tags.Living)
@@ -2319,7 +2320,7 @@ class MalignantGrowthSpell(Spell):
     def get_description(self):
         return ("Enemies in a [{radius}_tile:radius] radius are enfleshed. They become [living], lose [100_poison:poison] resistance, and gain [{hp_bonus}:living] max HP; the HP bonus is equal to 5 times the [damage] of this spell.\n"
                 "Each turn, enfleshed enemies take [poison] damage equal to 5% of their max HP.\n"
-                "If an enfleshed unit's current HP drops to an amount equal to or below the max HP it gained from enfleshment, it dies instantly at the end of its turn; this is treated as killed by [poison] damage equal to the enfleshed amount.\n"
+                "If an enfleshed unit's current HP becomes equal to or below the max HP it gained from enfleshment, it dies instantly at the end of its turn; this is treated as killed by [poison] damage equal to the enfleshed amount.\n"
                 "This spell cannot increase the max HP of [slime] units.").format(**self.fmt_dict())
 
     def cast_instant(self, x, y):
