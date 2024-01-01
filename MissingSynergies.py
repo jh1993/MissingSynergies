@@ -6849,7 +6849,7 @@ class CosmicStasisBuff(FrozenBuff):
 
     # This is needed because No More Scams only checks skills for redeals.
     def can_redeal(self, target, source, dtype, already_checked):
-        if not self.laser or dtype != Tags.Ice:
+        if dtype != Tags.Ice:
             return
         return not is_immune(target, source, Tags.Arcane, already_checked)
 
