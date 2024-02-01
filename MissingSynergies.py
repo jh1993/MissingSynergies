@@ -9632,31 +9632,47 @@ class ChaoticSparkSpell(Spell):
 
         damage = self.get_stat("damage")
         radius = self.get_stat("radius")
-        jumps_left = self.get_stat("num_targets")
+        beams_left = self.get_stat("num_targets")
         jump_range = self.get_stat("cascade_range")*2
         physical = self.get_stat("physical")
 
         start = Point(self.caster.x, self.caster.y)
         target = Point(x, y)
+        beams = list(Bolt(self.caster.level, start, target)) # Initial beam.
+        iters = []
+        to_advance = []
 
-        # Count the initial beam as a jump too.
-        while jumps_left > -1:
-            bursts = []
-            for p in Bolt(self.caster.level, start, target):
-                self.hit(p.x, p.y, damage, physical)
-                if random.random() < 0.25:
-                    bursts.append(list(Burst(self.caster.level, p, radius)))
-            for i in range(radius):
-                for burst in bursts:
-                    for p in burst[i]:
-                        self.hit(p.x, p.y, damage, physical)
-                yield
-            start = target
+        while beams_left > 0:
             new_targets = [p for p in self.caster.level.get_points_in_ball(target.x, target.y, jump_range) if self.caster.level.can_see(p.x, p.y, target.x, target.y)]
             if not new_targets:
-                return
+                break
+            start = target
             target = random.choice(new_targets)
-            jumps_left -= 1
+            beams.extend(list(Bolt(self.caster.level, start, target)))
+            beams_left -= 1
+        iters.append(iter(beams))
+
+        while iters:
+
+            to_advance = []
+            for i in list(iters):
+                obj = next(i, None)
+                if not obj:
+                    iters.remove(i)
+                    continue
+                to_advance.append(obj)
+            
+            for obj in to_advance:
+                if isinstance(obj, set) or isinstance(obj, list):
+                    # Explosion.
+                    for p in obj:
+                        self.hit(p.x, p.y, damage, physical)
+                else:
+                    # Beam.
+                    self.hit(obj.x, obj.y, damage, physical)
+                    if random.random() < 0.25:
+                        iters.append(iter(Burst(self.caster.level, obj, radius)))
+            
             yield
 
 class WeepingMedusaStoneForm(PetrifyBuff):
