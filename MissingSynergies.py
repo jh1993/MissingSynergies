@@ -13729,6 +13729,155 @@ class TimeSkip(Upgrade):
                 continue
             unit.apply_buff(Stun(), duration)
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell, CloudbenderSpell, GuruMeditationSpell])
+class EldritchEyeBuff(Spells.ElementalEyeBuff):
 
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture, BatEscape, EyeBleach, AntimatterInfusion, WarpStrike, ThornShot, TimeSkip])
+    def __init__(self, damage, freq, spell):
+        Spells.ElementalEyeBuff.__init__(self, Tags.Arcane, damage, freq, spell)
+        self.name = "Eldritch Eye"
+        self.color = Tags.Arcane.color
+        self.asset = ["MissingSynergies", "Statuses", "arcane_eye"]
+        self.stack_type = STACK_INTENSITY
+        self.show_effect = False
+
+class VileEyeBuff(Spells.ElementalEyeBuff):
+
+    def __init__(self, damage, freq, spell):
+        Spells.ElementalEyeBuff.__init__(self, Tags.Poison, damage, freq, spell)
+        self.name = "Vile Eye"
+        self.color = Tags.Poison.color
+        self.asset = ["MissingSynergies", "Statuses", "poison_eye"]
+        self.stack_type = STACK_INTENSITY
+        self.show_effect = False
+
+class GazersCurseBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+    
+    def on_attempt_apply(self, owner):
+        return not owner.get_buff(GazersCurseBuff)
+    
+    def on_init(self):
+        self.amount = 0
+        self.name = "Gazer's Curse %i" % self.amount
+        self.buff_type = BUFF_TYPE_CURSE
+        self.asset = ["MissingSynergies", "Statuses", "gazers_curse"]
+        self.color = Tags.Arcane.color
+        self.show_effect = False
+        self.owner_triggers[EventOnDamaged] = self.on_damaged
+
+    def on_advance(self):
+        old_amount = self.amount
+        for _ in range(old_amount):
+            self.owner.deal_damage(2, random.choice([Tags.Arcane, Tags.Poison]), self.spell)
+            if random.random() >= 0.5:
+                self.amount -= 1
+        if self.amount <= 0:
+            self.owner.remove_buff(self)
+        else:
+            self.name = "Gazer's Curse %i" % self.amount
+
+    def on_damaged(self, evt):
+        if not isinstance(evt.source, Spell) or Tags.Eye not in evt.source.tags:
+            return
+        self.amount += 1
+
+class GazerFormBuff(BlindBuff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        BlindBuff.__init__(self)
+    
+    def on_init(self):
+        self.name = "Gazer Form"
+        self.color = Tags.Arcane.color
+        self.buff_type = BUFF_TYPE_BLESS
+        self.stack_type = STACK_TYPE_TRANSFORM
+        self.transform_asset_name = os.path.join("..", "..", "mods", "MissingSynergies", "Units", "gazer_form")
+        self.owner_triggers[EventOnSpellCast] = self.on_spell_cast
+    
+    def on_advance(self):
+        self.grow_eyes(self.spell.get_stat("max_growths"))        
+        if self.spell.get_stat("curse"):
+            for unit in list(self.owner.level.units):
+                if not are_hostile(unit, self.owner):
+                    continue
+                unit.apply_buff(GazersCurseBuff(self))
+
+    def on_spell_cast(self, evt):
+        if not evt.spell.level or Tags.Eye not in evt.spell.tags or not self.spell.get_stat("spell"):
+            return
+        self.grow_eyes(evt.spell.level)
+
+    def grow_eyes(self, max_growths):
+        freq = self.spell.get_stat("shot_cooldown")
+        damage = self.spell.get_stat("damage")
+        eye_duration = self.spell.get_stat("eye_duration")
+        chance = 1 if self.owner.is_player_controlled else 0.2
+        for _ in range(random.randint(1, max_growths)):
+            if random.random() >= chance:
+                continue
+            self.owner.apply_buff(random.choice([EldritchEyeBuff, VileEyeBuff])(damage, freq, self.spell), eye_duration)
+
+class GazerFormSpell(Spell):
+
+    def on_init(self):
+        self.name = "Gazer Form"
+        self.asset = ["MissingSynergies", "Icons", "gazer_form"]
+        self.tags = [Tags.Arcane, Tags.Nature, Tags.Enchantment, Tags.Eye]
+        self.level = 5
+        self.max_charges = 3
+        self.range = 0
+
+        self.shot_cooldown = 3
+        self.damage = 8
+        self.eye_duration = 6
+        self.max_growths = 3
+        self.duration = 10
+
+        self.upgrades["shot_cooldown"] = (-1, 4)
+        self.upgrades["eye_duration"] = (6, 4)
+        self.upgrades["max_growths"] = (2, 3, "Max Growths", "Gazer Form can now grow up to [5:num_targets] eyes per turn.")
+        self.upgrades["spell"] = (1, 4, "Spell Gazer", "Whenever you cast an [eye] spell, Gazer Form grows a number of eyes between 1 and the spell's level.")
+        self.upgrades["curse"] = (1, 5, "Gazer's Curse", "Each turn, inflict Gazer's Curse on all enemies.\nEach time a cursed enemy takes damage from an [eye] spell, it gains a counter, which is not treated as debuff duration.\nEach turn, the cursed enemy takes [2_arcane:arcane] or [2_poison:poison] damage for each counter it has; then each counter has a 50% chance to disappear.\nThis damage is fixed, and cannot be increased using shrines, skills, or buffs.\nThe curse is removed if it has no more counters.")
+
+    def get_description(self):
+        return ("Transform into a Gazer for [{duration}_turns:duration], during which you are [blind] but automatically grow between 1 and [{max_growths}:num_targets] eyes each turn.\n"
+                "Each eye lasts [{eye_duration}_turns:duration], and deals [{damage}:damage] damage to a random enemy in line of sight every [{shot_cooldown}_turns:shot_cooldown]. It may be an eldritch eye that deals [arcane] damage, or a vile eye that deals [poison] damage.\n"
+                "If a minion copies this spell, it has a 80% chance to fail each time it tries to grow an eye.").format(**self.fmt_dict())
+
+    def cast_instant(self, x, y):
+        self.caster.apply_buff(GazerFormBuff(self), self.get_stat("duration"))
+
+class BlindSavant(Upgrade):
+
+    def on_init(self):
+        self.name = "Blind Savant"
+        self.asset = ["MissingSynergies", "Icons", "blind_savant"]
+        self.tags = [Tags.Holy, Tags.Translocation]
+        self.level = 4
+        self.description = "Each turn, if you are [blind], you gain [1_SH:shields], to a max of [3_SH:shields], and automatically teleport next to a random enemy if possible."
+    
+    def on_advance(self):
+        if not self.owner.is_blind():
+            return
+        if self.owner.shields < 3:
+            self.owner.add_shields(1)
+        units = [u for u in self.owner.level.units if are_hostile(u, self.owner)]
+        if not units:
+            return
+        random.shuffle(units)
+        for unit in units:
+            points = list(self.owner.level.get_adjacent_points(Point(unit.x, unit.y), check_unit=True))
+            if not points:
+                continue
+            point = random.choice(points)
+            self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
+            self.owner.level.act_move(self.owner, point.x, point.y, teleport=True)
+            self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
+            return
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell, CloudbenderSpell, GuruMeditationSpell, GazerFormSpell])
+
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture, BatEscape, EyeBleach, AntimatterInfusion, WarpStrike, ThornShot, TimeSkip, BlindSavant])

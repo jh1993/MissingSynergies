@@ -83,6 +83,7 @@ Level 5:
 + Fleshburst Zombie (Dark/Nature/Conjuration)
 + Frigid Famine (Dark/Ice/Enchantment)
 + Gathering Storm (Lightning/Ice/Nature/Conjuration)
++ Gazer Form (Arcane/Nature/Eye/Enchantment)
 + Golden Trickster (Holy/Arcane/Metallic/Chaos/Conjuration)
 + Heat Trick (Ice/Fire/Sorcery)
 + Irradiate (Arcane/Nature/Enchantment)
@@ -140,6 +141,7 @@ Skills:
 
 Level 4:
 + Bat Escape (Fire/Dark/Nature/Translocation)
++ Blind Savant (Holy/Translocation)
 + Blood Fodder (Dark/Nature)
 + Cantrip Adept (Sorcery)
 + Chaos Trick (Chaos/Fire/Lightning)
