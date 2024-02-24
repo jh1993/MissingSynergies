@@ -93,6 +93,7 @@ Level 5:
 + Mad Maestro (Dark/Lightning/Conjuration)
 + Mad Werewolf (Dark/Nature/Arcane/Translocation/Conjuration)
 + Mask of Troubles (Arcane/Translocation/Conjuration/Enchantment)
++ Melodrama (Dark/Arcane/Enchantment)
 + Mind Monarch (Arcane/Conjuration)
 + Morbid Sphere (Dark/Orb/Conjuration)
 + Nova Juggernaut (Arcane/Metallic/Conjuration)

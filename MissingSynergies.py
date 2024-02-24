@@ -13878,6 +13878,67 @@ class BlindSavant(Upgrade):
             self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
             return
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell, CloudbenderSpell, GuruMeditationSpell, GazerFormSpell])
+class MelodramaBuff(Thorns):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Thorns.__init__(self, spell.get_stat("damage"), Tags.Arcane)
+        self.name = "Melodrama"
+        self.color = Tags.Dark.color
+        self.global_triggers[EventOnSpellCast] = self.on_spell
+        if spell.get_stat("endless"):
+            self.owner_triggers[EventOnDamaged] = self.on_damaged
+
+    def do_thorns(self, unit):
+        unit.deal_damage(self.damage, self.dtype, self.spell)
+        yield
+    
+    def on_advance(self):
+        enemies = [u for u in self.owner.level.get_units_in_los(self.owner) if are_hostile(u, self.owner)]
+        if not enemies:
+            return
+        random.shuffle(enemies)
+        for enemy in enemies[:self.spell.get_stat("num_targets")]:
+            dummy_hit = SimpleMeleeAttack(damage_type=Tags.Dark)
+            dummy_hit.owner = enemy
+            dummy_hit.caster = enemy
+            self.owner.level.event_manager.raise_event(EventOnSpellCast(dummy_hit, enemy, self.owner.x, self.owner.y), enemy)
+            self.owner.level.event_manager.raise_event(EventOnPreDamaged(self.owner, 1, Tags.Dark, dummy_hit), self.owner)
+            self.owner.level.event_manager.raise_event(EventOnDamaged(self.owner, 1, Tags.Dark, dummy_hit), self.owner)
+
+    def on_damaged(self, evt):
+        if random.random() >= 0.5:
+            return
+        self.owner.level.event_manager.raise_event(EventOnPreDamaged(self.owner, 1, Tags.Dark, evt.source), self.owner)
+        self.owner.level.event_manager.raise_event(EventOnDamaged(self.owner, 1, Tags.Dark, evt.source), self.owner)        
+
+class MelodramaSpell(Spell):
+
+    def on_init(self):
+        self.name = "Melodrama"
+        self.asset = ["MissingSynergies", "Icons", "melodrama"]
+        self.tags = [Tags.Dark, Tags.Arcane, Tags.Enchantment]
+        self.level = 5
+        self.max_charges = 3
+        self.range = 0
+
+        self.damage = 15
+        self.num_targets = 2
+        self.duration = 30
+
+        self.upgrades["damage"] = (7, 3)
+        self.upgrades["num_targets"] = (2, 3)
+        self.upgrades["duration"] = (15, 2)
+        self.upgrades["endless"] = (1, 7, "Endless Drama", "Whenever you take damage, you have a 50% chance to pretend to take [1_dark:dark] damage from the same source, triggering all effects that are normally triggered by taking damage.\nThis effect can trigger itself.")
+    
+    def get_description(self):
+        return ("Each turn, [{num_targets}:num_targets] random enemies in line of sight are chosen. You pretend to be targeted by and take [1_dark:dark] damage from a melee attack from each enemy, triggering all effects that are normally triggered by these events.\n"
+                "For the duration, you also retaliate for [{damage}_arcane:arcane] damage when targeted in melee.\n"
+                "Lasts [{duration}_turns:duration].").format(**self.fmt_dict())
+
+    def cast_instant(self, x, y):
+        self.caster.apply_buff(MelodramaBuff(self), self.get_stat("duration"))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell, CloudbenderSpell, GuruMeditationSpell, GazerFormSpell, MelodramaSpell])
 
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture, BatEscape, EyeBleach, AntimatterInfusion, WarpStrike, ThornShot, TimeSkip, BlindSavant])
