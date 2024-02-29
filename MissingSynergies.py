@@ -13886,6 +13886,7 @@ class MelodramaBuff(Thorns):
         self.name = "Melodrama"
         self.color = Tags.Dark.color
         self.global_triggers[EventOnSpellCast] = self.on_spell
+        self.freak = spell.get_stat("freak")
         if spell.get_stat("endless"):
             self.owner_triggers[EventOnDamaged] = self.on_damaged
 
@@ -13893,6 +13894,13 @@ class MelodramaBuff(Thorns):
         unit.deal_damage(self.damage, self.dtype, self.spell)
         yield
     
+    def fake_damage(self, source):
+        damage = 1
+        if self.freak and random.random() < 0.1:
+            damage = self.damage
+        self.owner.level.event_manager.raise_event(EventOnPreDamaged(self.owner, damage, Tags.Dark, source), self.owner)
+        self.owner.level.event_manager.raise_event(EventOnDamaged(self.owner, damage, Tags.Dark, source), self.owner)  
+
     def on_advance(self):
         enemies = [u for u in self.owner.level.get_units_in_los(self.owner) if are_hostile(u, self.owner)]
         if not enemies:
@@ -13903,14 +13911,12 @@ class MelodramaBuff(Thorns):
             dummy_hit.owner = enemy
             dummy_hit.caster = enemy
             self.owner.level.event_manager.raise_event(EventOnSpellCast(dummy_hit, enemy, self.owner.x, self.owner.y), enemy)
-            self.owner.level.event_manager.raise_event(EventOnPreDamaged(self.owner, 1, Tags.Dark, dummy_hit), self.owner)
-            self.owner.level.event_manager.raise_event(EventOnDamaged(self.owner, 1, Tags.Dark, dummy_hit), self.owner)
+            self.fake_damage(dummy_hit)
 
     def on_damaged(self, evt):
         if random.random() >= 0.5:
             return
-        self.owner.level.event_manager.raise_event(EventOnPreDamaged(self.owner, 1, Tags.Dark, evt.source), self.owner)
-        self.owner.level.event_manager.raise_event(EventOnDamaged(self.owner, 1, Tags.Dark, evt.source), self.owner)        
+        self.fake_damage(evt.source)
 
 class MelodramaSpell(Spell):
 
@@ -13924,11 +13930,11 @@ class MelodramaSpell(Spell):
 
         self.damage = 15
         self.num_targets = 2
-        self.duration = 30
+        self.duration = 45
 
         self.upgrades["damage"] = (7, 3)
         self.upgrades["num_targets"] = (2, 3)
-        self.upgrades["duration"] = (15, 2)
+        self.upgrades["freak"] = (1, 5, "Freak Accident", "Whenever you pretend to take [1_dark:dark] damage with this spell, you have a 10% chance to instead pretend to take [dark] damage equal to this spell's melee retaliation damage.")
         self.upgrades["endless"] = (1, 7, "Endless Drama", "Whenever you take damage, you have a 50% chance to pretend to take [1_dark:dark] damage from the same source, triggering all effects that are normally triggered by taking damage.\nThis effect can trigger itself.")
     
     def get_description(self):
