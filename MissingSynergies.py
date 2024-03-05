@@ -8699,6 +8699,7 @@ class ReflexArcSpell(Spell):
         self.damage = 6
         self.range = 10
         self.duration = 1
+        self.can_target_self = True
         self.tags = [Tags.Nature, Tags.Lightning, Tags.Sorcery]
     
     def get_stat(self, attr, base=None):
