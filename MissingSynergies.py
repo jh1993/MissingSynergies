@@ -5024,7 +5024,7 @@ class PsychedelicSporesSpell(Spell):
         return ("Summon a giant psychedelic mushboom with [{minion_health}_HP:minion_health].\n"
                 "It has an attack with [{minion_range}_range:minion_range], [1_radius:radius], and [3_turns:duration] cooldown that deals [{minion_damage}_poison:poison] and [{minion_damage}_arcane:arcane] damage and inflicts a stack of delirium for [{duration}_turns:duration] to enemies.\n"
                 "On death, it applies a stack of delirium with the same duration to adjacent enemies.\n"
-                "An enemy with delirium suffers a [-1:damage] penalty to all spell damage per stack.\n"
+                "An enemy with delirium suffers a [-1:damage] penalty to all attack damage per stack.\n"
                 "When delirium is removed, it applies a stack of withdrawal, inflicting [1_poison:poison] and [1_arcane:arcane] damage per turn per stack.").format(**self.fmt_dict())
 
     def cast_instant(self, x, y):
