@@ -3219,16 +3219,18 @@ class VolatileOrbSpell(OrbSpell):
 
     def get_description(self):
         return ("Summon an orb of unstable energy next to the caster.\n"
-                "Each turn, the orb targets a random number of enemies in a random radius between 1 to [{radius}:radius], dealing [fire], [lightning], or [physical] damage to each enemy equal to [{total_damage}:damage] divided by the number of enemies targeted, with a random damage modifier between -100% and +100%, rounded up. The total damage benefits from bonuses to both [spell_damage:sorcery] and [minion_damage:minion_damage].\n"
+                "Each turn, the orb targets a random number of enemies in a random radius between 1 to [{radius}:radius], dealing [fire], [lightning], or [physical] damage equal to [{total_damage}:damage] divided randomly among enemies targeted, each with a random damage modifier between -100% and +100%, rounded up. The total damage benefits from bonuses to both [spell_damage:sorcery] and [minion_damage:minion_damage].\n"
                 "The orb has no will of its own, each turn it will float one tile towards the target.\n"
                 "The orb has [{minion_health}_HP:minion_health], with 100% resistance to all damage but loses 10% each turn.").format(**self.fmt_dict())
     
     def on_orb_move(self, orb, next_point):
 
         for tag in orb.resists.keys():
+            if tag == Tags.Heal:
+                continue
             orb.resists[tag] -= 10
 
-        radius = random.choice(list(range(1, self.get_stat("radius") + 1)))
+        radius = random.randint(1, self.get_stat("radius"))
         for point in self.caster.level.get_points_in_ball(next_point.x, next_point.y, radius):
             self.caster.level.show_effect(point.x, point.y, random.choice([Tags.Fire, Tags.Lightning, Tags.Physical]), minor=True)
         
@@ -3236,10 +3238,16 @@ class VolatileOrbSpell(OrbSpell):
         if not units:
             return
         random.shuffle(units)
-        num_targets = random.choice(list(range(1, len(units) + 1)))
-        damage = (self.get_stat("damage") + self.get_stat("minion_damage"))/num_targets
-        for unit in units[:num_targets]:
-            unit.deal_damage(math.ceil(damage*random.random()*2), random.choice([Tags.Fire, Tags.Lightning, Tags.Physical]), self)
+        num_targets = random.randint(1, len(units))
+        units = units[:num_targets]
+        num = len(units)
+        pairs = [[unit, 0] for unit in units]
+        
+        for _ in range((self.get_stat("damage") + self.get_stat("minion_damage"))):
+            pairs[random.randint(1, num) - 1][1] += 1
+        
+        for pair in pairs:
+            pair[0].deal_damage(math.ceil(pair[1]*random.random()*2), random.choice([Tags.Fire, Tags.Lightning, Tags.Physical]), self)
 
     def on_make_orb(self, orb):
         orb.asset = ["MissingSynergies", "Units", "volatile_orb"]
@@ -7463,7 +7471,7 @@ class EternalBomberSpell(Spell):
 
     def get_description(self):
         return ("Summon an immobile eternal bomber with [{minion_health}_HP:minion_health]. It dies after 1 turn, and on death it deals [holy] damage equal to its max HP to enemies in a [{radius}_tile:radius] burst. If it dies without reincarnations, summon another eternal bomber on a random tile if you have less than [{num_summons}:num_summons]; else summon a transient bomber.\n"
-                "Each turn, the eternal bomber loses all reincarnations to summon a transient bomber per life lost. Transient bombers have the same HP and no special abilities, but they are mobile and their explosions also deal half [arcane] and [fire] damage.").format(**self.fmt_dict())
+                "Each turn, the eternal bomber loses all reincarnations to summon a transient bomber per life lost. Transient bombers have the same HP and no special abilities, but they are mobile with no time limit and their explosions also deal half [arcane] and [fire] damage.").format(**self.fmt_dict())
 
     def summon_bomber(self, target=None, minor=False):
         unit = Unit()
@@ -10790,16 +10798,21 @@ class DamnationSpell(Spell):
         self.upgrades["max_charges"] = (6, 2)
         self.upgrades["radius"] = (1, 3)
         self.upgrades["minion_duration"] = (10, 3)
+        self.upgrades["pact"] = (1, 4, "Damned Pact", "Damnation now also affects your minions, healing them instead of damaging them if they already have reincarnation.\nDamned shades are unaffected.")
         self.upgrades["double"] = (1, 5, "Double Damned", "Each damned shade has a 50% chance to also be damned, summoning another damned shade when it dies.")
 
     def get_description(self):
         return ("All enemies in a [{radius}_tile:radius] radius that do not have reincarnations lose 50% max HP but gain 1 reincarnation; otherwise they take [dark] damage equal to 1/8 of their max HP.\n"
                 "All enemies in the area are also damned, which is a passive effect that persists beyond death. When a damned enemy dies, you summon a damned shade near it with the same max HP for [{minion_duration}_turns:minion_duration].\n"
-                "Damned shades are [demon] [undead] minions with [physical] immunity. They have teleport attacks with a range of [{minion_range}_tiles:minion_range] that deal [{minion_damage}_dark:dark] damage, and melee attacks with the same damage that give themselves [{duration}_turns:duration] of bloodrage on hit and heal themselves for the damage done.").format(**self.fmt_dict())
+                "Damned shades are [demon] [undead] minions with [{minion_damage}_dark:dark] damage. They have teleport attacks with a range of [{minion_range}_tiles:minion_range], and melee attacks that give themselves [{duration}_turns:duration] of bloodrage on hit and heal themselves for the damage done.").format(**self.fmt_dict())
 
     def cast_instant(self, x, y):
+        pact = self.get_stat("pact")
         for unit in self.caster.level.get_units_in_ball(Point(x, y), self.get_stat("radius")):
-            if not are_hostile(unit, self.caster):
+            if unit is self.caster or unit.source is self:
+                continue
+            hostile = are_hostile(unit, self.caster)
+            if not pact and not hostile:
                 continue
             if not unit.has_buff(ReincarnationBuff):
                 unit.max_hp = max(1, unit.max_hp//2)
@@ -10808,7 +10821,10 @@ class DamnationSpell(Spell):
                 buff.buff_type = BUFF_TYPE_PASSIVE
                 unit.apply_buff(buff)
             else:
-                unit.deal_damage(unit.max_hp//8, Tags.Dark, self)
+                if hostile:
+                    unit.deal_damage(unit.max_hp//8, Tags.Dark, self)
+                else:
+                    unit.deal_damage(-unit.max_hp//8, Tags.Heal, self)
             unit.apply_buff(DamnedBuff(self))
             self.caster.level.show_effect(unit.x, unit.y, Tags.Dark)
 
