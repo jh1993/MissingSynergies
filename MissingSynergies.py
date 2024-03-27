@@ -212,73 +212,60 @@ class IrradiateSpell(Spell):
 
 class ShiveringVenomBuff(Buff):
 
-    def __init__(self, upgrade):
-        Buff.__init__(self)
-        self.upgrade = upgrade
-        self.buff_type = BUFF_TYPE_PASSIVE
-        self.owner_triggers[EventOnPreDamaged] = self.on_pre_damaged
-
+    def on_init(self):
+        self.name = "Shivering Venom"
+        self.asset = ["MissingSynergies", "Statuses", "shivering_venom"]
+        self.buff_type = BUFF_TYPE_CURSE
+        self.color = Tags.Ice.color
+    
     def on_applied(self, owner):
-        poison = self.owner.get_buff(Poison)
-        if poison:
-            self.resists[Tags.Ice] = -poison.turns_left
-        else:
-            self.resists[Tags.Ice] = 0
         freeze = self.owner.get_buff(FrozenBuff)
         if freeze:
             self.resists[Tags.Poison] = -10*freeze.turns_left
-        else:
-            self.resists[Tags.Poison] = 0
+        poison = self.owner.get_buff(Poison)
+        if poison:
+            self.resists[Tags.Ice] = -poison.turns_left
+    
+    def update_resistance(self, tag, amount):
+        self.owner.resists[tag] -= self.resists[tag]
+        self.resists[tag] = amount
+        self.owner.resists[tag] += amount
 
-    def on_pre_damaged(self, evt):
-        if evt.damage <= 0:
-            return
-        self.update_resists()
+    def on_pre_advance(self):
+        self.owner.buffs.remove(self)
+        self.owner.buffs.append(self)
 
     def on_advance(self):
-        self.owner.level.queue_spell(self.update_resists_queued())
-
-    def update_resists(self):
-
-        # Remove this if an enemy becomes friendly via Dominate
-        if not are_hostile(self.owner, self.upgrade.owner):
-            self.owner.remove_buff(self)
-            return
-
-        self.owner.resists[Tags.Ice] -= self.resists[Tags.Ice]
-        poison = self.owner.get_buff(Poison)
-        if poison:
-            self.resists[Tags.Ice] = -poison.turns_left
-        else:
-            self.resists[Tags.Ice] = 0
-        self.owner.resists[Tags.Ice] += self.resists[Tags.Ice]
-        
-        self.owner.resists[Tags.Poison] -= self.resists[Tags.Poison]
         freeze = self.owner.get_buff(FrozenBuff)
-        if freeze:
-            self.resists[Tags.Poison] = -10*freeze.turns_left
-        else:
-            self.resists[Tags.Poison] = 0
-        self.owner.resists[Tags.Poison] += self.resists[Tags.Poison]
+        poison = self.owner.get_buff(Poison)
+        self.update_resistance(Tags.Poison, -10*freeze.turns_left if freeze else min(self.resists[Tags.Poison] + 10, 0))
+        self.update_resistance(Tags.Ice, -poison.turns_left if poison else min(self.resists[Tags.Ice] + 10, 0))
+        if self.resists[Tags.Poison] >= 0 and self.resists[Tags.Ice] >= 0:
+            self.owner.remove_buff(self)
 
-    def update_resists_queued(self):
-        self.update_resists()
-        yield
+    def on_unapplied(self):
+        if self.owner.get_buff(FrozenBuff) or self.owner.get_buff(Poison):
+            self.owner.apply_buff(self)
 
 class ShiveringVenom(Upgrade):
+
     def on_init(self):
         self.name = "Shivering Venom"
         self.asset = ["MissingSynergies", "Icons", "shivering_venom"]
         self.tags = [Tags.Ice, Tags.Nature]
         self.level = 6
         self.global_triggers[EventOnBuffApply] = self.on_buff_apply
-        self.description = ("Every enemy has [-1_ice:ice] resistance for each turn of [poison] it has.\n"
-                            "Every enemy has [-10_poison:poison] resistance for each turn of [frozen] it has.\n")
+
+    def get_description(self):
+        return ("Whenever an enemy is [frozen] or [poisoned], inflict shivering venom, which reduces [ice] resistance by 1 per turn of [poison], and [poison] resistance by 10 per turn of [freeze].\n"
+                "Both resistance reductions are decreased by 10 each turn, then refreshed to match any remaining [freeze] and [poison] durations on the enemy, as above.\n"
+                "If shivering venom is removed prematurely and the enemy is still [frozen] or [poisoned], it will automatically reapply itself.").format(**self.fmt_dict())
+
     def on_buff_apply(self, evt):
         if not are_hostile(self.owner, evt.unit):
             return
         if isinstance(evt.buff, Poison) or isinstance(evt.buff, FrozenBuff):
-            evt.unit.apply_buff(ShiveringVenomBuff(self))
+            evt.unit.apply_buff(ShiveringVenomBuff())
 
 class Electrolysis(Upgrade):
 
