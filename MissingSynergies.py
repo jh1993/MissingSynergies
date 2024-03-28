@@ -450,37 +450,32 @@ class WildHuntBuff(Buff):
         self.color = Tags.Nature.color
         self.asset = ["MissingSynergies", "Statuses", "wild_hunt"]
     
-    def qualifies(self, unit):
-        if unit is self.spell.caster:
-            return False
-        if unit.team != TEAM_PLAYER:
-            return False
-        if Tags.Living in unit.tags or Tags.Nature in unit.tags:
-            return True
-        if self.spell.get_stat("holy_units") and Tags.Holy in unit.tags:
-            return True
-        if self.spell.get_stat("demon_units") and Tags.Demon in unit.tags:
-            return True
-        if self.spell.get_stat("undead_units") and Tags.Undead in unit.tags:
-            return True
-        return distance(unit, self.owner) >= 2
-    
     def do_teleport(self, units):
+        num_targets = self.spell.get_stat("num_targets")
         units_teleported = 0
         for unit in units:
-            if units_teleported >= self.spell.get_stat("num_targets"):
+            if units_teleported >= num_targets:
                 return
-            if self.qualifies(unit):
-                point = self.owner.level.get_summon_point(self.owner.x, self.owner.y, flying=unit.flying)
-                if point:
-                    units_teleported += 1
-                    self.owner.level.show_effect(unit.x, unit.y, Tags.Translocation)
-                    self.owner.level.act_move(unit, point.x, point.y, teleport=True)
-                    self.owner.level.show_effect(unit.x, unit.y, Tags.Translocation)
+            point = self.owner.level.get_summon_point(self.owner.x, self.owner.y, flying=unit.flying)
+            if point:
+                units_teleported += 1
+                self.owner.level.show_effect(unit.x, unit.y, Tags.Translocation)
+                self.owner.level.act_move(unit, point.x, point.y, teleport=True)
+                self.owner.level.show_effect(unit.x, unit.y, Tags.Translocation)
         yield
     
     def on_advance(self):
-        units = self.owner.level.units
+        units = [u for u in self.owner.level.units if u is not self.spell.caster and not are_hostile(u, self.spell.caster) and distance(u, self.owner) >= 2]
+        tags = [Tags.Living, Tags.Nature]
+        if self.spell.get_stat("holy_units"):
+            tags.append(Tags.Holy)
+        if self.spell.get_stat("demon_units"):
+            tags.append(Tags.Demon)
+        if self.spell.get_stat("undead_units"):
+            tags.append(Tags.Undead)
+        units = [u for u in units if [t for t in tags if t in u.tags]]
+        if not units:
+            return
         random.shuffle(units)
         self.owner.level.queue_spell(self.do_teleport(units))
 
