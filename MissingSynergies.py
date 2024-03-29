@@ -315,26 +315,6 @@ class Electrolysis(Upgrade):
             target.deal_damage(damage, Tags.Lightning, self)
         target.deal_damage(damage, Tags.Poison, self)
 
-class SpaceChillBuff(Buff):
-
-    def __init__(self, spell, buff_type):
-        self.spell = spell
-        self.applier = spell.caster
-        Buff.__init__(self)
-        self.buff_type = buff_type
-    
-    def on_init(self):
-        self.name = "Space Chill"
-        self.asset = ["MissingSynergies", "Statuses", "space_chill"]
-        self.color = Tags.Ice.color
-        self.owner_triggers[EventOnMoved] = self.on_moved
-    
-    def on_moved(self, evt):
-        if not evt.teleport:
-            return
-        self.owner.remove_buff(self)
-        self.spell.effect(evt.unit)
-
 class FrozenSpaceBuff(Buff):
 
     def __init__(self, spell):
@@ -344,33 +324,11 @@ class FrozenSpaceBuff(Buff):
     def on_init(self):
         self.name = "Frozen Space"
         self.color = Tags.Ice.color
-        self.instant = self.spell.get_stat("instant")
-        if self.instant:
-            self.global_triggers[EventOnUnitAdded] = self.on_unit_added
         self.global_triggers[EventOnMoved] = self.on_moved
-        self.shielding = self.spell.get_stat("shielding")
         self.radius = self.spell.get_stat("radius")
         self.stillness = self.spell.get_stat("stillness")
         self.num_targets = self.spell.get_stat("num_targets", base=3)
         self.stack_type = STACK_REPLACE
-
-    def on_pre_advance(self):
-        for unit in list(self.owner.level.units):
-            unit.remove_buffs(SpaceChillBuff)
-        self.apply_effects()
-    
-    def on_unapplied(self):
-        self.owner.apply_buff(RemoveBuffOnPreAdvance(SpaceChillBuff))
-
-    def on_applied(self, owner):
-        self.apply_effects()
-
-    def apply_effects(self):
-        for unit in self.owner.level.get_units_in_ball(self.owner, self.radius):
-            if are_hostile(unit, self.owner):
-                unit.apply_buff(SpaceChillBuff(self.spell, BUFF_TYPE_CURSE))
-            elif self.shielding and unit is not self.owner:
-                unit.apply_buff(SpaceChillBuff(self.spell, BUFF_TYPE_BLESS))
     
     def on_moved(self, evt):
         if not evt.teleport:
@@ -384,16 +342,12 @@ class FrozenSpaceBuff(Buff):
                     random.shuffle(enemies)
                     for unit in enemies[:self.num_targets]:
                         self.spell.effect(unit)
-                if allies and self.shielding:
+                if allies:
                     random.shuffle(allies)
                     for unit in allies[:self.num_targets]:
                         self.spell.effect(unit)
             return
-        elif self.instant and distance(evt.unit, self.owner) <= self.radius:
-            self.spell.effect(evt.unit)
-    
-    def on_unit_added(self, evt):
-        if evt.unit is not self.owner and distance(self.owner, evt.unit) <= self.radius:
+        elif distance(Point(evt.old_x, evt.old_y), self.owner) <= self.radius:
             self.spell.effect(evt.unit)
 
 class FrozenSpaceSpell(Spell):
@@ -407,10 +361,11 @@ class FrozenSpaceSpell(Spell):
         self.damage = 7
         self.radius = 7
         self.duration = 30
+        self.freeze_duration = 1
 
         self.upgrades['radius'] = (3, 2)
         self.upgrades['damage'] = (5, 3)
-        self.upgrades['instant'] = (1, 5, "Instant Chill", "Units that teleport into or are summoned inside this spell's radius will also instantly be affected by the activation effect of Space Chill.")
+        self.upgrades['freeze_duration'] = (2, 3)
         self.upgrades['shielding'] = (1, 3, "Shielding Space", "Also affects your minions, giving them [1_SH:shields] instead on activation, up to a max of [3_SH:shield].")
         self.upgrades["stillness"] = (1, 5, "Moving Stillness", "Whenever you teleport, [{num_targets}:num_targets] random enemies in this spell's radius are affected as if they have teleported.\nIf you have the Shielding Space upgrade, the same number of minions will also be affected.")
 
@@ -423,10 +378,9 @@ class FrozenSpaceSpell(Spell):
         return stats
 
     def get_description(self):
-        return ("When you cast this spell, and at the beginning of each turn, apply Space Chill to enemies within [{radius}_tiles:radius] around you until the beginning of your next turn.\n"
-                "Whenever an enemy with Space Chill teleports, Space Chill is consumed to deal [{damage}_ice:ice] damage and [freeze] that enemy for [3_turns:duration].\n"
-                "Most forms of movement other than a unit's movement action count as teleportation.\n"
-                "Lasts [{duration}_turns:duration].").format(**self.fmt_dict())
+        return ("Freeze the space in a [{radius}_tile:radius] radius around yourself for [{duration}_turns:duration].\n"
+                "Whenever an enemy teleports from a tile in this radius, it takes [{damage}_ice:ice] damage and is [frozen] for [{freeze_duration}_turns:duration].\n"
+                "Most forms of movement other than a unit's movement action count as teleportation.").format(**self.fmt_dict())
     
     def cast_instant(self, x, y):
         self.caster.apply_buff(FrozenSpaceBuff(self), self.get_stat('duration'))
@@ -437,7 +391,7 @@ class FrozenSpaceSpell(Spell):
                 unit.add_shields(1)
             return
         unit.deal_damage(self.get_stat("damage"), Tags.Ice, self)
-        unit.apply_buff(FrozenBuff(), 3)
+        unit.apply_buff(FrozenBuff(), self.get_stat("freeze_duration"))
 
 class WildHuntBuff(Buff):
 
@@ -860,17 +814,6 @@ class ShadowAssassin(Upgrade):
         self.level = 4
         self.damage = 12
         self.owner_triggers[EventOnMoved] = self.on_moved
-        self.owner_triggers[EventOnUnitAdded] = self.on_unit_added
-    
-    def record_location(self):
-        self.old_x = self.owner.x
-        self.old_y = self.owner.y
-
-    def on_unit_added(self, evt):
-        self.record_location()
-    
-    def on_applied(self, owner):
-        self.record_location()
     
     def get_description(self):
         return ("Whenever you teleport, you deal [{damage}_dark:dark], [{damage}_physical:physical], and [{damage}_poison:poison] damage to a random adjacent enemy. Most forms of movement other than a unit's movement action count as teleportation.\n"
@@ -879,12 +822,11 @@ class ShadowAssassin(Upgrade):
                 "Targets that you can deal double damage to are prioritized.").format(**self.fmt_dict())
     
     def on_moved(self, evt):
-        
         if evt.teleport:    
             targets = [u for u in self.owner.level.get_units_in_ball(self.owner, 1, diag=True) if are_hostile(u, self.owner)]
             if not targets:
                 return
-            good_targets = [u for u in targets if self.can_double_damage(u)]
+            good_targets = [u for u in targets if self.can_double_damage(u, evt)]
             damage = self.get_stat("damage")
             if good_targets:
                 damage *= 2
@@ -894,10 +836,8 @@ class ShadowAssassin(Upgrade):
             for dtype in [Tags.Dark, Tags.Physical, Tags.Poison]:
                 target.deal_damage(damage, dtype, self)
 
-        self.record_location()
-
-    def can_double_damage(self, target):
-        return target.has_buff(BlindBuff) or target.has_buff(Stun) or not self.owner.level.can_see(target.x, target.y, self.old_x, self.old_y) or random.random() >= 2/max(1, distance(target, Point(self.old_x, self.old_y)))
+    def can_double_damage(self, target, evt):
+        return target.has_buff(BlindBuff) or target.has_buff(Stun) or not self.owner.level.can_see(target.x, target.y, evt.old_x, evt.old_y) or random.random() >= 2/max(1, distance(target, Point(evt.old_x, evt.old_y)))
 
 class PrismShellBuff(Buff):
     def __init__(self, spell):
@@ -13242,17 +13182,6 @@ class BatEscape(Upgrade):
         self.minion_range = 5
         self.duration = 3
         self.owner_triggers[EventOnMoved] = self.on_moved
-        self.owner_triggers[EventOnUnitAdded] = self.on_unit_added
-    
-    def record_location(self):
-        self.old_x = self.owner.x
-        self.old_y = self.owner.y
-
-    def on_unit_added(self, evt):
-        self.record_location()
-    
-    def on_applied(self, owner):
-        self.record_location()
     
     def get_description(self):
         return ("Whenever you teleport, you summon a robin at your previous location, and [blind] all enemies in a [{radius}_tile:radius] burst around that location for [{duration}_turns:duration]. Most forms of movement other than a unit's movement action count as teleportation.\n"
@@ -13260,8 +13189,7 @@ class BatEscape(Upgrade):
     
     def on_moved(self, evt):
         if evt.teleport:    
-            self.owner.level.queue_spell(self.do_summon(self.old_x, self.old_y))
-        self.record_location()
+            self.owner.level.queue_spell(self.do_summon(evt.old_x, evt.old_y))
 
     def do_summon(self, x, y):
 
