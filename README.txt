@@ -1,6 +1,8 @@
 PLEASE CHECK THE DISCORD THREAD FOR UPDATE NOTICES, AND RE-DOWNLOAD THE MOD WHENEVER THERE'S AN UPDATE.
 
-This mod requires my Bugfixes mod, which can be found here: https://github.com/jh1993/Bugfixes
+This mod requires the following mods by me:
+https://github.com/jh1993/Bugfixes
+https://github.com/jh1993/BugfixesExtended
 
 To install this mod, click on the green "Code" button on this page, then "Download ZIP". Please rename the "MissingSynergies-main" folder to "MissingSynergies" before putting it into your mods folder.
 

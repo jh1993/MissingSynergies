@@ -9,7 +9,7 @@ from Shrines import *
 from Consumables import *
 import random, math, os, sys
 
-from mods.Bugfixes.Bugfixes import RemoveBuffOnPreAdvance, MinionBuffAura, drain_max_hp_kill, increase_cooldown, HydraBeam, FreezeDependentBuff
+from mods.BugfixesExtended.BugfixesExtended import RemoveBuffOnPreAdvance, MinionBuffAura, drain_max_hp_kill, increase_cooldown, HydraBeam, FreezeDependentBuff, EventOnShieldDamaged
 import mods.Bugfixes.Bugfixes
 
 try:
@@ -847,7 +847,7 @@ class PrismShellBuff(Buff):
     def on_init(self):
         self.name = "Prism Shell"
         self.color = Tags.Ice.color
-        self.owner_triggers[EventOnPreDamaged] = self.on_pre_damaged
+        self.owner_triggers[EventOnShieldDamaged] = self.on_shield_damaged
         self.owner_triggers[EventOnDamaged] = self.on_damaged
         self.asset = ["MissingSynergies", "Statuses", "prism_shell"]
     
@@ -862,10 +862,7 @@ class PrismShellBuff(Buff):
         path_effect = lambda point: self.owner.level.show_effect(point.x, point.y, Tags.Holy)
         self.owner.level.queue_spell(send_bolts(path_effect, target_effect, self.owner, self.get_targets()))
     
-    def on_pre_damaged(self, evt):
-        penetration = evt.penetration if hasattr(evt, "penetration") else 0
-        if evt.damage <= 0 or not self.owner.shields or self.owner.resists[evt.damage_type] - penetration >= 100:
-            return
+    def on_shield_damaged(self, evt):
         target_effect = lambda target: target.apply_buff(FrozenBuff(), 3)
         path_effect = lambda point: self.owner.level.show_effect(point.x, point.y, Tags.Ice)
         self.owner.level.queue_spell(send_bolts(path_effect, target_effect, self.owner, self.get_targets()))
@@ -905,7 +902,7 @@ class PrismShellSpell(Spell):
     
     def get_description(self):
         return ("Target minion gains [{shield_amount}_SH:shields] per turn, up to a max of [{shield_max}_SH:shields].\n"
-                "Whenever it loses [SH:shields], [freeze] [{num_targets}:num_targets] random enemies in a [{radius}_tile:radius] burst for [3_turns:duration].\n"
+                "Whenever it loses [SH:shields] from damage, [freeze] [{num_targets}:num_targets] random enemies in a [{radius}_tile:radius] burst for [3_turns:duration].\n"
                 "Whenever it takes damage, deal [holy] damage to [{num_targets}:num_targets] random enemies in a [{radius}_tile:radius] burst equal to the damage taken.\n"
                 "Lasts [{duration}_turns:duration].").format(**self.fmt_dict())
     
@@ -5392,12 +5389,11 @@ class SoulShardBuff(Buff):
     def on_init(self):
         self.name = "Soul Shard"
         self.color = Tags.Glass.color
-        self.description = "When hit by an enemy, deal 2 arcane or 2 physical damage to that enemy."
-        self.owner_triggers[EventOnPreDamaged] = self.on_pre_damaged
+        self.description = "When damaged or losing SH from damage by an enemy, deal 2 arcane or 2 physical damage to that enemy."
+        self.owner_triggers[EventOnDamaged] = self.on_damaged
+        self.owner_triggers[EventOnShieldDamaged] = self.on_damaged
 
-    def on_pre_damaged(self, evt):
-        if evt.damage <= 0 or not evt.source or not evt.source.owner or not are_hostile(evt.source.owner, self.owner):
-            return
+    def on_damaged(self, evt):
         evt.source.owner.deal_damage(2, random.choice([Tags.Arcane, Tags.Physical]), self)
 
 class AfterlifeEchoesSpell(Spell):
@@ -5418,7 +5414,7 @@ class AfterlifeEchoesSpell(Spell):
         self.upgrades["life"] = (1, 5, "Life Echoes", "When you summon a [living] or [nature] minion, that minion's death explosion will [poison] enemies for a number of turns equal to 50% of its max HP.\nIf an enemy is already [poisoned], any excess duration will be dealt as [poison] damage.", "echo")
         self.upgrades["spirit"] = (1, 5, "Spirit Echoes", "When you summon a [holy], [demon], or [undead] minion, that minion's death explosion will summon an Afterlife Shade with the same max HP for [{minion_duration}_turns:minion_duration] on a random tile.\nThe Afterlife Shade has an attack with [{minion_range}_range:minion_range] that deals [holy] and [dark] damage equal to [{minion_damage}:minion_damage] plus 10% of its max HP.", "echo")
         self.upgrades["elemental"] = (1, 5, "Elemental Echoes", "When you summon a [fire], [lightning], or [ice] minion, that minion's death explosion has a chance to cast Fireball, Lightning Bolt, or Icicle respectively at valid enemy targets.\nA minion with multiple tags will try to cast every qualifying spell independently in random order.\nThe chance to cast is the minion's max HP divided by 40, with an extra guaranteed cast per 40 HP the minion has.\nThese spells gain all of your upgrades and bonuses.", "echo")
-        self.upgrades["shattering"] = (1, 5, "Shattering Echoes", "When you summon an [arcane], [metallic], or [glass] minion, that minion's death explosion will summon a Soul Shard on a random tile for every 20 HP and [2_SH:shields] the minion has, rounded up.\nSoul Shards have fixed 1 HP and [1_SH:shields], and teleport to random tiles each turn. They deal [2_physical:physical] or [2_arcane:arcane] damage to enemies that hit them.", "echo")
+        self.upgrades["shattering"] = (1, 5, "Shattering Echoes", "When you summon an [arcane], [metallic], or [glass] minion, that minion's death explosion will summon a Soul Shard on a random tile for every 20 HP and [2_SH:shields] the minion has, rounded up.\nSoul Shards have fixed 1 HP and [1_SH:shields], and teleport to random tiles each turn. They deal [2_physical:physical] or [2_arcane:arcane] damage to enemies that damage them or remove [SH:shields] from them with damage.", "echo")
 
     def fmt_dict(self):
         stats = Spell.fmt_dict(self)
@@ -7171,14 +7167,9 @@ class PureglassKnightBuff(Buff):
         self.radius = self.spell.get_stat("minion_range")
         self.phase = self.spell.get_stat("phase")
         self.damage = self.spell.get_stat("minion_damage")
-        self.owner_triggers[EventOnPreDamaged] = self.on_pre_damaged
+        self.owner_triggers[EventOnShieldDamaged] = self.on_shield_damaged
     
-    def on_pre_damaged(self, evt):
-        if self.owner.shields <= 0:
-            return
-        penetration = evt.penetration if hasattr(evt, "penetration") else 0
-        if evt.damage <= 0 or self.owner.resists[evt.damage_type] - penetration >= 100:
-            return
+    def on_shield_damaged(self, evt):
         if self.shards:
             targets = [unit for unit in self.owner.level.get_units_in_ball(self.owner, self.radius) if are_hostile(unit, self.owner)]
             if not self.phase:
