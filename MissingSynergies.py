@@ -3196,9 +3196,9 @@ class OrbSubstitution(Upgrade):
         self.owner_triggers[EventOnPreDamaged] = self.on_pre_damaged
     
     def get_description(self):
-        return ("Whenever you're about to take damage, if you have an active [orb] that can be harmed by that damage type and is on a walkable tile, swap places with that orb.\n"
-                "You gain resistance to that damage type equal to 100 minus the orb's resistance to that damage type, up to 100. This lasts until the beginning of your next turn.\n"
-                "You and the orb then both take that amount of damage.").format(**self.fmt_dict())
+        return ("Whenever you are about to take damage, each of your [orb] minions attempts to take that damage in your stead, with a chance to succeed equal to 100% minus that orb's effective resistance to the triggering damage type, including resistance penetration if any.\n"
+                "The first [orb] that succeeds will take that damage, negate it for you, and swap places with you if possible.\n"
+                "Damage negation activates before [SH:shields].").format(**self.fmt_dict())
 
     def on_pre_damaged(self, evt):
         if evt.damage <= 0:
@@ -3206,19 +3206,25 @@ class OrbSubstitution(Upgrade):
         penetration = evt.penetration if hasattr(evt, "penetration") else 0
         if self.owner.resists[evt.damage_type] - penetration >= 100:
             return
-        orbs = [unit for unit in self.owner.level.units if not are_hostile(self.owner, unit) and unit.has_buff(OrbBuff) and unit.resists[evt.damage_type] - penetration < 100]
+        orbs = [unit for unit in self.owner.level.units if not are_hostile(self.owner, unit) and unit.has_buff(OrbBuff)]
         if not orbs:
             return
-        orb = random.choice(orbs)
-        if self.owner.level.tiles[orb.x][orb.y].can_walk:
-            for p in self.owner.level.get_points_in_ball(orb.x, orb.y, 1):
-                self.owner.level.show_effect(p.x, p.y, Tags.Translocation)
-            for p in self.owner.level.get_points_in_ball(self.owner.x, self.owner.y, 1):
-                self.owner.level.show_effect(p.x, p.y, Tags.Translocation)
-            self.owner.level.act_move(self.owner, orb.x, orb.y, teleport=True, force_swap=True)
-            amount = min(100, 100 - orb.resists[evt.damage_type])
-            self.owner.apply_buff(OrbSubstitutionStack(evt.damage_type, amount))
+        random.shuffle(orbs)
+        for orb in orbs:
+            if random.random() >= (100 - orb.resists[evt.damage_type] + penetration)/100:
+                continue
+            if self.owner.level.tiles[orb.x][orb.y].can_walk:
+                for p in self.owner.level.get_points_in_ball(orb.x, orb.y, 1):
+                    self.owner.level.show_effect(p.x, p.y, Tags.Translocation)
+                for p in self.owner.level.get_points_in_ball(self.owner.x, self.owner.y, 1):
+                    self.owner.level.show_effect(p.x, p.y, Tags.Translocation)
+                self.owner.level.act_move(self.owner, orb.x, orb.y, teleport=True, force_swap=True)
             orb.deal_damage(evt.damage, evt.damage_type, evt.source, penetration=penetration)
+            if hasattr(self.owner, "negates"):
+                self.owner.negates.append(evt)
+            else:
+                self.owner.negates = [evt]
+            return
 
 class LocusOfEnergy(Upgrade):
 
