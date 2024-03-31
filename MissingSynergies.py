@@ -9,7 +9,7 @@ from Shrines import *
 from Consumables import *
 import random, math, os, sys
 
-from mods.BugfixesExtended.BugfixesExtended import RemoveBuffOnPreAdvance, MinionBuffAura, drain_max_hp_kill, increase_cooldown, HydraBeam, FreezeDependentBuff, EventOnShieldDamaged
+from mods.BugfixesExtended.BugfixesExtended import RemoveBuffOnPreAdvance, MinionBuffAura, drain_max_hp_kill, increase_cooldown, HydraBeam, FreezeDependentBuff, EventOnShieldDamaged, EventOnHealed
 import mods.Bugfixes.Bugfixes
 
 try:
@@ -4119,7 +4119,7 @@ class FrigidFamineSpell(Spell):
 
     def get_description(self):
         return ("Every turn, all units take [1_dark:dark] or [1_ice:ice] damage. This damage is fixed, and cannot be increased using shrines, skills, or buffs.\n"
-                "Whenever a unit is about to be [healed:heal], before counting healing penalty, deal that amount as [dark] or [ice] damage divided among a random number of units.\n"
+                "Whenever a unit is about to be healed, before counting healing penalty or wasted healing, deal that amount as [dark] or [ice] damage divided among a random number of units.\n"
                 "Lasts [{duration}_turns:duration].").format(**self.fmt_dict())
 
     def cast_instant(self, x, y):
@@ -9136,6 +9136,7 @@ class KarmicLoanBuff(Buff):
         self.total_healed = 0
         self.total_self_damage = 0
         self.owner_triggers[EventOnDamaged] = self.on_damaged
+        self.owner_triggers[EventOnHealed] = self.on_healed
         self.resists[Tags.Holy] = self.spell.get_stat("holy_resistance")
     
     def get_description(self):
@@ -9158,9 +9159,12 @@ class KarmicLoanBuff(Buff):
         self.do_heal(self.heal)
 
     def do_heal(self, amount):
-        old = self.owner.cur_hp
         self.owner.deal_damage(-amount, Tags.Heal, self.spell)
-        self.total_healed += max(0, self.owner.cur_hp - old)
+    
+    def on_healed(self, evt):
+        if evt.source is not self.spell:
+            return
+        self.total_healed += evt.heal
 
     def on_damaged(self, evt):
         if not evt.source or not evt.source.owner or are_hostile(self.owner, evt.source.owner):
