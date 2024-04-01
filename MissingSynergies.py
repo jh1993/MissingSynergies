@@ -9074,7 +9074,7 @@ class HeavyElements(Upgrade):
         self.asset = ["MissingSynergies", "Icons", "heavy_elements"]
         self.tags = [Tags.Fire, Tags.Lightning, Tags.Ice, Tags.Arcane]
         self.level = 6
-        self.description = "Whenever one of your [fire], [lightning], [ice], [arcane], [dragon], or [elemental] minions attempts to damage an enemy with an attack, that enemy takes additional damage of the same type equal to 10% of the minion's max HP, rounded down."
+        self.description = "Whenever one of your [fire], [lightning], [ice], [arcane], [dragon], or [elemental] minions attempts to damage an enemy with an attack, you deal damage of the same type to that enemy equal to 10% of the minion's max HP, rounded down."
         self.global_triggers[EventOnPreDamaged] = self.on_pre_damaged
     
     def on_pre_damaged(self, evt):
@@ -13858,6 +13858,77 @@ class MelodramaSpell(Spell):
     def cast_instant(self, x, y):
         self.caster.apply_buff(MelodramaBuff(self), self.get_stat("duration"))
 
+class ScratchProofing(Upgrade):
+
+    def on_init(self):
+        self.name = "Scratch Proofing"
+        self.asset = ["MissingSynergies", "Icons", "scratch_proofing"]
+        self.tags = [Tags.Metallic]
+        self.level = 5
+        self.description = "Whenever one of your minions loses [SH:shields] from damage dealt by an enemy, it has a chance to regain [1_SH:shields], equal to 100% divided by damage dealt."
+        self.global_triggers[EventOnShieldDamaged] = self.on_shield_damaged
+    
+    def on_shield_damaged(self, evt):
+        if evt.damage <= 0:
+            return
+        if evt.unit is self.owner or are_hostile(evt.unit, self.owner):
+            return
+        if random.random() >= 1/evt.damage:
+            return
+        evt.unit.add_shields(1)
+
+class OffensiveShieldsBuff(Buff):
+
+    def on_init(self):
+        self.name = "Offensive Shields"
+        self.color = Tags.Shield.color
+        self.description = "Incoming damage ignores SH. On attack, deals SH-ignoring physical damage equal to own SH."
+        self.buff_type = BUFF_TYPE_PASSIVE
+        self.owner_triggers[EventOnPreDamaged] = self.on_pre_damaged
+        self.owner_triggers[EventOnSpellCast] = self.on_spell_cast
+    
+    def on_pre_damaged(self, evt):
+        if evt.damage <= 0 or self.owner.shields <= 0:
+            return
+        if hasattr(evt, "ignore_sh") and evt.ignore_sh:
+            return
+        if hasattr(self.owner, "negates"):
+            self.owner.negates.append(evt)
+        else:
+            self.owner.negates = [evt]
+        penetration = evt.penetration if hasattr(evt, "penetration") else 0
+        self.owner.deal_damage(evt.damage, evt.damage_type, evt.source, penetration=penetration, ignore_sh=True)
+
+    def on_spell_cast(self, evt):
+        if self.owner.shields <= 0:
+            return
+        unit = self.owner.level.get_unit_at(evt.x, evt.y)
+        if not unit or not are_hostile(unit, self.owner):
+            return
+        unit.deal_damage(self.owner.shields, Tags.Physical, self, ignore_sh=True)
+
+    def can_redeal(self, target, source, damage_type, already_checked):
+        if not isinstance(source, Spell) or source.caster is not self.owner:
+            return False
+        if self.owner.shields <= 0:
+            return False
+        return not is_immune(target, self, Tags.Physical, already_checked)
+
+class OffensiveShields(Upgrade):
+
+    def on_init(self):
+        self.name = "Offensive Shields"
+        self.asset = ["MissingSynergies", "Icons", "offensive_shields"]
+        self.tags = [Tags.Arcane]
+        self.level = 4
+        self.description = "Whenever one of your shielded minions is about to take damage that does not ignore [SH:shields], it negates that damage, but then takes the same damage from the same source that ignores [SH:shields].\nWhen one of your minions attacks an enemy, it deals [physical] damage to the target equal to the minion's [SH:shields]. This damage ignores the target's [SH:shields]."
+        self.global_triggers[EventOnUnitAdded] = self.on_unit_added
+    
+    def on_unit_added(self, evt):
+        if evt.unit is self.owner or are_hostile(evt.unit, self.owner):
+            return
+        evt.unit.apply_buff(OffensiveShieldsBuff())
+
 all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell, CloudbenderSpell, GuruMeditationSpell, GazerFormSpell, MelodramaSpell])
 
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture, BatEscape, EyeBleach, AntimatterInfusion, WarpStrike, ThornShot, TimeSkip, BlindSavant])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture, BatEscape, EyeBleach, AntimatterInfusion, WarpStrike, ThornShot, TimeSkip, BlindSavant, ScratchProofing, OffensiveShields])
