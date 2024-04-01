@@ -9150,10 +9150,7 @@ class KarmicLoanBuff(Buff):
         return max(0, self.total_healed - self.total_self_damage)
 
     def on_unapplied(self):
-        old_shields = self.owner.shields
-        self.owner.shields = 0
-        self.owner.deal_damage(self.get_damage(), Tags.Holy, self.spell)
-        self.owner.shields = old_shields
+        self.owner.deal_damage(self.get_damage(), Tags.Holy, self.spell, ignore_sh=True)
     
     def on_advance(self):
         self.do_heal(self.heal)
@@ -9193,8 +9190,8 @@ class KarmicLoanSpell(Spell):
 
     def get_description(self):
         return ("For [{duration}_turns:duration], you gain [{holy_resistance}_holy:holy] resistance and heal for [{heal}_HP:heal] each turn.\n"
-                "When the effect is removed, you take [holy] damage equal to the total amount healed by this spell, minus all damage inflicted on you by allies for the duration, if the amount is positive. This damage is dealt before you lose the [holy] resistance granted by this spell.\n"
-                "You lose all [SH:shields] before taking this damage, then regain the same amount afterwards.").format(**self.fmt_dict())
+                "When the effect is removed, you take [holy] damage equal to the total amount healed by this spell, minus all damage inflicted on you by allies for the duration, if the amount is positive.\n"
+                "This damage is dealt before you lose the [holy] resistance granted by this spell, and ignores [SH:shields].").format(**self.fmt_dict())
     
     def cast_instant(self, x, y):
         self.caster.apply_buff(KarmicLoanBuff(self), self.get_stat("duration"))
@@ -13244,22 +13241,15 @@ class AntimatterInfusion(Upgrade):
         self.global_triggers[EventOnDamaged] = self.on_damaged
     
     def get_description(self):
-        return ("Whenever an ally deals damage to an enemy, that ally has a chance to reduce that enemy's current HP by [{damage}:damage], and its own current HP by 1. The chance is equal to that ally's current HP divided by max HP or 100, whichever is higher.\n"
-                "The self-inflicted HP reduction from this skill is fixed, and cannot be increased using shrines, skills, or buffs.\n"
-                "The HP reduction inflicted on enemies benefits from bonuses to [damage], but is not considered dealing damage.").format(**self.fmt_dict())
+        return ("Whenever you damage an enemy with a [sorcery] spell, you deal [{damage}_damage:damage] of the same type to that enemy, and and [1_damage:damage] of the same type to yourself.\n"
+                "The self-damage from this skill is fixed, and cannot be increased using shrines, skills, or buffs.\n"
+                "The damage dealt to enemies benefits from bonuses to [damage].").format(**self.fmt_dict())
 
     def on_damaged(self, evt):
-        if not evt.source.owner or are_hostile(evt.source.owner, self.owner) or not are_hostile(evt.unit, self.owner):
+        if not are_hostile(evt.unit, self.owner) or not isinstance(evt.source, Spell) or evt.source.caster is not self.owner or Tags.Sorcery not in evt.source.tags:
             return
-        if random.random() >= evt.source.owner.cur_hp/max(100, evt.source.owner.max_hp):
-            return
-        self.deduct_hp(evt.unit, self.get_stat("damage"))
-        self.deduct_hp(evt.source.owner, 1)
-
-    def deduct_hp(self, unit, amount):
-        unit.cur_hp -= amount
-        if unit.cur_hp <= 0:
-            unit.kill()
+        evt.unit.deal_damage(self.get_stat("damage"), evt.damage_type, self)
+        self.owner.deal_damage(1, evt.damage_type, self)
 
 class WarpStrike(Upgrade):
 
@@ -13270,7 +13260,7 @@ class WarpStrike(Upgrade):
         self.level = 7
         self.global_bonuses["requires_los"] = -1
         self.owner_triggers[EventOnSpellCast] = self.on_spell_cast
-        self.description = "All of your spells no longer require line of sight.\nWhenever you cast a spell targeting a tile not in line of sight, if that spell does not have blindcasting from any other source, you lose current HP equal to the spell's level plus the total levels of all of its upgrades."
+        self.description = "All of your spells no longer require line of sight.\nWhenever you cast a spell targeting a tile not in line of sight, if that spell does not have blindcasting from any other source, you take [arcane] damage equal to the spell's level plus the total levels of all of its upgrades.\nThis damage ignores [arcane] resistance and [SH:shields]."
 
     def on_spell_cast(self, evt):
 
@@ -13291,12 +13281,7 @@ class WarpStrike(Upgrade):
             if not isinstance(buff, Upgrade) or buff.prereq is not evt.spell or isinstance(buff, ShrineBuff):
                 continue
             total_level += buff.level
-        self.deduct_hp(self.owner, total_level)
-
-    def deduct_hp(self, unit, hp):
-        unit.cur_hp -= hp
-        if unit.cur_hp <= 0:
-            unit.kill()
+        self.owner.deal_damage(total_level, Tags.Arcane, self, penetration=self.owner.resists[Tags.Arcane], ignore_sh=True)
 
 class ParticleBeam(HydraBeam):
 
