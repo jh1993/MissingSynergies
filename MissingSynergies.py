@@ -13864,18 +13864,29 @@ class ScratchProofing(Upgrade):
         self.name = "Scratch Proofing"
         self.asset = ["MissingSynergies", "Icons", "scratch_proofing"]
         self.tags = [Tags.Metallic]
-        self.level = 5
-        self.description = "Whenever one of your minions loses [SH:shields] from damage dealt by an enemy, it has a chance to regain [1_SH:shields], equal to 100% divided by damage dealt."
-        self.global_triggers[EventOnShieldDamaged] = self.on_shield_damaged
+        self.level = 6
+        self.description = "Whenever one of your minions is about to take damage dealt by an enemy, it has a chance to negate that damage, equal to 100% divided by the damage it would have taken.\nThe chance to activate is doubled for [metallic] minions.\nDamage negation applies before [SH:shields]."
+        self.global_triggers[EventOnPreDamaged] = self.on_pre_damaged
     
-    def on_shield_damaged(self, evt):
+    def on_pre_damaged(self, evt):
         if evt.damage <= 0:
             return
         if evt.unit is self.owner or are_hostile(evt.unit, self.owner):
             return
-        if random.random() >= 1/evt.damage:
+        penetration = evt.penetration if hasattr(evt, "penetration") else 0
+        resist = evt.unit.resists[evt.damage_type] - penetration
+        if resist >= 100:
             return
-        evt.unit.add_shields(1)
+        amount = math.ceil(evt.damage*(100 - resist)/100)
+        chance = 1/amount
+        if Tags.Metallic in evt.unit.tags:
+            chance *= 2
+        if random.random() >= chance:
+            return
+        if hasattr(evt.unit, "negates"):
+            evt.unit.negates.append(evt)
+        else:
+            evt.unit.negates = [evt]
 
 class OffensiveShieldsBuff(Buff):
 
