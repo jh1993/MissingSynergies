@@ -101,6 +101,7 @@ Level 5:
 + Nova Juggernaut (Arcane/Metallic/Conjuration)
 + Orb of Mirrors (Metallic/Eye/Orb/Conjuration)
 + Static Field (Lightning/Enchantment)
++ Tide of Genesis (Holy/Dark/Nature/Chaos/Enchantment)
 + Warp-Lens Golem (Arcane/Translocation/Eye/Conjuration)
 + Wastefire (Fire/Dark/Sorcery)
 + Weeping Medusa (Dark/Nature/Arcane/Conjuration)
@@ -125,7 +126,7 @@ Level 6:
 Level 7:
 + Copper Furnace (Chaos/Metallic/Conjuration)
 + Empyreal Ascension (Fire/Holy/Sorcery/Enchantment)
-+ Genesis (Holy/Chaos/Conjuration)
++ Eschaton (Holy/Chaos/Conjuration)
 + Mass Enchantment (Holy/Dark/Enchantment)
 + Might of the Overlord (Enchantment)
 + Omnistrike (Chaos/Translocation/Sorcery)

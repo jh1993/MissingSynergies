@@ -2100,11 +2100,11 @@ class TransienceBuff(Buff):
         self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
         self.owner.kill(trigger_death_event=False)
 
-class GenesisSpell(Spell):
+class EschatonSpell(Spell):
 
     def on_init(self):
-        self.name = "Genesis"
-        self.asset = ["MissingSynergies", "Icons", "genesis"]
+        self.name = "Eschaton"
+        self.asset = ["MissingSynergies", "Icons", "eschaton"]
         self.tags = [Tags.Holy, Tags.Chaos, Tags.Conjuration]
         self.level = 7
         self.max_charges = 2
@@ -2118,13 +2118,13 @@ class GenesisSpell(Spell):
 
         self.upgrades["max_channel"] = (5, 2)
         self.upgrades["num_summons"] = (1, 4)
-        self.upgrades["reincarnation"] = (1, 6, "Reincarnation", "Each unit summoned by Genesis now gains 1 reincarnation.")
-        self.upgrades["greater"] = (1, 7, "Greater Gods", "Each aesir summoned by Genesis now has a 10% chance to instead be Odin, Aesir Immortal.\nEach titan summoned by Genesis how has a 10% chance to instead be Chronos, Titan Immortal.")
+        self.upgrades["reincarnation"] = (1, 6, "Reincarnation", "Each unit summoned by Eschaton now gains 1 reincarnation.")
+        self.upgrades["greater"] = (1, 7, "Greater Gods", "Each Aesir summoned by Eschaton now has a 10% chance to instead be Odin, Aesir Immortal.\nEach Titan summoned by Eschaton how has a 10% chance to instead be Chronos, Titan Immortal.")
     
     def get_description(self):
         return ("Channel to summon [{num_summons}:num_summons] lesser gods near the target tile each turn for [{max_channel}_turns:duration], each of which may be an Aesir or a Titan, chosen at random.\n"
                 "Aesirs are [lightning] units, while Titans are [fire] units; both are [living] and [holy].\n"
-                "Aesirs and Titans have very high HP and powerful attacks, but their presences are transient. They are immune to debuffs, but titans have a 100% to disappear after each turn and aesirs have 50%; this does not count as dying.\n"
+                "Aesirs and Titans have very high HP and powerful attacks, but their presences are transient. They are immune to debuffs, but Titans have a 100% to disappear after each turn and Aesirs have 50%; this does not count as dying.\n"
                 "If a summoned unit has reincarnation, each life will be consumed to prevent it from disappearing once.").format(**self.fmt_dict())
 
     def cast(self, x, y, channel_cast=False):
@@ -13940,6 +13940,90 @@ class OffensiveShields(Upgrade):
             return
         evt.unit.apply_buff(OffensiveShieldsBuff())
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, GenesisSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell, CloudbenderSpell, GuruMeditationSpell, GazerFormSpell, MelodramaSpell])
+class PermaBerserkBuff(BerserkBuff):
+
+    def __init__(self):
+        BerserkBuff.__init__(self)
+        self.buff_type = BUFF_TYPE_NONE
+
+class UnstableCellBuff(Buff):
+
+    def on_init(self):
+        self.color = Tags.Chaos.color
+        self.description = "Cannot move or act. Each turn, takes holy, dark, or poison damage equal to max HP from Tide of Genesis, which ignores resistances and SH."
+        self.berserk = random.choice([True, False])
+    
+    def on_applied(self, owner):
+        if self.berserk:
+            self.owner.apply_buff(PermaBerserkBuff())
+    
+    def on_advance(self):
+        tag = random.choice([Tags.Holy, Tags.Dark, Tags.Poison])
+        self.owner.deal_damage(self.owner.max_hp, tag, self.owner.source, penetration=self.owner.resists[tag], ignore_sh=True)
+
+class UnstableCell(Unit):
+
+    def advance(self, orders=None):
+        return True
+
+class TideOfGenesisSpell(Spell):
+
+    def on_init(self):
+        self.name = "Tide of Genesis"
+        self.asset = ["MissingSynergies", "Icons", "tide_of_genesis"]
+        self.tags = [Tags.Holy, Tags.Dark, Tags.Nature, Tags.Chaos, Tags.Conjuration]
+        self.level = 5
+        self.max_charges = 5
+
+        self.range = RANGE_GLOBAL
+        self.requires_los = False
+        self.minion_health = 10
+        self.num_summons = 8
+        self.max_channel = 10
+
+        self.upgrades["max_channel"] = (10, 1)
+        self.upgrades["minion_health"] = (10, 2)
+        self.upgrades["num_summons"] = (4, 3)
+        self.upgrades["endless"] = (1, 5, "Endless Tide", "Each unstable cell now has a 1/2 chance to have 1 reincarnation, 1/4 chance to have 2 reincarnations, 1/8 chance to have 3 reincarnations, 1/16 chance to have 4 reincarnations, and so on. This has no upper limit.\nBerserk from this spell persists through reincarnations.")
+    
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["total_hp"] = self.get_stat("minion_health") + self.get_stat("minion_damage") + self.get_stat("damage")
+        return stats
+
+    def get_description(self):
+        return ("Channel for up to [{max_channel}_turns:duration] to summon [{num_summons}:num_summons] unstable cells each turn, with [{total_hp}_HP:minion_health] each. The max HP benefits from bonuses to [minion_health:minion_health], [minion_damage:minion_damage], and [damage].\n"
+                "Each unstable cell has a 50% chance to be hostile and also a 50% chance to be permanently berserk. It is randomly a [living], [undead], or [demon] unit.\n"
+                "Unstable cells cannot move or act. Each turn, they take [holy], [dark], or [poison] damage from this spell equal to their max HP, which ignores resistances and [SH:shields].").format(**self.fmt_dict())
+
+    def cast(self, x, y, channel_cast=False):
+        
+        if not channel_cast:
+            self.caster.apply_buff(ChannelBuff(self.cast, Point(x, y)), self.get_stat('max_channel'))
+            return
+
+        hp = self.get_stat("minion_health") + self.get_stat("minion_damage") + self.get_stat("damage")
+        endless = self.get_stat("endless")
+
+        for _ in range(self.get_stat("num_summons")):
+            unit = UnstableCell()
+            unit.name = "Unstable Cell"
+            unit.asset = ["MissingSynergies", "Units", "unstable_cell"]
+            unit.max_hp = hp
+            unit.tags = [random.choice([Tags.Living, Tags.Undead, Tags.Demon])]
+            for tag in [Tags.Fire, Tags.Ice, Tags.Lightning, Tags.Physical, Tags.Poison, Tags.Arcane, Tags.Holy, Tags.Dark]:
+                unit.resists[tag] = 0
+            unit.buffs = [UnstableCellBuff()]
+            lives = 0
+            if endless:
+                while random.choice([True, False]):
+                    lives += 1
+            if lives:
+                unit.buffs.append(ReincarnationBuff(lives))
+            self.summon(unit, Point(x, y), radius=RANGE_GLOBAL, team=random.choice([TEAM_ENEMY, TEAM_PLAYER]))
+        
+        yield
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, EschatonSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell, CloudbenderSpell, GuruMeditationSpell, GazerFormSpell, MelodramaSpell, TideOfGenesisSpell])
 
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture, BatEscape, EyeBleach, AntimatterInfusion, WarpStrike, ThornShot, TimeSkip, BlindSavant, ScratchProofing, OffensiveShields])
