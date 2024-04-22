@@ -6903,7 +6903,7 @@ class ShockTroops(Upgrade):
         
         radius = self.get_stat("radius")
         damage = evt.unit.max_hp//4
-        self.owner.level.queue_spell(send_bolts(lambda point: self.owner.level.show_effect(point.x, point.y, random.choice([Tags.Fire, Tags.Lightning]), minor=True), lambda point: self.owner.level.queue_spell(self.boom(point, radius, damage)), evt.unit, targets[:self.get_stat("num_targets")]))
+        self.owner.level.queue_spell(send_bolts(lambda point: self.owner.level.show_effect(point.x, point.y, random.choice([Tags.Fire, Tags.Lightning]), minor=True), lambda point: self.owner.level.queue_spell(self.boom(point, radius, damage), prepend=True), evt.unit, targets[:self.get_stat("num_targets")]))
 
 class OverloadedBuff(Buff):
 
@@ -7253,171 +7253,165 @@ class PureglassKnightSpell(Spell):
     def cast_instant(self, x, y):
         self.summon_knight(Point(x, y))
 
-class TransientBomberBuff(Buff):
+class AfterlifeJaunt(Spell):
 
     def __init__(self, spell):
         self.spell = spell
-        Buff.__init__(self)
-
-    def on_init(self):
-        self.name = "Transient Bomber"
-        self.radius = self.spell.get_stat("radius")
-        self.phase = self.spell.get_stat("phase")
-        self.owner_triggers[EventOnDeath] = lambda evt: self.owner.level.queue_spell(self.boom())
-    
-    def boom(self):
-        damage = self.owner.max_hp
-        for stage in Burst(self.owner.level, Point(self.owner.x, self.owner.y), self.radius, ignore_walls=self.phase):
-            for point in stage:
-                unit = self.owner.level.get_unit_at(point.x, point.y)
-                for tag in [Tags.Holy, Tags.Arcane, Tags.Fire]:
-                    if not unit or not are_hostile(unit, self.owner):
-                        self.owner.level.show_effect(point.x, point.y, tag)
-                    else:
-                        unit.deal_damage(damage if tag == Tags.Holy else damage//2, tag, self)
-            yield
-
-class TransientBomberExplosion(Spell):
-
-    def __init__(self, buff):
-        self.buff = buff
         Spell.__init__(self)
     
-    def can_cast(self, x, y):
-        if not Spell.can_cast(self, x, y):
-            return False
-        return Point(x, y) in [p for stage in Burst(self.caster.level, Point(self.owner.x, self.owner.y), self.buff.radius, ignore_walls=self.buff.phase) for p in stage]
-
-    def get_stat(self, attr, base=None):
-        if attr == "range":
-            return self.buff.radius
-        return Spell.get_stat(self, attr, base)
-
     def on_init(self):
-        self.name = "Suicide Explosion"
-        self.requires_los = not self.buff.phase
-        self.damage_type = [Tags.Holy, Tags.Arcane, Tags.Fire]
-        self.description = "Deals holy damage equal to the user's max HP then half fire and arcane damage, in a %i tile burst. Suicide attack; autocasts on death." % self.buff.radius
+        self.name = "Afterlife Jaunt"
+        self.damage = self.spell.get_stat("minion_damage")
+        self.damage_type = [Tags.Holy, Tags.Dark]
+        self.all_damage_types = True
+        self.range = self.spell.get_stat("minion_range")
+        self.requires_los = False
+        self.description = "Ignores LOS. Kills the user, summons another Twilight Wanderer next to the target, then deals damage. Consumes reincarnations to multiply damage."
+    
+    def get_target(self, x, y):
+        if distance(self.caster, Point(x, y)) < 1.5:
+            point = Point(self.caster.x, self.caster.y)
+        else:
+            point = self.caster.level.get_summon_point(x, y)
+        return point
+
+    def can_cast(self, x, y):
+        return bool(self.get_target(x, y)) and Spell.can_cast(self, x, y)
 
     def cast_instant(self, x, y):
-        self.owner.kill()
 
-class EternalBomberBuff(Buff):
+        point = self.get_target(x, y)
+        if not point:
+            return
+        
+        mult = 1
+        reincarnation = self.caster.get_buff(ReincarnationBuff)
+        if reincarnation:
+            self.caster.remove_buff(reincarnation)
+            mult += reincarnation.lives
+        
+        self.caster.kill()
+        self.caster.level.queue_spell(self.spell.jaunt(point, spell=self, damage=self.get_stat("damage")*mult, enemy=self.caster.level.get_unit_at(x, y)))
 
-    def __init__(self, spell):
-        self.spell = spell
-        Buff.__init__(self)
-    
+class TwilightBurstBuff(Buff):
+
     def on_init(self):
-        self.name = "Eternal Bomber"
-        self.color = Tags.Holy.color
-        self.radius = self.spell.get_stat("radius")
-        self.phase = self.spell.get_stat("phase")
+        self.name = "Twilight Burst"
+        self.owner_triggers[EventOnUnitAdded] = self.on_unit_added
         self.owner_triggers[EventOnDeath] = self.on_death
-        # Can't just check has_buff(ReincarnationBuff) because non-passive reincarnation gets temporarily removed while the unit is reincarnating,
-        # and the order in which that triggers versus this buff is random. We have to rely on my Bugfixes mod, which changes reincarnation temporary
-        # self-removal and reapplying to not trigger buff apply and buff remove events.
-        self.reincarnation = None
-        self.owner_triggers[EventOnBuffApply] = self.on_buff_apply
-        self.owner_triggers[EventOnBuffRemove] = self.on_buff_remove
     
-    def get_tooltip(self):
-        return "On death, deal holy damage equal to this unit's max HP in a %i tile burst. If this unit has no reincarnations, summon another eternal bomber on a random tile if you have less than %i; else summon a transient bomber.\n\nEach turn, lose all reincarnations to summon the same number of transient bombers near self." % (self.radius, self.spell.get_stat("num_summons"))
-
-    def on_buff_apply(self, evt):
-        if isinstance(evt.buff, ReincarnationBuff):
-            self.reincarnation = evt.buff
-
-    def on_buff_remove(self, evt):
-        if evt.buff is self.reincarnation:
-            self.reincarnation = None
+    def boom(self, tag):
+        damage = self.owner.source.get_stat("minion_damage")
+        radius = self.owner.source.get_stat("radius", base=4)
+        for stage in Burst(self.owner.level, Point(self.owner.x, self.owner.y), radius, ignore_walls=True):
+            for p in stage:
+                unit = self.owner.level.get_unit_at(p.x, p.y)
+                if not unit or not are_hostile(unit, self.owner):
+                    self.owner.level.show_effect(p.x, p.y, tag)
+                else:
+                    unit.deal_damage(damage, tag, self)
+            yield
+    
+    def on_unit_added(self, evt):
+        self.owner.level.queue_spell(self.boom(Tags.Holy))
 
     def on_death(self, evt):
-        self.owner.level.queue_spell(self.boom())
-        if not self.reincarnation:
-            num_bombers = len([u for u in self.owner.level.units if u.name == "Eternal Bomber" and u.is_alive()])
-            self.spell.summon_bomber(minor=(num_bombers >= self.spell.get_stat("num_summons")))
-    
-    def boom(self):
-        for stage in Burst(self.owner.level, Point(self.owner.x, self.owner.y), self.radius, ignore_walls=self.phase):
-            for point in stage:
-                unit = self.owner.level.get_unit_at(point.x, point.y)
-                if not unit or not are_hostile(unit, self.owner):
-                    self.owner.level.show_effect(point.x, point.y, Tags.Holy)
-                else:
-                    unit.deal_damage(self.owner.max_hp, Tags.Holy, self)
-            yield
+        self.owner.level.queue_spell(self.boom(Tags.Dark))
 
-    def on_advance(self):
-        if not self.reincarnation:
-            return        
-        for _ in range(self.reincarnation.lives):
-            self.spell.summon_bomber(target=self.owner, minor=True)
-        self.owner.remove_buff(self.reincarnation)
-
-class EternalBomberPhaseBomber(Upgrade):
+class TwilightWandererSpell(Spell):
 
     def on_init(self):
-        self.name = "Phase Bomber"
-        self.level = 4
-        self.description = "Eternal Bomber no longer requires line of sight.\nBomber explosions can now pass through walls."
-        self.spell_bonuses[EternalBomberSpell]["requires_los"] = -1
-        self.spell_bonuses[EternalBomberSpell]["phase"] = 1
-
-class EternalBomberSpell(Spell):
-
-    def on_init(self):
-        self.name = "Eternal Bomber"
-        self.asset = ["MissingSynergies", "Icons", "eternal_bomber"]
-        self.tags = [Tags.Holy, Tags.Conjuration]
+        self.name = "Twilight Wanderer"
+        self.asset = ["MissingSynergies", "Icons", "twilight_wanderer"]
+        self.tags = [Tags.Holy, Tags.Dark, Tags.Conjuration]
         self.level = 3
         self.max_charges = 4
-        self.range = 12
-        self.must_target_empty = True
+
+        self.range = RANGE_GLOBAL
+        self.requires_los = False
         self.must_target_walkable = True
+        self.minion_health = 30
+        self.minion_damage = 9
+        self.minion_range = 5
 
-        self.minion_health = 12
-        self.radius = 2
-        self.num_summons = 2
+        self.upgrades["minion_range"] = (5, 3)
+        self.upgrades["max_charges"] = (8, 3)
+        self.upgrades["steal"] = (1, 4, "Life Stealer", "If the target of the Twilight Wanderer's afterlife jaunt dies, the newly summoned Twilight Wanderer gains 1 reincarnation.")
+        self.upgrades["burst"] = (1, 4, "Twilight Burst", "On summon, the Twilight Wanderer deals [{minion_damage}_holy:holy] damage to enemies in a [{radius}_tile:radius] burst around itself, passing through walls.\nOn death, the Twilight Wanderer deals [{minion_damage}_dark:dark] damage to enemies in a [{radius}_tile:radius] burst around itself, passing through walls.")
 
-        self.upgrades["radius"] = (2, 4)
-        self.upgrades["num_summons"] = (1, 3, "Max Bombers", "You can have 1 additional eternal bomber at a time.")
-        self.upgrades["extra"] = (1, 4, "Extra Bomber", "When you cast this spell, an additional transient bomber will also be summoned near the target.")
-        self.add_upgrade(EternalBomberPhaseBomber())
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["radius"] = self.get_stat("radius", base=4)
+        return stats
 
-    def get_impacted_tiles(self, x, y):
-        return [p for stage in Burst(self.caster.level, Point(x, y), self.get_stat('radius'), ignore_walls=self.get_stat("phase")) for p in stage]
+    def get_existing(self):
+        existing = None
+        for unit in self.caster.level.units:
+            if unit.source is self:
+                existing = unit
+                break
+        return existing
 
+    def can_cast(self, x, y):
+        if self.get_existing():
+            return x == self.caster.x and y == self.caster.y
+        else:
+            return Spell.can_cast(self, x, y) and not self.caster.level.get_unit_at(x, y)
+    
     def get_description(self):
-        return ("Summon an immobile eternal bomber with [{minion_health}_HP:minion_health]. It dies after 1 turn, and on death it deals [holy] damage equal to its max HP to enemies in a [{radius}_tile:radius] burst. If it dies without reincarnations, summon another eternal bomber on a random tile if you have less than [{num_summons}:num_summons]; else summon a transient bomber.\n"
-                "Each turn, the eternal bomber loses all reincarnations to summon a transient bomber per life lost. Transient bombers have the same HP and no special abilities, but they are mobile with no time limit and their explosions also deal half [arcane] and [fire] damage.").format(**self.fmt_dict())
+        return ("Summon the Twilight Wanderer, a [holy] [undead] minion with [{minion_health}_HP:minion_health]. If one already exists, instead give it 1 reincarnation.\n"
+                "The Twilight Wanderer has an afterlife jaunt attack with a range of [{minion_range}_tiles:minion_range], which ignores LOS. It kills the user, summons another Twilight Wanderer adjacent to the target, then deals [{minion_damage}_holy:holy] and [{minion_damage}_dark:dark] damage.\n"
+                "Any reincarnations the Twilight Wanderer has are consumed before use to multiply the damage of its afterlife jaunt.").format(**self.fmt_dict())
 
-    def summon_bomber(self, target=None, minor=False):
+    def jaunt(self, target, spell, damage, enemy):
+        for p in Bolt(self.caster.level, spell.caster, target, find_clear=False):
+            self.caster.level.show_effect(p.x, p.y, Tags.Holy)
+            self.caster.level.show_effect(p.x, p.y, Tags.Dark)
+            yield
+        unit = self.get_wanderer()
+        self.summon(unit, target=target, radius=5)
+        if not enemy:
+            return
+        enemy.deal_damage(damage, Tags.Holy, spell)
+        enemy.deal_damage(damage, Tags.Dark, spell)
+        # Queue it to make sure Life Stealer checks after other on-summon effects.
+        if self.get_stat("steal"):
+            self.caster.level.queue_spell(self.life_steal(enemy, unit))
+
+    def life_steal(self, enemy, unit):
+        if not enemy.is_alive():
+            self.add_reincarnation(unit)
+        yield
+
+    def add_reincarnation(self, unit):
+        existing = unit.get_buff(ReincarnationBuff)
+        if existing:
+            existing.lives +=1
+        else:
+            buff = ReincarnationBuff(1)
+            buff.buff_type = BUFF_TYPE_PASSIVE
+            unit.apply_buff(buff)
+
+    def get_wanderer(self):
         unit = Unit()
+        unit.unique = True
+        unit.name = "Twilight Wanderer"
+        unit.asset = ["MissingSynergies", "Units", "twilight_wanderer"]
+        unit.tags = [Tags.Holy, Tags.Dark, Tags.Undead]
         unit.max_hp = self.get_stat("minion_health")
-        if not minor:
-            unit.name = "Eternal Bomber"
-            unit.asset_name = "holy_bomber"
-            unit.turns_to_death = 1
-            unit.tags = [Tags.Holy]
-            unit.stationary = True
-            unit.buffs = [EternalBomberBuff(self)]
-        else:
-            unit.name = "Transient Bomber"
-            unit.asset_name = "prism_bomber"
-            unit.tags = [Tags.Holy, Tags.Arcane, Tags.Fire]
-            buff = TransientBomberBuff(self)
-            unit.buffs = [buff]
-            unit.spells = [TransientBomberExplosion(buff)]
-        if not target:
-            self.summon(unit, radius=RANGE_GLOBAL, sort_dist=False)
-        else:
-            self.summon(unit, target=target, radius=5)
+        unit.resists[Tags.Holy] = 100
+        if self.get_stat("burst"):
+            unit.buffs = [TwilightBurstBuff()]
+        unit.spells = [AfterlifeJaunt(self)]
+        return unit
 
     def cast_instant(self, x, y):
-        self.summon_bomber(target=Point(x, y))
-        if self.get_stat("extra"):
-            self.summon_bomber(target=Point(x, y), minor=True)
+        existing = self.get_existing()
+        if existing:
+            self.add_reincarnation(existing)
+            return
+        unit = self.get_wanderer()
+        self.summon(unit, target=Point(x, y), radius=5)
 
 class RedheartSpiderBuff(Buff):
 
@@ -14024,6 +14018,6 @@ class TideOfGenesisSpell(Spell):
         
         yield
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, EschatonSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, EternalBomberSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell, CloudbenderSpell, GuruMeditationSpell, GazerFormSpell, MelodramaSpell, TideOfGenesisSpell])
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, EschatonSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, TwilightWandererSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell, CloudbenderSpell, GuruMeditationSpell, GazerFormSpell, MelodramaSpell, TideOfGenesisSpell])
 
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture, BatEscape, EyeBleach, AntimatterInfusion, WarpStrike, ThornShot, TimeSkip, BlindSavant, ScratchProofing, OffensiveShields])
