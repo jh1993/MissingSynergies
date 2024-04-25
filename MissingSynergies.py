@@ -9190,168 +9190,6 @@ class KarmicLoanSpell(Spell):
     def cast_instant(self, x, y):
         self.caster.apply_buff(KarmicLoanBuff(self), self.get_stat("duration"))
 
-class FleshburstZombieBuff(Buff):
-
-    def __init__(self, spell):
-        self.spell = spell
-        Buff.__init__(self)
-    
-    def on_init(self):
-        self.name = "Fleshburst"
-        self.color = Tags.Undead.color
-        self.radius = self.spell.get_stat("radius")
-        self.maggot = self.spell.get_stat("maggot")
-        self.description = "On death, deal dark and poison damage equal to 25%% of this unit's max HP to enemies in a %i tile radius, and summon a blighted skeleton%s." % (self.radius, ", plus a flesh maggot per 15 max HP this unit had, rounded down" if self.maggot else "")
-        self.owner_triggers[EventOnDeath] = lambda evt: self.owner.level.queue_spell(self.fleshburst())
-    
-    def fleshburst(self):
-        self.spell.summon_skeleton(self.owner)
-        if self.maggot:
-            self.spell.summon_maggots(self.owner)
-        damage = self.owner.max_hp//4
-        points = list(self.owner.level.get_points_in_ball(self.owner.x, self.owner.y, self.radius))
-        random.shuffle(points)
-        for point in points:
-            unit = self.owner.level.get_unit_at(point.x, point.y)
-            if not unit or not are_hostile(unit, self.owner):
-                self.owner.level.show_effect(point.x, point.y, Tags.Dark)
-                self.owner.level.show_effect(point.x, point.y, Tags.Poison)
-            else:
-                unit.deal_damage(damage, Tags.Dark, self)
-                unit.deal_damage(damage, Tags.Poison, self)
-            if random.random() < 0.5:
-                yield
-
-class FleshburstZombieLeap(LeapAttack):
-
-    def __init__(self, spell):
-        LeapAttack.__init__(self, damage=spell.get_stat("minion_damage"), range=spell.get_stat("minion_range"))
-        self.name = "Suicidal Leap"
-    
-    def get_description(self):
-        desc = LeapAttack.get_description(self)
-        desc += "\nKills the user"
-        return desc
-    
-    def cast(self, x, y):
-        yield from LeapAttack.cast(self, x, y)
-        self.caster.kill()
-
-class FleshburstZombieMelee(SimpleMeleeAttack):
-
-    def __init__(self, spell):
-        SimpleMeleeAttack.__init__(self, damage=spell.get_stat("minion_damage"))
-
-    def get_description(self):
-        return "Kills the user"
-    
-    def cast(self, x, y):
-        yield from SimpleMeleeAttack.cast(self, x, y)
-        self.caster.kill()
-
-class BlightedSkeletonAura(DamageAuraBuff):
-
-    def __init__(self, spell):
-        self.spell = spell
-        DamageAuraBuff.__init__(self, damage=2, damage_type=[Tags.Dark, Tags.Poison], radius=spell.get_stat("radius"))
-        self.name = "Blight Aura"
-        self.color = Tags.Undead.color
-        self.has_boneburst = spell.get_stat("boneburst")
-        if self.has_boneburst:
-            self.owner_triggers[EventOnDeath] = lambda evt: self.owner.level.queue_spell(self.boneburst())
-
-    def boneburst(self):
-        damage = self.owner.max_hp//4
-        points = list(self.owner.level.get_points_in_ball(self.owner.x, self.owner.y, self.radius))
-        random.shuffle(points)
-        for point in points:
-            unit = self.owner.level.get_unit_at(point.x, point.y)
-            if not unit or not are_hostile(unit, self.owner):
-                self.owner.level.show_effect(point.x, point.y, Tags.Physical)
-            else:
-                unit.deal_damage(damage, Tags.Physical, self)
-            if random.random() < 0.5:
-                yield
-
-    def get_tooltip(self):
-        desc = DamageAuraBuff.get_tooltip(self)
-        if self.has_boneburst:
-            desc += "\nOn death, deal physical damage equal to 25%% of this unit's max HP to enemies in a %i tile radius" % self.radius
-        return desc
-
-class FleshburstZombieSpell(Spell):
-
-    def on_init(self):
-        self.name = "Fleshburst Zombie"
-        self.asset = ["MissingSynergies", "Icons", "fleshburst_zombie"]
-        self.tags = [Tags.Dark, Tags.Nature, Tags.Conjuration]
-        self.level = 5
-        self.max_charges = 7
-        self.must_target_walkable = True
-        self.must_target_empty = True
-
-        self.radius = 3
-        self.minion_health = 20
-        self.minion_damage = 10
-        self.minion_range = 6
-        self.range = 10
-
-        self.upgrades["radius"] = (2, 3)
-        self.upgrades["minion_damage"] = (12, 4)
-        self.upgrades["maggot"] = (1, 5, "Flesh Maggots", "On death, the fleshburst zombie also summons a flesh maggot per 15 max HP it had, rounded down.\nFlesh maggots are [nature] [undead] minions with [{maggot_health}_HP:minion_health] and melee attacks that deal [{maggot_damage}_physical:physical] damage.")
-        self.upgrades["boneburst"] = (1, 4, "Bone Burst", "When blighted skeletons die, they deal [physical] damage equal to 25% of their max HP to enemies in a radius equal to their aura radius.")
-    
-    def fmt_dict(self):
-        stats = Spell.fmt_dict(self)
-        stats["total_health"] = self.get_stat("minion_health") + self.get_stat("minion_damage")
-        stats["maggot_health"] = self.get_stat("minion_health", base=5)
-        stats["maggot_damage"] = self.get_stat("minion_damage", base=3)
-        return stats
-    
-    def get_description(self):
-        return ("Summon a fleshburst zombie, a [nature] [undead] minion with [{total_health}_HP:minion_health], which also benefits from [minion_damage:minion_damage] bonuses, and a suicidal leap attack with a range of [{minion_range}_tiles:minion_range].\n"
-                "On death, the fleshburst zombie deals [dark] and [poison] damage equal to 25% of its max HP to enemies in a [{radius}_tile:radius] radius, and summons a blighted skeleton with the same max HP at its former location.\n"
-                "The blighted skeleton is a [nature] [undead] minion with a melee attack that deals [{minion_damage}_physical:physical] damage. Each turn, it deals fixed [2_dark:dark] or [2_poison:poison] damage to enemies in a [{radius}_tile:radius] radius.").format(**self.fmt_dict())
-
-    def cast_instant(self, x, y):
-        unit = Unit()
-        unit.asset = ["MissingSynergies", "Units", "fleshburst_zombie"]
-        unit.name = "Fleshburst Zombie"
-        unit.max_hp =  self.get_stat("minion_health") + self.get_stat("minion_damage")
-        unit.tags = [Tags.Dark, Tags.Poison, Tags.Nature, Tags.Undead]
-        unit.resists[Tags.Poison] = 100
-        unit.spells = [FleshburstZombieMelee(self), FleshburstZombieLeap(self)]
-        unit.buffs = [FleshburstZombieBuff(self)]
-        self.summon(unit, target=Point(x, y))
-    
-    def summon_maggots(self, unit):
-        if unit.max_hp <= 0:
-            return
-        maggot_health = self.get_stat("minion_health", base=5)
-        maggot_damage = self.get_stat("minion_damage", base=3)
-        for _ in range(unit.max_hp//15):
-            maggot = Unit()
-            maggot.asset = ["MissingSynergies", "Units", "flesh_maggot"]
-            maggot.name = "Flesh Maggot"
-            maggot.max_hp = maggot_health
-            maggot.tags = [Tags.Dark, Tags.Poison, Tags.Nature, Tags.Undead]
-            maggot.resists[Tags.Poison] = 100
-            maggot.spells = [SimpleMeleeAttack(maggot_damage)]
-            self.summon(maggot, target=unit, radius=5)
-
-    def summon_skeleton(self, unit):
-        if unit.max_hp <= 0:
-            return
-        skeleton = Unit()
-        skeleton.asset = ["MissingSynergies", "Units", "blighted_skeleton"]
-        skeleton.name = "Blighted Skeleton"
-        skeleton.max_hp = unit.max_hp
-        skeleton.tags = [Tags.Nature, Tags.Undead]
-        skeleton.resists[Tags.Poison] = 100
-        skeleton.spells = [SimpleMeleeAttack(self.get_stat("minion_damage"))]
-        skeleton.buffs = [BlightedSkeletonAura(self)]
-        self.summon(skeleton, target=unit)
-
 class Halogenesis(Upgrade):
 
     def on_init(self):
@@ -14018,6 +13856,98 @@ class TideOfGenesisSpell(Spell):
         
         yield
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, EschatonSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, TwilightWandererSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, FleshburstZombieSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell, CloudbenderSpell, GuruMeditationSpell, GazerFormSpell, MelodramaSpell, TideOfGenesisSpell])
+class HolyBomberBuff(Buff):
+
+    def on_init(self):
+        self.owner_triggers[EventOnDeath] = self.on_death
+        self.color = Tags.Holy.color
+    
+    def get_tooltip(self):
+        return "Dies at the end of turn. On death, causes Holy Hand Grenade to deal holy damage equal to max HP to enemies in a %i tile burst." % self.owner.source.get_stat("radius")
+    
+    def on_advance(self):
+        self.owner.kill()
+
+    def on_death(self, evt):
+        self.owner.level.queue_spell(self.owner.source.boom(self.owner.max_hp - self.owner.bonus_hp, self.owner.x, self.owner.y))
+
+class HolyHandGrenadeSpell(Spell):
+
+    def on_init(self):
+        self.name = "Holy Hand Grenade"
+        self.asset = ["MissingSynergies", "Icons", "holy_hand_grenade"]
+        self.tags = [Tags.Holy, Tags.Conjuration, Tags.Sorcery]
+        self.level = 3
+        self.max_charges = 16
+
+        self.range = 8
+        self.max_charges = 16
+        self.minion_health = 12
+        self.radius = 2
+
+        self.upgrades["radius"] = (1, 3)
+        self.upgrades["minion_health"] = (8, 2)
+        self.upgrades["blind"] = (1, 3, "Flashbang", "This spell also [blinds:blind] affected enemies for [1_turn:duration].")
+        self.upgrades["thick"] = (1, 3, "Thick Shell", "The holy bomber gains bonus HP equal to 100% of its base HP.\nThis bonus HP does not contribute to the damage of its explosion.")
+    
+    def get_impacted_tiles(self, x, y):
+        return [p for stage in Burst(self.caster.level, Point(x, y), self.get_stat('radius')) for p in stage]
+
+    def can_cast(self, x, y):
+        if not Spell.can_cast(self, x, y):
+            return False
+        unit = self.caster.level.get_unit_at(x, y)
+        return not unit or unit.source is self
+    
+    def get_total_hp(self):
+        return self.get_stat("minion_health") + self.get_stat("minion_damage") + self.get_stat("damage")
+    
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["total_hp"] = self.get_total_hp()
+        return stats
+    
+    def get_description(self):
+        return ("Summon a [holy] bomber, a flying stationary minion with [{total_hp}_HP:minion_health], which also benefits from bonuses to [minion_damage:minion_damage] and [damage].\n"
+                "The bomber dies at the end of its turn, excluding the turn when it is summoned. On death, it causes this spell to deal [holy] damage equal to its max HP to enemies in a [{radius}_tile:radius] burst.\n"
+                "Targeting an existing bomber with this spell immediately detonates it before summoning a new one.").format(**self.fmt_dict())
+
+    def boom(self, hp, x, y):
+        blind = self.get_stat("blind")
+        for stage in Burst(self.caster.level, Point(x, y), self.get_stat("radius")):
+            for p in stage:
+                unit = self.caster.level.get_unit_at(p.x, p.y)
+                if not unit or not are_hostile(unit, self.caster):
+                    self.caster.level.show_effect(p.x, p.y, Tags.Holy)
+                else:
+                    unit.deal_damage(hp, Tags.Holy, self)
+                    if blind:
+                        unit.apply_buff(BlindBuff(), 1)
+            yield
+    
+    def cast(self, x, y):
+
+        for p in Bolt(self.caster.level, self.caster, Point(x, y)):
+            self.caster.level.show_effect(p.x, p.y, Tags.Holy, minor=True)
+            yield
+
+        existing = self.caster.level.get_unit_at(x, y)
+        if existing:
+            existing.kill()
+        
+        unit = Unit()
+        unit.name = "Holy Bomber"
+        unit.tags = [Tags.Holy]
+        unit.flying = True
+        unit.stationary = True
+        unit.max_hp = self.get_total_hp()
+        unit.bonus_hp = 0
+        if self.get_stat("thick"):
+            unit.bonus_hp = unit.max_hp
+            unit.max_hp *= 2
+        unit.buffs = [HolyBomberBuff()]
+        self.summon(unit, Point(x, y))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, EschatonSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, TwilightWandererSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell, CloudbenderSpell, GuruMeditationSpell, GazerFormSpell, MelodramaSpell, TideOfGenesisSpell, HolyHandGrenadeSpell])
 
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture, BatEscape, EyeBleach, AntimatterInfusion, WarpStrike, ThornShot, TimeSkip, BlindSavant, ScratchProofing, OffensiveShields])
