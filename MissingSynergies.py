@@ -13869,7 +13869,7 @@ class HolyBomberBuff(Buff):
         self.owner.kill()
 
     def on_death(self, evt):
-        self.owner.level.queue_spell(self.owner.source.boom(self.owner.max_hp - self.owner.bonus_hp, self.owner.x, self.owner.y))
+        self.owner.level.queue_spell(self.owner.source.boom(max(self.owner.max_hp - self.owner.bonus_hp, 0), self.owner.x, self.owner.y))
 
 class HolyHandGrenadeSpell(Spell):
 
