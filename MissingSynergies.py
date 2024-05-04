@@ -1276,7 +1276,10 @@ class RaiseDracolichBreath(BreathWeapon):
                 ghost.resists[Tags.Dark] = 100
                 summoned = self.caster.source.summon(ghost, target=Point(x, y))
                 if summoned and self.legacy:
-                    ghost.apply_buff(TouchedBySorcery(self.legacy, self.caster.source))
+                    buff = TouchedBySorcery(self.legacy, self.caster.source)
+                    buff.buff_type = BUFF_TYPE_NONE
+                    buff.resists[self.legacy] = max(100, 100 - ghost.resists[self.legacy])
+                    ghost.apply_buff(buff)
             elif unit and unit.is_alive():
                 unit.deal_damage(ghost.spells[0].damage, Tags.Dark, self)
         
@@ -1288,7 +1291,10 @@ class RaiseDracolichBreath(BreathWeapon):
             skeleton.spells[0].damage = self.caster.source.get_stat("minion_damage", base=skeleton.spells[0].damage)
             summoned = self.caster.source.summon(skeleton, target=unit)
             if summoned and self.legacy:
-                skeleton.apply_buff(TouchedBySorcery(self.legacy, self.caster.source))
+                buff = TouchedBySorcery(self.legacy, self.caster.source)
+                buff.buff_type = BUFF_TYPE_NONE
+                buff.resists[self.legacy] = max(100, 100 - skeleton.resists[self.legacy])
+                skeleton.apply_buff(buff)
         yield
 
 class RaiseDracolichSoulJar(LichSealSoulSpell):
@@ -1309,7 +1315,10 @@ class RaiseDracolichSoulJar(LichSealSoulSpell):
         if self.caster.source.summon(phylactery, Point(x, y)):
             self.caster.apply_buff(Soulbound(phylactery))
             if self.legacy:
-                phylactery.apply_buff(TouchedBySorcery(self.legacy, self.caster.source))
+                buff = TouchedBySorcery(self.legacy, self.caster.source)
+                buff.buff_type = BUFF_TYPE_NONE
+                buff.resists[self.legacy] = max(100, 100 - phylactery.resists[self.legacy])
+                phylactery.apply_buff(buff)
 
 class InstantRaising(Upgrade):
 
@@ -1345,7 +1354,7 @@ class RaiseDracolichSpell(Spell):
         self.range = RANGE_GLOBAL
         self.requires_los = 0
 
-        self.upgrades["legacy"] = (1, 7, "Elemental Legacy", "The dracolich gains [100:damage] resistance of the same element as the breath weapon of the dragon it was created from, and its breath weapon redeals half of its damage as that element; this also counts as using another breath weapon of that element.\nUnits summoned by the dracolich gain [100:damage] resistance to that element and a ranged attack of that element.")
+        self.upgrades["legacy"] = (1, 7, "Elemental Legacy", "The dracolich gains 100 resistance of the same element as the breath weapon of the dragon it was created from, and its breath weapon redeals half of its damage as that element; this also counts as using another breath weapon of that element.\nUnits summoned by the dracolich gain 100 resistance to that element and a ranged attack of that element.\nThese resistances are raised to 100 if they are still less than 100 after the increase.")
         self.upgrades["dragon_mage"] = (1, 5, "Dragon Mage", "The dracolich can cast Death Bolt with a 3 turn cooldown.\nThis Death Bolt gains all of your upgrades and bonuses.")
         self.upgrades["ghost"] = (1, 5, "Spectral Breath", "The dracolich's breath summons ghosts with [dark] immunity in empty tiles.\nOccupied tiles are dealt [dark] damage equal to the melee damage of the ghosts.")
         self.add_upgrade(InstantRaising())
@@ -1394,7 +1403,7 @@ class RaiseDracolichSpell(Spell):
         dracolich.spells[0] = RaiseDracolichSoulJar(legacy)
         
         if legacy:
-            dracolich.resists[legacy] += 100
+            dracolich.resists[legacy] = max(100, dracolich.resists[legacy] + 100)
 
         if self.get_stat('dragon_mage'):
             bolt = DeathBolt()
@@ -12419,7 +12428,7 @@ class SerpentBrood(Upgrade):
     def get_description(self):
         return ("Each turn, each of your [dragon] minions has a 15% chance to spawn a snake.\n"
                 "Snakes are [living] [nature] minions with [{minion_health}_HP:minion_health]. Their melee attacks deal [{minion_damage}_physical:physical] damage and inflict [{duration}_turns:duration] of [poison].\n"
-                "If the dragon has a breath weapon, each snake it spawns will gain 100 resistance of its element, and a ranged attack of that element dealing the same damage as the snake's melee. This attack has a range of [{minion_range}_tiles:minion_range].").format(**self.fmt_dict())
+                "If the dragon has a breath weapon, each snake it spawns will gain 100 resistance of its element (increased to 100 if still less), and a ranged attack of that element dealing the same damage as the snake's melee. This attack has a range of [{minion_range}_tiles:minion_range].").format(**self.fmt_dict())
 
     def on_advance(self):
         units = [u for u in self.owner.level.units if Tags.Dragon in u.tags and not are_hostile(u, self.owner)]
@@ -12436,12 +12445,14 @@ class SerpentBrood(Upgrade):
                     breath = s
                     break
             snake = Snake()
-            snake.resists[Tags.Ice] = 0
             snake.spells[0].damage = self.minion_damage
             snake.spells[0].buff_duration = duration
             apply_minion_bonuses(self, snake)
             if self.summon(snake, target=u, radius=5) and breath:
-                snake.apply_buff(TouchedBySorcery(breath.damage_type, self))
+                buff = TouchedBySorcery(breath.damage_type, self)
+                buff.buff_type = BUFF_TYPE_NONE
+                buff.resists[breath.damage_type] = max(100, 100 - snake.resists[breath.damage_type])
+                snake.apply_buff(buff)
 
 class ReflectionBuff(Buff):
 
