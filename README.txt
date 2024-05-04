@@ -110,6 +110,7 @@ Level 5:
 Level 6:
 + Astral Meltdown (Arcane/Chaos/Sorcery)
 + Death Metal (Dark/Metallic/Conjuration)
++ Dragon Chorus (Dragon/Sorcery)
 + Elemental Chaos (Arcane/Ice/Chaos/Conjuration)
 + Eyes of Chaos (Chaos/Eye/Enchantment)
 + High Sorcery (Fire/Lightning/Ice/Sorcery)

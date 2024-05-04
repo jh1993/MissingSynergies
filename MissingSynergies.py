@@ -13948,6 +13948,104 @@ class HolyHandGrenadeSpell(Spell):
         unit.buffs = [HolyBomberBuff()]
         self.summon(unit, Point(x, y))
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, EschatonSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, TwilightWandererSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell, CloudbenderSpell, GuruMeditationSpell, GazerFormSpell, MelodramaSpell, TideOfGenesisSpell, HolyHandGrenadeSpell])
+class DragonChorusCrescendo(Upgrade):
+
+    def on_init(self):
+        self.name = "Crescendo"
+        self.level = 5
+        self.exc_class = "chorus"
+        self.description = "The first time you summon a [dragon] minion each turn, you automatically cast Dragon Chorus targeting the same tile for free, if possible.\nDragon Chorus can be upgraded with only 1 chorus upgrade"
+        self.triggered = False
+        self.global_triggers[EventOnUnitAdded] = self.on_unit_added
+        # This is necessary to not trigger twice when on minions that are summoned when you enter a realm.
+        self.just_entered = False
+    
+    def on_pre_advance(self):
+        if self.just_entered:
+            self.just_entered = False
+        else:
+            self.triggered = False
+    
+    def on_unit_added(self, evt):
+        if evt.unit.is_player_controlled:
+            self.just_entered = True
+            return
+        if self.triggered or are_hostile(evt.unit, self.owner) or Tags.Dragon not in evt.unit.tags:
+            return
+        if not self.prereq.can_cast(evt.unit.x, evt.unit.y):
+            return
+        self.triggered = True
+        self.owner.level.act_cast(self.owner, self.prereq, evt.unit.x, evt.unit.y, pay_costs=False)
+
+class DragonChorusSpell(Spell):
+
+    def on_init(self):
+        self.name = "Dragon Chorus"
+        self.asset = ["MissingSynergies", "Icons", "dragon_chorus"]
+        self.tags = [Tags.Dragon, Tags.Sorcery]
+        self.level = 6
+        self.max_charges = 6
+        self.requires_los = False
+
+        self.range = 8
+        self.damage = 12
+
+        self.upgrades["max_charges"] = (3, 3)
+        self.upgrades["range"] = (4, 4)
+        self.upgrades["solo"] = (1, 4, "Solo", "Each affected tile now has a chance to be affected an additional time by each breath weapon of your [dragon] minions, equal to 100% divided by the number of different sources that your [dragon] minions are summoned from.\nMinions with no breath weapons are not counted.", "chorus")
+        self.add_upgrade(DragonChorusCrescendo())
+
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["total_damage"] = self.get_stat("damage") + self.get_stat("breath_damage")
+        return stats
+
+    def get_description(self):
+        return ("Deal [{total_damage}_physical:physical] damage in a [{range}_tile:range] cone. This damage also benefits from bonuses to [breath_damage:breath_damage].\n"
+                "Each affected tile is also affected by the per-tile effect of the breath weapon of each of your [dragon] minions.\n"
+                "Tiles containing allies are not affected.").format(**self.fmt_dict())
+
+    def aoe(self, x, y):
+        return Burst(self.caster.level, Point(self.caster.x, self.caster.y), self.get_stat('range'), burst_cone_params=BurstConeParams(Point(x, y), math.pi/6))
+
+    def get_impacted_tiles(self, x, y):
+        return [p for stage in self.aoe(x, y) for p in stage]
+    
+    def cast(self, x, y):
+
+        damage = self.get_stat("damage") + self.get_stat("breath_damage")
+        breaths = []
+        sources = set()
+        repeat_chance = 1 if self.get_stat("solo") else 0
+        for unit in self.caster.level.units:
+            if are_hostile(unit, self.caster) or Tags.Dragon not in unit.tags:
+                continue
+            for spell in unit.spells:
+                if isinstance(spell, BreathWeapon):
+                    breaths.append(spell)
+                    sources.add(unit.source)
+                    break
+        if sources:
+            repeat_chance /= len(sources)
+
+        for stage in self.aoe(x, y):
+            for p in stage:
+                random.shuffle(breaths)
+                unit = self.caster.level.get_unit_at(p.x, p.y)
+                if unit and not are_hostile(unit, self.caster):
+                    self.caster.level.show_effect(p.x, p.y, Tags.Physical)
+                    for breath in breaths:
+                        self.caster.level.show_effect(p.x, p.y, breath.damage_type)
+                        if isinstance(breath, RaiseDracolichBreath) and breath.legacy:
+                            self.caster.level.show_effect(p.x, p.y, breath.legacy)
+                else:
+                    self.caster.level.deal_damage(p.x, p.y, damage, Tags.Physical, self)
+                    for breath in breaths:
+                        breath.per_square_effect(p.x, p.y)
+                        if random.random() < repeat_chance:
+                            breath.per_square_effect(p.x, p.y)
+            yield
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, EschatonSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, TwilightWandererSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell, CloudbenderSpell, GuruMeditationSpell, GazerFormSpell, MelodramaSpell, TideOfGenesisSpell, HolyHandGrenadeSpell, DragonChorusSpell])
 
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture, BatEscape, EyeBleach, AntimatterInfusion, WarpStrike, ThornShot, TimeSkip, BlindSavant, ScratchProofing, OffensiveShields])
