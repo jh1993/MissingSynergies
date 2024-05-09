@@ -1264,7 +1264,8 @@ class RaiseDracolichBreath(BreathWeapon):
     def per_square_effect(self, x, y):
 
         unit = self.caster.level.get_unit_at(x, y)
-        self.caster.level.queue_spell(self.try_raise(unit))
+        if unit:
+            self.caster.level.queue_spell(self.try_raise(unit))
         self.caster.level.deal_damage(x, y, self.get_stat("damage"), Tags.Dark, self)
         if self.legacy:
             self.caster.level.deal_damage(x, y, self.get_stat("damage")//2, self.legacy, self)
@@ -7374,8 +7375,8 @@ class TwilightWandererSpell(Spell):
 
     def jaunt(self, target, spell, damage, enemy):
         for p in Bolt(self.caster.level, spell.caster, target, find_clear=False):
-            self.caster.level.show_effect(p.x, p.y, Tags.Holy)
-            self.caster.level.show_effect(p.x, p.y, Tags.Dark)
+            self.caster.level.show_effect(p.x, p.y, Tags.Holy, minor=True)
+            self.caster.level.show_effect(p.x, p.y, Tags.Dark, minor=True)
             yield
         unit = self.get_wanderer()
         self.summon(unit, target=target, radius=5)
@@ -14038,6 +14039,21 @@ class DragonChorusSpell(Spell):
                     break
         if sources:
             repeat_chance /= len(sources)
+
+        def bolt(breath):
+            has_legacy = isinstance(breath, RaiseDracolichBreath) and breath.legacy
+            for p in Bolt(self.caster.level, breath.caster, self.caster, find_clear=False):
+                self.caster.level.show_effect(p.x, p.y, breath.damage_type, minor=True)
+                if has_legacy:
+                    self.caster.level.show_effect(p.x, p.y, breath.legacy, minor=True)
+                yield True
+            yield False
+
+
+        bolts = [bolt(breath) for breath in breaths]
+        while bolts:
+            bolts = [bolt for bolt in bolts if next(bolt)]
+            yield
 
         for stage in self.aoe(x, y):
             for p in stage:
