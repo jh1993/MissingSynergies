@@ -1310,6 +1310,7 @@ class RaiseDracolichSoulJar(LichSealSoulSpell):
         phylactery.name = 'Soul Jar'
         phylactery.max_hp = self.caster.source.get_stat("minion_health", base=6)
         phylactery.stationary = True
+        phylactery.flying = True
         phylactery.tags = [Tags.Construct, Tags.Dark]
         phylactery.resists[Tags.Dark] = 100
 
@@ -1362,7 +1363,7 @@ class RaiseDracolichSpell(Spell):
     
     def get_description(self):
         return ("Kill target [dragon] minion and resurrect it as a dracolich with the same max HP, melee damage, breath damage, and breath range. Other abilities will not be retained.\n"
-                "The dracolich can create a soul jar that makes itself immortal as long as the jar exists, and its [dark] breath raises slain [living] enemies as friendly skeletons with the same max HP.").format(**self.fmt_dict())
+                "The dracolich can create a flying stationary soul jar that makes itself immortal as long as the jar exists, and its [dark] breath raises slain [living] enemies as friendly skeletons with the same max HP.").format(**self.fmt_dict())
 
     def can_cast(self, x, y):
         if not Spell.can_cast(self, x, y):
