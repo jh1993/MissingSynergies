@@ -2963,7 +2963,7 @@ class SpiritBombBuff(Buff):
         Buff.__init__(self)
         self.spell = spell
         self.charges = charges
-        self.base_damage = spell.get_stat("minion_damage") + spell.get_stat("breath_damage")
+        self.base_damage = spell.get_stat("minion_damage") + spell.get_stat("damage") + spell.get_stat("breath_damage")
         self.base_radius = spell.get_stat("radius")
         self.base_hp = spell.minion_health
         self.timer = 0
@@ -2977,11 +2977,11 @@ class SpiritBombBuff(Buff):
         self.owner.level.queue_spell(self.boom())
 
     def get_bonus(self):
-        return self.charges//2 + self.timer//2 + (self.owner.max_hp - self.base_hp)//20
+        return self.charges + self.timer + self.owner.max_hp//10
     
     def update_description(self):
         bonus = self.get_bonus()
-        self.description = "On death, explodes to deal %i holy damage to all enemies in a %i tile burst and destroy all walls." % (self.base_damage + 10*bonus, self.base_radius + bonus)
+        self.description = "On death, explodes to deal %i holy and physical damage to all enemies in a %i tile burst and destroy all walls." % (self.base_damage + 5*bonus, self.base_radius + bonus)
         if self.warcry:
             self.description += "\nEach turn, the summoner of this unit has a 50%% chance of stunning or berserking a random enemy in line of sight for %i turns." % self.duration
     
@@ -2995,16 +2995,19 @@ class SpiritBombBuff(Buff):
     
     def boom(self):
         bonus = self.get_bonus()
-        damage = self.base_damage + 10*bonus
+        damage = self.base_damage + 5*bonus
         radius = self.base_radius + bonus
         self.timer = 0
+        tags = [Tags.Holy, Tags.Physical]
         for stage in Burst(self.owner.level, Point(self.owner.x, self.owner.y), radius, ignore_walls=True):
             for point in stage:
                 unit = self.owner.level.get_unit_at(point.x, point.y)
                 if unit and are_hostile(unit, self.spell.caster):
-                    unit.deal_damage(damage, Tags.Holy, self.spell)
+                    for tag in tags:
+                        unit.deal_damage(damage, tag, self.spell)
                 else:
-                    self.owner.level.show_effect(point.x, point.y, Tags.Holy)
+                    for tag in tags:
+                        self.owner.level.show_effect(point.x, point.y, tag)
                     if self.owner.level.tiles[point.x][point.y].is_wall():
                         self.owner.level.make_floor(point.x, point.y)
             yield
@@ -3014,13 +3017,14 @@ class SpiritBombSpell(OrbSpell):
     def on_init(self):
         self.name = "Spirit Bomb"
         self.asset = ["MissingSynergies", "Icons", "spirit_bomb"]
-        self.tags = [Tags.Holy, Tags.Orb, Tags.Dragon, Tags.Conjuration]
+        self.tags = [Tags.Holy, Tags.Orb, Tags.Dragon, Tags.Conjuration, Tags.Sorcery]
         self.level = 7
         self.max_charges = 1
         self.range = 9
+        self.melt_walls = True
 
         self.minion_health = 40
-        self.minion_damage = 50
+        self.minion_damage = 25
         self.radius = 5
 
         self.upgrades["minion_damage"] = (30, 3)
@@ -3029,20 +3033,20 @@ class SpiritBombSpell(OrbSpell):
     
     def fmt_dict(self):
         stats = Spell.fmt_dict(self)
-        stats["total_damage"] = self.get_stat("minion_damage") + self.get_stat("breath_damage")
+        stats["total_damage"] = self.get_stat("minion_damage") + self.get_stat("damage") + self.get_stat("breath_damage")
         stats["duration"] = self.get_stat("duration", base=3)
         return stats
 
     def get_description(self):
         return ("Summon an orb of extremely concentrated energy next to the caster, consuming every remaining charge of this spell, each time counting as casting the spell once.\n"
-                "When the orb dies, it deals [{total_damage}_holy:holy] damage to all enemies and destroys all walls in a [{radius}_tile:radius] burst, gaining +1 radius and +10 damage for every 2 turns it had existed, every 2 additional charge consumed, and each 20 bonus to max HP it had. It also benefits from bonuses to [breath_damage:breath_damage].\n"
+                "When the orb dies, it deals [{total_damage}_holy:holy] and [{total_damage}_physical:physical] damage to all enemies and destroys all walls in a [{radius}_tile:radius] burst, gaining +1 radius and +5 damage for every turn it had existed, every charge consumed, and every 10 max HP it had. It also benefits from bonuses to [damage] and [breath_damage:breath_damage].\n"
                 "The orb has no will of its own, each turn it will float one tile towards the target.\n"
                 "The orb can be destroyed by dark damage.").format(**self.fmt_dict())
     
     def on_make_orb(self, orb):
         orb.asset = ["MissingSynergies", "Units", "spirit_bomb"]
         orb.resists[Tags.Dark] = 0
-        orb.buffs.append(SpiritBombBuff(self, self.cur_charges))
+        orb.buffs.append(SpiritBombBuff(self, self.cur_charges + 1))
 
     def cast(self, x, y):
         yield from OrbSpell.cast(self, x, y)
@@ -7796,16 +7800,16 @@ class EmpyrealAscensionSpell(Spell):
     def on_init(self):
         self.name = "Empyreal Ascension"
         self.asset = ["MissingSynergies", "Icons", "empyreal_ascension"]
-        self.tags = [Tags.Holy, Tags.Fire, Tags.Sorcery, Tags.Enchantment]
+        self.tags = [Tags.Holy, Tags.Fire, Tags.Sorcery, Tags.Enchantment, Tags.Translocation]
         self.level = 7
-        self.max_charges = 1
+        self.max_charges = 2
         self.range = RANGE_GLOBAL
         self.requires_los = False
         self.can_target_self = True
         self.must_target_walkable = True
         self.radius = 6
         self.damage = 33
-        self.duration = 5
+        self.duration = 10
 
         self.upgrades["radius"] = (4, 3)
         self.upgrades["storm"] = (1, 6, "Storm Herald", "Empyreal Form also grants [100_ice:ice] and [100_lightning:lightning] resistance.\nThe explosion of this spell has a chance to create thunderstorm and blizzard clouds, starting at 100% near you and decreasing to 0% at the edges of the radius.")

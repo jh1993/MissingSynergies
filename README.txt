@@ -126,14 +126,14 @@ Level 6:
 
 Level 7:
 + Copper Furnace (Chaos/Metallic/Conjuration)
-+ Empyreal Ascension (Fire/Holy/Sorcery/Enchantment)
++ Empyreal Ascension (Fire/Holy/Sorcery/Enchantment/Translocation)
 + Eschaton (Holy/Chaos/Conjuration)
 + Mass Enchantment (Holy/Dark/Enchantment)
 + Might of the Overlord (Enchantment)
 + Omnistrike (Chaos/Translocation/Sorcery)
 + Primordial Rot (Dark/Nature/Conjuration)
 + Ruinous Impact (Dark/Chaos/Sorcery)
-+ Spirit Bomb (Holy/Orb/Dragon/Conjuration)
++ Spirit Bomb (Holy/Orb/Dragon/Conjuration/Sorcery)
 + Word of Detonation (Fire/Arcane/Word)
 + Word of Rust (Word/Metallic)
 + Word of Upheaval (Nature/Word)
