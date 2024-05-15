@@ -7802,14 +7802,14 @@ class EmpyrealAscensionSpell(Spell):
         self.asset = ["MissingSynergies", "Icons", "empyreal_ascension"]
         self.tags = [Tags.Holy, Tags.Fire, Tags.Sorcery, Tags.Enchantment, Tags.Translocation]
         self.level = 7
-        self.max_charges = 2
+        self.max_charges = 1
         self.range = RANGE_GLOBAL
         self.requires_los = False
         self.can_target_self = True
         self.must_target_walkable = True
         self.radius = 6
         self.damage = 33
-        self.duration = 10
+        self.duration = 7
 
         self.upgrades["radius"] = (4, 3)
         self.upgrades["storm"] = (1, 6, "Storm Herald", "Empyreal Form also grants [100_ice:ice] and [100_lightning:lightning] resistance.\nThe explosion of this spell has a chance to create thunderstorm and blizzard clouds, starting at 100% near you and decreasing to 0% at the edges of the radius.")
