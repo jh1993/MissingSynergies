@@ -7,9 +7,9 @@ from Monsters import *
 from Variants import *
 from Shrines import *
 from Consumables import *
-import random, math, os, sys
+import random, math, os
 
-from mods.BugfixesExtended.BugfixesExtended import RemoveBuffOnPreAdvance, MinionBuffAura, drain_max_hp_kill, increase_cooldown, HydraBeam, FreezeDependentBuff, EventOnShieldDamaged, EventOnHealed
+from mods.BugfixesExtended.BugfixesExtended import RemoveBuffOnPreAdvance, MinionBuffAura, drain_max_hp_kill, increase_cooldown, HydraBeam, FreezeDependentBuff, EventOnShieldDamaged, EventOnHealed, DamageNegation
 import mods.Bugfixes.Bugfixes
 
 try:
@@ -3212,30 +3212,34 @@ class OrbSubstitution(Upgrade):
                 "Damage negation activates before [SH:shields].").format(**self.fmt_dict())
 
     def on_pre_damaged(self, evt):
+
         if evt.damage <= 0:
             return
+        
         penetration = evt.penetration if hasattr(evt, "penetration") else 0
+        ignore_sh = evt.ignore_sh if hasattr(evt, "ignore_sh") else False
         if self.owner.resists[evt.damage_type] - penetration >= 100:
             return
+        
         orbs = [unit for unit in self.owner.level.units if not are_hostile(self.owner, unit) and unit.has_buff(OrbBuff)]
         if not orbs:
             return
         random.shuffle(orbs)
+        
         for orb in orbs:
+
             if random.random() >= (100 - orb.resists[evt.damage_type] + penetration)/100:
                 continue
-            if self.owner.level.tiles[orb.x][orb.y].can_walk:
-                for p in self.owner.level.get_points_in_ball(orb.x, orb.y, 1):
-                    self.owner.level.show_effect(p.x, p.y, Tags.Translocation)
-                for p in self.owner.level.get_points_in_ball(self.owner.x, self.owner.y, 1):
-                    self.owner.level.show_effect(p.x, p.y, Tags.Translocation)
-                self.owner.level.act_move(self.owner, orb.x, orb.y, teleport=True, force_swap=True)
-            orb.deal_damage(evt.damage, evt.damage_type, evt.source, penetration=penetration)
-            if hasattr(self.owner, "negates"):
-                self.owner.negates.append(evt)
-            else:
-                self.owner.negates = [evt]
-            return
+            
+            def pay_costs():
+                if self.owner.level.tiles[orb.x][orb.y].can_walk:
+                    for p in self.owner.level.get_points_in_ball(orb.x, orb.y, 1):
+                        self.owner.level.show_effect(p.x, p.y, Tags.Translocation)
+                    for p in self.owner.level.get_points_in_ball(self.owner.x, self.owner.y, 1):
+                        self.owner.level.show_effect(p.x, p.y, Tags.Translocation)
+                    self.owner.level.act_move(self.owner, orb.x, orb.y, teleport=True, force_swap=True)
+                orb.deal_damage(evt.damage, evt.damage_type, evt.source, penetration=penetration, ignore_sh=ignore_sh)
+            DamageNegation(evt, pay_costs=pay_costs).add_to_unit(self.owner)
 
 class LocusOfEnergy(Upgrade):
 
@@ -13728,10 +13732,7 @@ class ScratchProofing(Upgrade):
             chance *= 2
         if random.random() >= chance:
             return
-        if hasattr(evt.unit, "negates"):
-            evt.unit.negates.append(evt)
-        else:
-            evt.unit.negates = [evt]
+        DamageNegation(evt).add_to_unit(evt.unit)
 
 class OffensiveShieldsBuff(Buff):
 
@@ -13744,16 +13745,16 @@ class OffensiveShieldsBuff(Buff):
         self.owner_triggers[EventOnSpellCast] = self.on_spell_cast
     
     def on_pre_damaged(self, evt):
+
         if evt.damage <= 0 or self.owner.shields <= 0:
             return
         if hasattr(evt, "ignore_sh") and evt.ignore_sh:
             return
-        if hasattr(self.owner, "negates"):
-            self.owner.negates.append(evt)
-        else:
-            self.owner.negates = [evt]
-        penetration = evt.penetration if hasattr(evt, "penetration") else 0
-        self.owner.deal_damage(evt.damage, evt.damage_type, evt.source, penetration=penetration, ignore_sh=True)
+        
+        def pay_costs():
+            penetration = evt.penetration if hasattr(evt, "penetration") else 0
+            self.owner.deal_damage(evt.damage, evt.damage_type, evt.source, penetration=penetration, ignore_sh=True)
+        DamageNegation(evt, pay_costs=pay_costs, log=False).add_to_unit(self.owner)
 
     def on_spell_cast(self, evt):
         if self.owner.shields <= 0:
