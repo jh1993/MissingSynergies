@@ -9,7 +9,7 @@ from Shrines import *
 from Consumables import *
 import random, math, os
 
-from mods.BugfixesExtended.BugfixesExtended import RemoveBuffOnPreAdvance, MinionBuffAura, drain_max_hp_kill, increase_cooldown, HydraBeam, FreezeDependentBuff, EventOnShieldDamaged, EventOnHealed, DamageNegation
+from mods.BugfixesExtended.BugfixesExtended import RemoveBuffOnPreAdvance, MinionBuffAura, drain_max_hp_kill, increase_cooldown, HydraBeam, FreezeDependentBuff, EventOnShieldDamaged, EventOnHealed, DamageNegation, ChannelDependentBuff
 import mods.Bugfixes.Bugfixes
 
 try:
@@ -2957,107 +2957,107 @@ class GoldenTricksterSpell(Spell):
 
         self.summon(unit, target=Point(x, y))
 
-class SpiritBombBuff(Buff):
-
-    def __init__(self, spell, charges):
-        Buff.__init__(self)
-        self.spell = spell
-        self.charges = charges
-        self.base_damage = spell.get_stat("minion_damage") + spell.get_stat("damage") + spell.get_stat("breath_damage")
-        self.base_radius = spell.get_stat("radius")
-        self.base_hp = spell.minion_health
-        self.timer = 0
-        self.warcry = spell.get_stat("warcry")
-        self.duration = spell.get_stat("duration", base=3)
-        self.on_applied = lambda owner: self.update_description()
-        self.owner_triggers[EventOnDeath] = self.on_death
-        self.color = Tags.Holy.color
-    
-    def on_death(self, evt):
-        self.owner.level.queue_spell(self.boom())
-
-    def get_bonus(self):
-        return self.charges + self.timer + self.owner.max_hp//10
-    
-    def update_description(self):
-        bonus = self.get_bonus()
-        self.description = "On death, explodes to deal %i holy and physical damage to all enemies in a %i tile burst and destroy all walls." % (self.base_damage + 5*bonus, self.base_radius + bonus)
-        if self.warcry:
-            self.description += "\nEach turn, the summoner of this unit has a 50%% chance of stunning or berserking a random enemy in line of sight for %i turns." % self.duration
-    
-    def on_advance(self):
-        self.timer += 1
-        self.update_description()
-        if self.warcry and random.random() < 0.5:
-            enemies = [unit for unit in self.owner.level.get_units_in_los(self.spell.caster) if are_hostile(self.spell.caster, unit)]
-            if enemies:
-                random.choice(enemies).apply_buff(random.choice([BerserkBuff, Stun])(), self.duration)
-    
-    def boom(self):
-        bonus = self.get_bonus()
-        damage = self.base_damage + 5*bonus
-        radius = self.base_radius + bonus
-        self.timer = 0
-        tags = [Tags.Holy, Tags.Physical]
-        for stage in Burst(self.owner.level, Point(self.owner.x, self.owner.y), radius, ignore_walls=True):
-            for point in stage:
-                unit = self.owner.level.get_unit_at(point.x, point.y)
-                if unit and are_hostile(unit, self.spell.caster):
-                    for tag in tags:
-                        unit.deal_damage(damage, tag, self.spell)
-                else:
-                    for tag in tags:
-                        self.owner.level.show_effect(point.x, point.y, tag)
-                    if self.owner.level.tiles[point.x][point.y].is_wall():
-                        self.owner.level.make_floor(point.x, point.y)
-            yield
-
-class SpiritBombSpell(OrbSpell):
+class OrbOfZealotrySpell(OrbSpell):
 
     def on_init(self):
-        self.name = "Spirit Bomb"
-        self.asset = ["MissingSynergies", "Icons", "spirit_bomb"]
-        self.tags = [Tags.Holy, Tags.Orb, Tags.Dragon, Tags.Conjuration, Tags.Sorcery]
-        self.level = 7
-        self.max_charges = 1
+        self.name = "Orb of Zealotry"
+        self.asset = ["MissingSynergies", "Icons", "orb_of_zealotry"]
+        self.tags = [Tags.Holy, Tags.Orb, Tags.Conjuration]
+        self.level = 3
+        self.max_charges = 4
         self.range = 9
-        self.melt_walls = True
 
         self.minion_health = 40
-        self.minion_damage = 25
-        self.radius = 5
+        self.minion_damage = 5
+        self.duration = 5
+        self.radius = 8
 
-        self.upgrades["minion_damage"] = (30, 3)
-        self.upgrades["radius"] = (3, 3)
-        self.upgrades["warcry"] = (1, 2, "War Cry", "Each turn, the spirit bomb has a 50% chance of inflicting [stun] or [berserk] for [{duration}_turns:duration] on a random enemy in your line of sight.")
-    
-    def fmt_dict(self):
-        stats = Spell.fmt_dict(self)
-        stats["total_damage"] = self.get_stat("minion_damage") + self.get_stat("damage") + self.get_stat("breath_damage")
-        stats["duration"] = self.get_stat("duration", base=3)
-        return stats
+        self.upgrades["duration"] = (5, 3)
+        self.upgrades["radius"] = (4, 4)
+        self.upgrades["combo"] = (1, 4, "Combo Attack", "If a minion has its own melee attack, it will now immediately use that attack once each time it uses the melee attack granted by the orb.")
+        self.upgrades["templar"] = (1, 6, "Knights Templar", "Each turn, each orb has a chance to summon a judgement knight on a random tile in its radius, equal to 100% divided by 1 plus the number of judgement knights in its radius.\nThe judgment knight has a duration limit equal to the orb's remaining duration.")
 
     def get_description(self):
-        return ("Summon an orb of extremely concentrated energy next to the caster, consuming every remaining charge of this spell, each time counting as casting the spell once.\n"
-                "When the orb dies, it deals [{total_damage}_holy:holy] and [{total_damage}_physical:physical] damage to all enemies and destroys all walls in a [{radius}_tile:radius] burst, gaining +1 radius and +5 damage for every turn it had existed, every charge consumed, and every 10 max HP it had. It also benefits from bonuses to [damage] and [breath_damage:breath_damage].\n"
+        return ("Summon an orb of blind faith next to the caster.\n"
+                "Each turn, the orb [blinds:blind] all enemies in a [{radius}_tile:radius] radius around itself for [{duration}_turns:duration].\n"
+                "Each minion in the radius, other than [orb] minions, will also make a melee attack against a random adjacent enemy, dealing [{minion_damage}_physical:physical] damage plus 25% of the minion's max HP.\n"
                 "The orb has no will of its own, each turn it will float one tile towards the target.\n"
                 "The orb can be destroyed by dark damage.").format(**self.fmt_dict())
     
     def on_make_orb(self, orb):
-        orb.asset = ["MissingSynergies", "Units", "spirit_bomb"]
+        orb.asset = ["MissingSynergies", "Units", "orb_of_zealotry"]
         orb.resists[Tags.Dark] = 0
-        orb.buffs.append(SpiritBombBuff(self, self.cur_charges + 1))
-
-    def cast(self, x, y):
-        yield from OrbSpell.cast(self, x, y)
-        charges = self.cur_charges
-        self.cur_charges = 0
-        for _ in range(charges):
-            self.caster.level.event_manager.raise_event(EventOnSpellCast(self, self.caster, x, y), self.caster)
 
     def on_orb_collide(self, orb, next_point):
         orb.level.show_effect(next_point.x, next_point.y, Tags.Holy)
         yield
+
+    def on_orb_move(self, orb, next_point):
+
+        radius = self.get_stat("radius")
+        duration = self.get_stat("duration")
+        damage = self.get_stat("minion_damage")
+        combo = self.get_stat("combo")
+        units = self.caster.level.get_units_in_ball(next_point, radius)
+        random.shuffle(units)
+        effects_left = 7
+        knights = 1
+
+        for unit in units:
+            if unit is self.caster or unit.has_buff(OrbBuff):
+                continue
+            if are_hostile(unit, self.caster):
+                unit.apply_buff(BlindBuff(), duration)
+            else:
+                if unit.source is self:
+                    knights += 1
+                melee = SimpleMeleeAttack(damage + unit.max_hp//4)
+                melee.caster = unit
+                melee.owner = unit
+                melee.name = "Zealous Strike"
+                target = melee.get_ai_target()
+                if not target:
+                    continue
+                self.caster.level.act_cast(unit, melee, target.x, target.y)
+                if not combo:
+                    continue
+                for spell in unit.spells:
+                    if not spell.melee or not spell.can_pay_costs():
+                        continue
+                    target = spell.get_ai_target()
+                    if not target:
+                        continue
+                    self.caster.level.act_cast(unit, spell, target.x, target.y)
+                    break
+            effects_left -= 1
+
+        # Show some graphical indication of this aura if it didnt hit much
+        points = self.caster.level.get_points_in_ball(next_point.x, next_point.y, radius)
+        points = [p for p in points if not self.caster.level.get_unit_at(p.x, p.y)]
+        random.shuffle(points)
+        for _ in range(effects_left):
+            if not points:
+                break
+            p = points.pop()
+            self.caster.level.show_effect(p.x, p.y, Tags.Holy, minor=True)
+        
+        if not self.get_stat("templar") or orb.turns_to_death <= 1 or random.random() >= 1/knights:
+            return
+        knight = Unit()
+        knight.name = "Judgement Knight"
+        knight.turns_to_death = orb.turns_to_death - 1
+        knight.max_hp = self.get_stat("minion_health", base=70)
+        knight.shields = 2
+        knight.tags = [Tags.Holy, Tags.Arcane, Tags.Living]
+        knight.resists[Tags.Holy] = 100
+        knight.resists[Tags.Arcane] = 100
+        knight.resists[Tags.Physical] = 50
+        melee = SimpleMeleeAttack(damage=self.get_stat("minion_damage", base=6), damage_type=Tags.Holy)
+        melee.name = "Smite"
+        charge = LeapAttack(damage=self.get_stat("minion_damage", base=10), damage_type=Tags.Arcane, range=self.get_stat("minion_range", base=6), is_ghost=True)
+        charge.name = "Aether Charge"
+        knight.spells = [melee, charge]
+        self.summon(knight, target=orb, radius=radius, sort_dist=False)
 
 class OrbOfMirrorsSpell(OrbSpell):
 
@@ -4759,25 +4759,13 @@ class LivingLabyrinthSpell(Spell):
         unit.buffs = [LivingLabyrinthBuff(self)]
         self.summon(unit, target=Point(x, y))
 
-class AgonizingPowerBuff(Buff):
+class AgonizingPowerBuff(ChannelDependentBuff):
 
     def on_init(self):
+        ChannelDependentBuff.on_init(self)
         self.name = "Agonizing Power"
         self.color = Tags.Dark.color
         self.spell_bonuses[AgonizingStormSpell]["radius"] = 1
-        self.stack_type = STACK_INTENSITY
-        self.passed = True
-        self.owner_triggers[EventOnPass] = self.on_pass
-
-    def on_pre_advance(self):
-        self.passed = False
-
-    def on_advance(self):
-        if not self.passed:
-            self.owner.remove_buff(self)
-
-    def on_pass(self, evt):
-        self.passed = True
 
 class AgonizingStormSpell(Spell):
 
@@ -13309,12 +13297,13 @@ class OverchannelSpell(Spell):
         repeats = self.get_stat("repeats")
         target = Point(x, y)
         for buff in list(self.caster.buffs):
-            if not isinstance(buff, ChannelBuff):
-                continue
-            buff.spell_target = target
-            buff.passed = True
-            for _ in range(repeats):
-                self.caster.level.queue_spell(buff.spell(buff.spell_target.x, buff.spell_target.y, channel_cast=True))
+            if isinstance(buff, ChannelDependentBuff):
+                buff.passed = True
+            if isinstance(buff, ChannelBuff):
+                buff.spell_target = target
+                buff.passed = True
+                for _ in range(repeats):
+                    self.caster.level.queue_spell(buff.spell(buff.spell_target.x, buff.spell_target.y, channel_cast=True))
 
 class ChannelFinisher(Upgrade):
 
@@ -14079,6 +14068,107 @@ class DragonChorusSpell(Spell):
                             breath.per_square_effect(p.x, p.y)
             yield
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, EschatonSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, SpiritBombSpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, TwilightWandererSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell, CloudbenderSpell, GuruMeditationSpell, GazerFormSpell, MelodramaSpell, TideOfGenesisSpell, HolyHandGrenadeSpell, DragonChorusSpell])
+class SpiritEnergyBuff(ChannelDependentBuff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        ChannelDependentBuff.__init__(self)
+
+    def on_init(self):
+        ChannelDependentBuff.on_init(self)
+        self.name = "Spirit Energy"
+        self.color = Tags.Holy.color
+        self.spell_bonuses[SpiritBombSpell]["radius"] = 1
+        self.spell_bonuses[SpiritBombSpell]["damage"] = 5
+
+class SpiritBombBuff(ChannelBuff):
+
+    def on_advance(self):
+        if not self.passed:
+            self.owner.level.queue_spell(self.spell.__self__.boom(self.spell_target))
+        ChannelBuff.on_advance(self)
+
+class SpiritBombSpell(Spell):
+
+    def on_init(self):
+        self.name = "Spirit Bomb"
+        self.asset = ["MissingSynergies", "Icons", "spirit_bomb"]
+        self.level = 7
+        self.tags = [Tags.Holy, Tags.Dragon, Tags.Orb, Tags.Sorcery]
+        self.max_charges = 1
+        self.range = RANGE_GLOBAL
+        self.requires_los = False
+        self.can_target_self = True
+
+        self.radius = 5
+        self.damage = 50
+        self.stacks_per_turn = 1
+
+        self.upgrades["stacks_per_turn"] = (1, 5)
+        self.upgrades["warcry"] = (1, 5, "War Cry", "While channeling, each turn each enemy in line of sight has a 50% chance to be [stunned] or go [berserk] for [1_turn:duration].")
+        self.upgrades["instinct"] = (1, 6, "Ultra Instinct", "While channeling, each turn you automatically cast another random [holy] [sorcery] spell at a random valid enemy target, consuming charges as usual.")
+
+    def get_description(self):
+        return ("Consume all charges to gain a spirit energy stack for every charge consumed and every 10 bonus to [minion_health:minion_health] this spell has, then begin channeling to gain [{stacks_per_turn}:holy] stacks per turn. Counts as casting the spell an extra time per charge consumed.\n"
+                "When channeling stops, deal [{total_damage}_holy:holy] and [{total_damage}_physical:physical] damage to all enemies and destroy all walls in a [{radius}_tile:radius] burst around the target point. Each stack of spirit energy increases radius by 1 and damage by 5, and is lost before the start of your next turn.\n"
+                "The base damage also benefits from bonuses to [minion_damage:minion_damage] and [breath_damage:breath_damage].").format(**self.fmt_dict())
+
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["total_damage"] = self.get_stat("damage") + self.get_stat("minion_damage") + self.get_stat("breath_damage")
+        return stats
+
+    def get_impacted_tiles(self, x, y):
+            return [p for stage in Burst(self.caster.level, Point(x, y), self.get_stat('radius'), ignore_walls=True) for p in stage]
+
+    def boom(self, target):
+        damage = self.get_stat("damage") + self.get_stat("minion_damage") + self.get_stat("breath_damage")
+        for stage in Burst(self.caster.level, target, self.get_stat("radius"), ignore_walls=True):
+            for p in stage:
+                unit = self.caster.level.get_unit_at(p.x, p.y)
+                if not unit or not are_hostile(unit, self.caster):
+                    self.caster.level.show_effect(p.x, p.y, Tags.Holy)
+                    self.caster.level.show_effect(p.x, p.y, Tags.Physical)
+                else:
+                    unit.deal_damage(damage, Tags.Holy, self)
+                    unit.deal_damage(damage, Tags.Physical, self)
+                if self.caster.level.tiles[p.x][p.y].is_wall():
+                    self.caster.level.make_floor(p.x, p.y)
+            yield
+
+    def cast(self, x, y, channel_cast=False):
+
+        if not channel_cast:
+            charges = self.cur_charges
+            self.caster.apply_buff(SpiritBombBuff(self.cast, Point(x, y)))
+            for _ in range(self.get_stat("minion_health")//10 + charges + 1):
+                self.caster.apply_buff(SpiritEnergyBuff(self))
+            self.cur_charges = 0
+            for _ in range(charges):
+                self.caster.level.event_manager.raise_event(EventOnSpellCast(self, self.caster, x, y), self.caster)
+            return
+        
+        for _ in range(self.get_stat("stacks_per_turn")):
+            self.caster.apply_buff(SpiritEnergyBuff(self))
+        
+        if self.get_stat("warcry"):
+            for unit in self.caster.level.get_units_in_los(self.caster):
+                if not are_hostile(unit, self.caster) or random.random() >= 0.5:
+                    continue
+                unit.apply_buff(random.choice([Stun, BerserkBuff])(), 1)
+        
+        if self.get_stat("instinct"):
+            spells = [spell for spell in self.caster.spells if Tags.Sorcery in spell.tags and Tags.Holy in spell.tags and spell is not self and spell.can_pay_costs()]
+            random.shuffle(spells)
+            for spell in spells:
+                target = spell.get_ai_target()
+                if not target:
+                    continue
+                self.caster.level.act_cast(self.caster, spell, target.x, target.y)
+                break
+        
+        yield
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, EschatonSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, OrbOfZealotrySpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, TwilightWandererSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell, CloudbenderSpell, GuruMeditationSpell, GazerFormSpell, MelodramaSpell, TideOfGenesisSpell, HolyHandGrenadeSpell, DragonChorusSpell, SpiritBombSpell])
 
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture, BatEscape, EyeBleach, AntimatterInfusion, WarpStrike, ThornShot, TimeSkip, BlindSavant, ScratchProofing, OffensiveShields])
