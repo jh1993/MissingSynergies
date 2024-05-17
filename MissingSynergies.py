@@ -14122,6 +14122,7 @@ class SpiritBombSpell(Spell):
             return [p for stage in Burst(self.caster.level, Point(x, y), self.get_stat('radius'), ignore_walls=True) for p in stage]
 
     def boom(self, target):
+        self.caster.level.show_effect(0, 0, Tags.Sound_Effect, 'death_boss')
         damage = self.get_stat("damage") + self.get_stat("minion_damage") + self.get_stat("breath_damage")
         for stage in Burst(self.caster.level, target, self.get_stat("radius"), ignore_walls=True):
             for p in stage:
