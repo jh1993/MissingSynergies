@@ -14170,6 +14170,167 @@ class SpiritBombSpell(Spell):
         
         yield
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, EschatonSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, OrbOfZealotrySpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, TwilightWandererSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell, CloudbenderSpell, GuruMeditationSpell, GazerFormSpell, MelodramaSpell, TideOfGenesisSpell, HolyHandGrenadeSpell, DragonChorusSpell, SpiritBombSpell])
+class PreservedThresholdBuff(Buff):
+
+    def on_init(self):
+        self.name = "Preserved Threshold"
+        self.color = Tags.Conjuration.color
+        self.stack_type = STACK_DURATION
+        self.owner_triggers[EventOnUnitAdded] = self.on_unit_added
+    
+    def on_unit_added(self, evt):
+        self.owner.remove_buff(self)
+
+class AltarOfBanishmentBuff(Buff):
+
+    def __init__(self, threshold):
+        self.threshold = threshold
+        Buff.__init__(self)
+    
+    def on_init(self):
+        self.color = Tags.Conjuration.color
+        self.global_triggers[EventOnDeath] = self.on_death
+    
+    def get_tooltip(self):
+        return "Each turn, sacrifices all minions in a %i tile radius and instantly kills the highest current HP enemy with no more than %i HP." % (self.owner.source.get_stat("radius"), self.threshold)
+    
+    def on_death(self, evt):
+        if evt.unit is not self.owner:
+            self.threshold += evt.unit.shields
+            self.threshold += math.ceil(evt.unit.max_hp/10)
+        elif self.owner.source.get_stat("preserve") and self.threshold:
+            self.owner.source.caster.apply_buff(PreservedThresholdBuff(), self.threshold)
+    
+    def on_advance(self):
+        radius = self.owner.source.get_stat("radius")
+        cheat = self.owner.source.get_stat("cheat")
+        
+        for unit in self.owner.level.get_units_in_ball(self.owner, radius):
+            if are_hostile(unit, self.owner.source.caster) or unit.is_player_controlled or unit is self.owner:
+                continue
+            if cheat and not unit.has_buff(SplittingBuff) and random.random() < 0.5:
+                buff = unit.get_buff(ReincarnationBuff)
+                if buff:
+                    buff.lives += 1
+                else:
+                    buff = ReincarnationBuff(1)
+                    buff.buff_type = BUFF_TYPE_PASSIVE
+                    unit.apply_buff(buff)
+            self.owner.level.show_effect(unit.x, unit.y, Tags.Translocation)
+            unit.kill()
+        
+        if self.owner.source.get_stat("unstable"):
+            unit = Unit()
+            unit.name = "Unstable Shade"
+            unit.asset = ["MissingSynergies", "Units", "unstable_shade"]
+            unit.max_hp = self.owner.max_hp
+            unit.tags = [Tags.Arcane, Tags.Dark, Tags.Undead]
+            unit.resists[Tags.Arcane] = 100
+            unit.flying = True
+            unit.stationary = True
+            unit.turns_to_death = 1
+            enemies = [u for u in self.owner.level.get_units_in_ball(self.owner, radius) if are_hostile(self.owner.source.caster, u)]
+            if enemies:
+                random.shuffle(enemies)
+                target = max(enemies, key=lambda u: u.cur_hp)
+            else:
+                target = self.owner
+            self.owner.source.summon(unit, target=target, radius=radius)
+        
+        enemies = [u for u in self.owner.level.get_units_in_ball(self.owner, radius) if are_hostile(self.owner.source.caster, u) and u.cur_hp <= self.threshold]
+        if not enemies:
+            return
+        random.shuffle(enemies)
+        target = max(enemies, key=lambda u: u.cur_hp)
+        self.owner.level.show_effect(target.x, target.y, Tags.Translocation)
+        target.kill()
+
+class BanishingBolt(SimpleRangedAttack):
+
+    def __init__(self, passive):
+        self.passive = passive
+        SimpleRangedAttack.__init__(self, "Banishing Bolt", damage_type=Tags.Arcane)
+        self.requires_los = False
+        self.description = "Ignores line of sight. Range is equal to caster's effect radius, and damage is equal to HP threshold."
+    
+    def get_stat(self, attr, base=None):
+        if attr == "damage":
+            return self.passive.threshold
+        elif attr == "range":
+            return self.caster.source.get_stat("radius")
+        return Spell.get_stat(self, attr, base)
+
+class AltarOfBanishmentSpell(Spell):
+
+    def on_init(self):
+        self.name = "Altar of Banishment"
+        self.asset = ["MissingSynergies", "Icons", "altar_of_banishment"]
+        self.tags = [Tags.Dark, Tags.Arcane, Tags.Conjuration]
+        self.level = 4
+        self.max_charges = 8
+        self.range = RANGE_GLOBAL
+        self.requires_los = False
+        self.must_target_walkable = True
+
+        self.minion_health = 50
+        self.radius = 8
+
+        self.upgrades["radius"] = (4, 4)
+        self.upgrades["preserve"] = (1, 2, "Preserve Threshold", "If the altar is destroyed, you now gain preserved threshold with duration equal to the altar's HP threshold.\nWhen you summon the altar again, the preserved threshold is consumed to increase the altar's starting HP threshold to that amount.\nPreserved threshold does not carry over between realms.")
+        self.upgrades["cheat"] = (1, 5, "Cheat Sacrifice", "Before each minion is sacrificed, it now has a 50% chance to gain 1 reincarnation.\nThis does not work on minions that split into smaller versions of themselves on death.")
+        self.upgrades["unstable"] = (1, 3, "Unstable Veil", "Each turn, after sacrificing minions, the altar now summons an [arcane] [undead] unstable shade with the same max HP as itself.\nThe shade is summoned next to the enemy with the highest current HP in the altar's radius, or the altar itself if no enemies are in its radius.\nThe shade dies after a fixed [1_turn:minion_duration], if not manually sacrificed by the altar.")
+        self.upgrades["bolt"] = (1, 4, "Banishing Bolt", "The altar gains an attack that ignores line of sight, with range equal to its radius.\nThe attack deals [arcane] damage equal to its HP threshold.")
+
+    def get_description(self):
+        return ("Summon the Altar of Banishment, a stationary [arcane] [construct] minion with [{minion_health}_HP:minion_health]. If the altar already exists, instead fully heal it and teleport it to the target point.\n"
+                "The altar's HP threshold starts at 0. Each turn, it sacrifices all of your other minions in a [{radius}_tile:radius] radius, increasing its HP threshold by each minion's [SH:shields] plus 10% of its max HP, rounded up.\n"
+                "Then the altar instantly kills the highest current HP enemy in its radius with current HP no more than its HP threshold.").format(**self.fmt_dict())
+
+    def can_cast(self, x, y):
+        if not Spell.can_cast(self, x, y):
+            return False
+        unit = self.caster.level.get_unit_at(x, y)
+        if unit:
+            return unit.source is self
+        return True
+
+    def cast_instant(self, x, y):
+
+        existing = None
+        for unit in self.caster.level.units:
+            if unit.source is self:
+                existing = unit
+                break
+        if existing:
+            existing.deal_damage(-existing.max_hp, Tags.Heal, self)
+            if self.caster.level.can_move(existing, x, y, teleport=True):
+                self.caster.level.show_effect(existing.x, existing.y, Tags.Translocation)
+                self.caster.level.act_move(existing, x, y, teleport=True)
+                self.caster.level.show_effect(existing.x, existing.y, Tags.Translocation)
+            return
+        
+        threshold = 0
+        preserve = self.caster.get_buff(PreservedThresholdBuff)
+        if preserve:
+            threshold += preserve.turns_left
+        
+        unit = Unit()
+        unit.unique = True
+        unit.name = "Altar of Banishment"
+        unit.asset = ["MissingSynergies", "Units", "altar_of_banishment"]
+        unit.max_hp = self.get_stat("minion_health")
+        unit.tags = [Tags.Arcane, Tags.Dark, Tags.Construct]
+        unit.resists[Tags.Dark] = 100
+        unit.resists[Tags.Arcane] = 100
+        for tag in [Tags.Fire, Tags.Lightning, Tags.Physical]:
+            unit.resists[tag] = 50
+        unit.stationary = True
+        buff = AltarOfBanishmentBuff(threshold)
+        unit.buffs = [buff]
+        if self.get_stat("bolt"):
+            unit.spells = [BanishingBolt(buff)]
+        self.summon(unit, Point(x, y))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, EschatonSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, OrbOfZealotrySpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, TwilightWandererSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell, CloudbenderSpell, GuruMeditationSpell, GazerFormSpell, MelodramaSpell, TideOfGenesisSpell, HolyHandGrenadeSpell, DragonChorusSpell, SpiritBombSpell, AltarOfBanishmentSpell])
 
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture, BatEscape, EyeBleach, AntimatterInfusion, WarpStrike, ThornShot, TimeSkip, BlindSavant, ScratchProofing, OffensiveShields])

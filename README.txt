@@ -47,6 +47,7 @@ Level 3:
 Level 4:
 + Aegis Overload (Metallic/Chaos/Sorcery)
 + Afterlife Echoes (Holy/Dark/Enchantment)
++ Altar of Banishment (Arcane/Dark/Conjuration)
 + Ashen Avatar (Fire/Dark/Nature/Enchantment/Conjuration)
 + Blade Rush (Metallic/Translocation/Sorcery)
 + Brimstone Cluster (Fire/Dark/Nature/Enchantment)
