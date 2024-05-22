@@ -4810,16 +4810,18 @@ class AgonizingStormSpell(Spell):
             if random.random() < 0.5:
                 self.caster.deal_damage(1, random.choice([Tags.Dark, Tags.Lightning]), self)
             effects_left += 1
-            stun = unit.get_buff(Stun)
-            berserk = unit.get_buff(BerserkBuff)
+            buffs = [b for b in unit.buffs if isinstance(b, Stun) and b.buff_type == BUFF_TYPE_CURSE]
+            stun = buffs[0] if buffs else None
+            buffs = [b for b in unit.buffs if isinstance(b, BerserkBuff) and b.buff_type == BUFF_TYPE_CURSE]
+            berserk = buffs[0] if buffs else None
             if not stun and not berserk:
                 debuff_type = random.choice([Stun, BerserkBuff])
                 unit.apply_buff(debuff_type(), duration)
                 continue
-            if stun and stun.buff_type == BUFF_TYPE_CURSE:
+            if stun:
                 unit.remove_buff(stun)
                 unit.deal_damage(damage + stun.turns_left, Tags.Lightning, self, penetration=penetration)
-            if berserk and berserk.buff_type == BUFF_TYPE_CURSE:
+            if berserk:
                 unit.remove_buff(berserk)
                 unit.deal_damage(damage + berserk.turns_left, Tags.Dark, self, penetration=penetration)
 
