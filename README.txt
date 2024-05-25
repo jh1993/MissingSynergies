@@ -156,6 +156,7 @@ Level 4:
 + Eye Bleach (Holy)
 + Flesh Loan (Dark/Nature)
 + Fulgurite Alchemy (Arcane/Lightning)
++ Mage Glasses (Eye)
 + Nuclear Winter (Lightning/Ice/Nature)
 + Offensive Shields (Arcane)
 + Orb Ponderance (Orb)
