@@ -136,6 +136,7 @@ Level 7:
 + Primordial Rot (Dark/Nature/Conjuration)
 + Ruinous Impact (Dark/Chaos/Sorcery)
 + Spirit Bomb (Holy/Orb/Dragon/Sorcery)
++ Tera Annihilate (Chaos/Sorcery)
 + Word of Detonation (Fire/Arcane/Word)
 + Word of Rust (Word/Metallic)
 + Word of Upheaval (Nature/Word)

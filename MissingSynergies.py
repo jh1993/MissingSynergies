@@ -8617,11 +8617,6 @@ class ElectricNetSpell(Spell):
         yield
 
 class ReflexArcSpell(Spell):
-
-    # .upgrade defaults to none to not crash with unmodded Chimera Familiar.
-    def __init__(self, upgrade=None):
-        self.upgrade = upgrade
-        Spell.__init__(self)
     
     def on_init(self):
         self.name = "Reflex Arc"
@@ -8631,15 +8626,6 @@ class ReflexArcSpell(Spell):
         self.duration = 1
         self.can_target_self = True
         self.tags = [Tags.Nature, Tags.Lightning, Tags.Sorcery]
-    
-    def get_stat(self, attr, base=None):
-        if self.upgrade:
-            return self.upgrade.get_stat(attr, base)
-        elif self.statholder:
-            upgrade = self.statholder.get_buff(ReflexArc)
-            if upgrade:
-                return upgrade.get_stat(attr, base)
-        return Spell.get_stat(attr, base)
 
     def cast(self, x, y):
         for p in Bolt(self.caster.level, self.caster, Point(x, y)):
@@ -8654,6 +8640,11 @@ class ReflexArcSpell(Spell):
         unit.deal_damage(damage, Tags.Lightning, self)
         unit.deal_damage(damage, Tags.Poison, self)
 
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["poison_duration"] = 10*self.get_stat("duration")
+        return stats
+
 class ReflexArc(Upgrade):
 
     def on_init(self):
@@ -8661,20 +8652,17 @@ class ReflexArc(Upgrade):
         self.asset = ["MissingSynergies", "Icons", "reflex_arc"]
         self.tags = [Tags.Nature, Tags.Lightning, Tags.Sorcery]
         self.level = 5
-        self.damage = 6
-        self.range = 10
-        self.duration = 1
-        self.requires_los = True
+        self.spell = ReflexArcSpell()
     
+    def get_stat(self, attr, base=None):
+        return self.spell.get_stat(attr, base)
+
     def on_applied(self, owner):
-        self.spell = ReflexArcSpell(self)
         self.spell.owner = self.owner
         self.spell.caster = self.owner
 
     def fmt_dict(self):
-        stats = Upgrade.fmt_dict(self)
-        stats["poison_duration"] = 10*self.get_stat("duration")
-        return stats
+        return self.spell.fmt_dict()
 
     def get_description(self):
         return ("Each turn, apply [{poison_duration}_turns:duration] of [poison] and deal [{damage}_lightning:lightning] and [{damage}_poison:poison] damage to a random enemy in line of sight within [{range}_tiles:range] of yourself.\n"
@@ -14143,14 +14131,23 @@ class SpiritBombSpell(Spell):
 
         if not channel_cast:
             charges = self.cur_charges
+            bonus = self.get_stat("minion_health")//10 + charges + 1
             self.caster.apply_buff(SpiritBombBuff(self.cast, Point(x, y)))
-            for _ in range(self.get_stat("minion_health")//10 + charges + 1):
+            for _ in range(bonus):
                 self.caster.apply_buff(SpiritEnergyBuff(self))
             self.cur_charges = 0
             for _ in range(charges):
                 self.caster.level.event_manager.raise_event(EventOnSpellCast(self, self.caster, x, y), self.caster)
             return
         
+        stages = list(Burst(self.caster.level, self.caster, self.get_stat("radius"), ignore_walls=True))
+        stages.reverse()
+        for stage in stages:
+            for p in stage:
+                self.caster.level.show_effect(p.x, p.y, Tags.Holy, minor=True)
+                self.caster.level.show_effect(p.x, p.y, Tags.Physical, minor=True)
+            yield
+
         for _ in range(self.get_stat("stacks_per_turn")):
             self.caster.apply_buff(SpiritEnergyBuff(self))
         
@@ -14357,6 +14354,136 @@ class MageGlasses(Upgrade):
     def on_add_spell(self, spell):
         self.fix_spell(spell)
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, EschatonSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, OrbOfZealotrySpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, TwilightWandererSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell, CloudbenderSpell, GuruMeditationSpell, GazerFormSpell, MelodramaSpell, TideOfGenesisSpell, HolyHandGrenadeSpell, DragonChorusSpell, SpiritBombSpell, AltarOfBanishmentSpell])
+class FemtoAnnihilateSpell(Spell):
+
+    def on_init(self):
+        self.name = "Femto Annihilate"
+        self.tags = [Tags.Chaos, Tags.Sorcery]
+        self.level = 1
+        self.range = RANGE_GLOBAL
+        self.requires_los = False
+    
+    def can_cast(self, x, y):
+        if not self.caster.has_buff(ChaosOverflowBuff):
+            return False
+        return Spell.can_cast(self, x, y)
+
+    def cast_instant(self, x, y):
+        buff = self.caster.get_buff(ChaosOverflowBuff)
+        if not buff:
+            return
+        dtypes = [Tags.Fire, Tags.Lightning, Tags.Physical]
+        if buff.spell.get_stat("nightmare"):
+            dtypes.extend([Tags.Arcane, Tags.Dark])
+        for dtype in dtypes:
+            if random.random() >= 1/3:
+                continue
+            self.caster.level.deal_damage(x, y, 1, dtype, self)
+
+class ChaosOverflowBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+    
+    def on_init(self):
+        self.name = "Chaos Overflow"
+        self.color = Tags.Chaos.color
+        self.buff_type = BUFF_TYPE_NONE
+        self.tag_bonuses[Tags.Chaos]["damage"] = 12
+        self.tag_bonuses[Tags.Chaos]["minion_damage"] = 6
+        if self.spell.get_stat("robust"):
+            self.tag_bonuses[Tags.Chaos]["range"] = 2
+            self.tag_bonuses[Tags.Chaos]["minion_health"] = 10
+        self.femto = FemtoAnnihilateSpell() if self.spell.get_stat("femto") else None
+        self.owner_triggers[EventOnUnitAdded] = self.on_unit_added
+
+    def on_unit_added(self, evt):
+        self.owner.remove_buff(self)
+
+    def on_applied(self, owner):
+        if not self.femto:
+            return
+        self.femto.caster = self.owner
+        self.femto.owner = self.owner
+
+    def on_advance(self):
+        if not self.femto:
+            return
+        target = self.femto.get_ai_target()
+        if not target:
+            return
+        self.owner.level.act_cast(self.owner, self.femto, target.x, target.y)
+
+class TeraAnnihilateSpell(Spell):
+
+    def on_init(self):
+        self.name = "Tera Annihilate"
+        self.asset = ["MissingSynergies", "Icons", "tera_annihilate"]
+        self.tags = [Tags.Chaos, Tags.Sorcery]
+        self.level = 7
+        self.max_charges = 1
+        self.range = RANGE_GLOBAL
+        self.requires_los = False
+        self.damage = 600
+
+        self.upgrades["nightmare"] = (1, 2, "Nightmare Annihilation", "Tera Annihilate also deals [arcane] and [dark] damage.")
+        self.upgrades["robust"] = (1, 5, "Robust Chaos", "Chaos Overflow now grants [2_range:range] and [10_minion_health:minion_health] to all of your [chaos] spells and skills.")
+        self.upgrades["overkill"] = (1, 7, "Overkill", "Tera Annihilate now removes all of the target's [SH:shields] and buffs before dealing damage.\nIf the target has reincarnations, it now loses 1 reincarnation before taking damage.\nIf the target has no reincarnations, and survives the damage of Tera Annihilate, it is instantly killed.")
+        self.upgrades["femto"] = (1, 3, "Leaking Chaos", "When you have Chaos Overflow, each turn you now automatically cast Femto Annihilate on a random enemy.\nFemto Annihilate is a level 1 [chaos] [sorcery] spell that has a 1/3 chance each to deal [1_fire:fire], [1_lightning:lightning], and [1_physical:physical] damage to the target.\nIf you have the Nightmare Annihilation upgrade, [1_arcane:arcane] and [1_dark:dark] damage have the same chance to be dealt.\nThis damage is fixed, and cannot be increased using shrines, skills, or buffs.")
+
+    def can_cast(self, x, y):
+        if self.caster.has_buff(ChaosOverflowBuff):
+            return False
+        return Spell.can_cast(self, x, y)
+
+    def can_pay_costs(self):
+        if self.caster.has_buff(ChaosOverflowBuff):
+            return False
+        return Spell.can_pay_costs(self)
+
+    def get_description(self):
+        return ("Deal [{damage}_fire:fire], [{damage}_lightning:lightning], and [{damage}_physical:physical] damage to the target, then gain Chaos Overflow until you enter a new realm.\n"
+                "When you have Chaos Overflow, you cannot cast Tera Annihilate, but your [chaos] spells and skills gain [12_damage:damage] and [6_minion_damage:minion_damage].\n"
+                "Chaos Overflow is not a buff and cannot be dispelled.").format(**self.fmt_dict())
+
+    def cast_instant(self, x, y):
+
+        self.caster.level.show_effect(0, 0, Tags.Sound_Effect, 'death_boss')
+        dtypes = [Tags.Fire, Tags.Lightning, Tags.Physical]
+        if self.get_stat("nightmare"):
+            dtypes.extend([Tags.Arcane, Tags.Dark])
+        
+        unit = self.caster.level.get_unit_at(x, y)
+        if not unit:
+            for dtype in dtypes:
+                self.caster.level.show_effect(x, y, dtype)
+        else:
+
+            kill = False
+            if self.get_stat("overkill"):
+                unit.shields = 0
+                for buff in list(unit.buffs):
+                    if buff.buff_type != BUFF_TYPE_BLESS:
+                        continue
+                    unit.remove_buff(buff)
+                buff = unit.get_buff(ReincarnationBuff)
+                if buff:
+                    if buff.lives > 1:
+                        buff.lives -= 1
+                    else:
+                        unit.remove_buff(buff)
+                else:
+                    kill = True
+
+            damage = self.get_stat("damage")
+            for dtype in dtypes:
+                unit.deal_damage(damage, dtype, self)
+            if kill:
+                unit.kill()
+        
+        self.caster.apply_buff(ChaosOverflowBuff(self))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, EschatonSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, OrbOfZealotrySpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, TwilightWandererSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell, CloudbenderSpell, GuruMeditationSpell, GazerFormSpell, MelodramaSpell, TideOfGenesisSpell, HolyHandGrenadeSpell, DragonChorusSpell, SpiritBombSpell, AltarOfBanishmentSpell, TeraAnnihilateSpell])
 
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture, BatEscape, EyeBleach, AntimatterInfusion, WarpStrike, ThornShot, TimeSkip, BlindSavant, ScratchProofing, OffensiveShields, MageGlasses])
