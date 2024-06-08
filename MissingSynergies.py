@@ -1981,6 +1981,7 @@ class CopperFurnaceSpell(Spell):
         self.range = 5
         self.max_charges = 1
         self.must_target_walkable = True
+        self.can_target_self = True
 
         self.minion_health = 12
         self.minion_damage = 7
@@ -4315,7 +4316,8 @@ class GatheringStormSpell(Spell):
         self.tags = [Tags.Lightning, Tags.Ice, Tags.Nature, Tags.Conjuration]
         self.level = 5
         self.max_charges = 4
-        self.range = 8
+        self.range = RANGE_GLOBAL
+        self.requires_los = False
 
         self.radius = 4
         self.minion_range = 8
@@ -4331,7 +4333,7 @@ class GatheringStormSpell(Spell):
         unit = self.caster.level.get_unit_at(x, y)
         if unit:
             return unit.source is self
-        return True
+        return not self.caster.level.tiles[x][y].is_wall()
 
     def fmt_dict(self):
         stats = Spell.fmt_dict(self)
@@ -4691,7 +4693,7 @@ class LivingLabyrinthSpell(Spell):
         self.tags = [Tags.Arcane, Tags.Conjuration]
         self.level = 5
         self.max_charges = 3
-        self.range = 10
+        self.range = RANGE_GLOBAL
         self.must_target_walkable = True
         self.requires_los = False
 
@@ -5178,7 +5180,7 @@ class ChaosTheorySpell(Spell):
         unit = self.caster.level.get_unit_at(x, y)
         if unit:
             return unit.source is self
-        return True
+        return not self.caster.level.tiles[x][y].is_wall()
 
     def get_existing(self):
         for unit in self.caster.level.units:
@@ -5838,7 +5840,7 @@ class BoxOfWoeSpell(Spell):
         self.tags = [Tags.Dark, Tags.Lightning, Tags.Ice, Tags.Conjuration]
         self.level = 5
         self.max_charges = 3
-        self.range = 10
+        self.range = RANGE_GLOBAL
         self.requires_los = False
         self.must_target_walkable = True
 
@@ -6499,7 +6501,7 @@ class MutantCyclopsSpell(Spell):
         self.tags = [Tags.Arcane, Tags.Conjuration]
         self.level = 6
         self.max_charges = 3
-        self.range = 10
+        self.range = RANGE_GLOBAL
         self.requires_los = False
         self.must_target_walkable = True
 
@@ -8185,7 +8187,7 @@ class FleshSacrificeSpell(Spell):
         self.tags = [Tags.Dark, Tags.Conjuration]
         self.level = 5
         self.max_charges = 6
-        self.range = 10
+        self.range = RANGE_GLOBAL
         self.requires_los = False
         self.must_target_walkable = True
 
@@ -10896,7 +10898,6 @@ class BlueSpikeBeastSpell(Spell):
         self.tags = [Tags.Lightning, Tags.Nature, Tags.Orb, Tags.Conjuration]
         self.level = 5
         self.max_charges = 8
-        self.must_target_empty = True
         self.can_target_self = True
 
         self.minion_health = 35
@@ -10931,7 +10932,7 @@ class BlueSpikeBeastSpell(Spell):
         if existing:
             return x == self.caster.x and y == self.caster.y
         else:
-            return Spell.can_cast(self, x, y) and not self.caster.level.get_unit_at(x, y)
+            return Spell.can_cast(self, x, y) and not self.caster.level.get_unit_at(x, y) and not self.caster.level.tiles[x][y].is_wall()
 
     def cast_instant(self, x, y):
         existing = None
@@ -14629,7 +14630,7 @@ class NineTheFaerySpell(Spell):
         if existing:
             return x == self.caster.x and y == self.caster.y
         else:
-            return Spell.can_cast(self, x, y) and not self.caster.level.get_unit_at(x, y)
+            return Spell.can_cast(self, x, y) and not self.caster.level.get_unit_at(x, y) and not self.caster.level.tiles[x][y].is_wall()
 
     def cast_instant(self, x, y):
         existing = None
@@ -14651,6 +14652,7 @@ class NineTheFaerySpell(Spell):
         unit = Unit()
         unit.name = "Nine the Faery"
         unit.unique = True
+        unit.flying = True
         unit.asset = ["MissingSynergies", "Units", "nine_the_faery"]
         unit.max_hp = self.get_stat("minion_health")
         unit.shields = 9
