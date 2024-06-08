@@ -132,6 +132,7 @@ Level 7:
 + Eschaton (Holy/Chaos/Conjuration)
 + Mass Enchantment (Holy/Dark/Enchantment)
 + Might of the Overlord (Enchantment)
++ Nine the Faery (Arcane/Ice/Nature/Conjuration)
 + Omnistrike (Chaos/Translocation/Sorcery)
 + Primordial Rot (Dark/Nature/Conjuration)
 + Ruinous Impact (Dark/Chaos/Sorcery)

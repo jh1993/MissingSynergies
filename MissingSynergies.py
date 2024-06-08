@@ -14484,6 +14484,188 @@ class TeraAnnihilateSpell(Spell):
         
         self.caster.apply_buff(ChaosOverflowBuff(self))
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, EschatonSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, OrbOfZealotrySpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, TwilightWandererSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell, CloudbenderSpell, GuruMeditationSpell, GazerFormSpell, MelodramaSpell, TideOfGenesisSpell, HolyHandGrenadeSpell, DragonChorusSpell, SpiritBombSpell, AltarOfBanishmentSpell, TeraAnnihilateSpell])
+class Ninebolt(SimpleRangedAttack):
+
+    def __init__(self, spell):
+        SimpleRangedAttack.__init__(self, name="Ninebolt", damage=spell.get_stat("minion_damage"), damage_type=Tags.Arcane, range=spell.get_stat("minion_range"))
+        self.duration = spell.get_stat("duration")
+        self.perfect = spell.get_stat("perfect")
+        self.strongest = spell.get_stat("strongest")
+        self.effect = [Tags.Arcane, Tags.Ice]
+
+    def get_bonus(self, hp):
+        hp_str = str(hp)
+        num_digits = len(hp_str)
+        
+        digit = 0
+        for i in range(num_digits):
+            if int(hp_str[i]) == 9:
+                digit = num_digits - i
+                break
+        bonus1 = max(0, 10**digit - 1)
+    
+        if not self.perfect:
+            return bonus1
+
+        total = 0
+        for i in range(num_digits):
+            total += int(hp_str[i])
+        if total % 9:
+            bonus2 = 0
+        else:
+            bonus2 = 10**(total//9) - 1
+        
+        return max(bonus1, bonus2)
+
+    def can_redeal(self, target, already_checked):
+        return self.strongest or self.get_bonus(target.cur_hp)
+
+    def get_ai_target(self):
+
+        def is_good_target(u):    
+            if not u:
+                return False
+            if bool(self.target_allies) == bool(self.caster.level.are_hostile(u, self.caster)):
+                return False
+            if hasattr(self, 'damage_type') and not self.level:
+                if isinstance(self.damage_type, list):
+                    if all(is_immune(u, self, dtype, []) for dtype in self.damage_type):
+                        return False
+                else:
+                    if is_immune(u, self, self.damage_type, []):
+                        return False
+            if not self.can_cast(u.x, u.y):
+                return False
+            return True
+
+        targets = [u for u in self.caster.level.units if is_good_target(u)]
+        targets = [target for target in targets if not target.has_buff(Soulbound) or target.cur_hp > 1]
+        if not targets:
+            return None
+        else:
+            random.shuffle(targets)
+            target = max(targets, key=lambda target: self.get_bonus(target.cur_hp))
+            return Point(target.x, target.y)
+
+    def hit(self, x, y):
+        target = self.caster.level.get_unit_at(x, y)
+        if not target:
+            self.caster.level.show_effect(x, y, Tags.Arcane)
+            return
+        bonus = self.get_bonus(target.cur_hp)
+        target.deal_damage(self.get_stat("damage"), Tags.Arcane, self)
+        target.apply_buff(FrozenBuff(), self.get_stat("duration"))
+        if bonus:
+            target.deal_damage(bonus, Tags.Ice, self, penetration=target.resists[Tags.Ice], ignore_sh=True)
+
+    def get_description(self):
+        return "Freezes for %i turns. May deal bonus damage depending on the target's HP digits." % self.get_stat("duration")
+
+class NineballBuff(Buff):
+
+    def on_init(self):
+        self.color = Tags.Ice.color
+        self.spell = FrozenOrbSpell()
+        self.spell.radius = 9
+        self.spell.minion_damage = 9
+    
+    def on_applied(self, owner):
+        self.spell.caster = self.owner
+        self.spell.owner = self.owner
+        self.spell.statholder = self.owner.source.caster
+    
+    def get_tooltip(self):
+        return "Each turn, activates the effect of Ice Orb in a %i tile radius." % self.spell.get_stat("radius")
+
+    def on_advance(self):
+        self.spell.on_orb_move(self.owner, self.owner)
+
+class TheStrongestBuff(Buff):
+
+    def on_init(self):
+        self.color = COLOR_DAMAGE
+        self.global_triggers[EventOnDamaged] = self.on_damaged
+    
+    def on_damaged(self, evt):
+        if not are_hostile(evt.unit, self.owner) or random.random() >= 0.09:
+            return
+        evt.unit.kill()
+    
+    def get_tooltip(self):
+        return "On damaging an enemy, has a 9% chance to instantly kill it."
+
+class NineTheFaerySpell(Spell):
+
+    def on_init(self):
+        self.name = "Nine the Faery"
+        self.asset = ["MissingSynergies", "Icons", "nine_the_faery"]
+        self.tags = [Tags.Ice, Tags.Arcane, Tags.Nature, Tags.Conjuration]
+        self.level = 7
+        self.max_charges = 9
+        
+        self.range = RANGE_GLOBAL
+        self.requires_los = False
+        self.can_target_self = True
+        self.minion_health = 9
+        self.minion_damage = 9
+        self.minion_range = 9
+        self.duration = 9
+
+        self.upgrades["perfect"] = (1, 3, "Perfect Math", "The target of Nine the Faery now also takes 9 bonus damage if the digits of its HP add up to 9, 99 if they add up to 18, 999 if they add up to 27, and so on.")
+        self.upgrades["nineball"] = (1, 6, "Nineball", "Each turn, Nine the Faery activates the effects of the Ice Orb spell around itself.\nThis Ice Orb has a base radius of 9 and base minion damage of 9, but otherwise gains all of your upgrades and bonuses.")
+        self.upgrades["strongest"] = (1, 7, "The Strongest", "Any enemy damaged by Nine the Faery has a 9% chance to die instantly.")
+
+    def get_description(self):
+        return ("Summon Nine the Faery, a flying debuff-immune [living] [nature] [arcane] [ice] minion with [{minion_health}_HP:minion_health], [9_SH:shields], and 9 reincarnations. If already summoned, instead fully restore its [SH:shields] and reincarnations.\n"
+                "Nine the Faery has an attack with a range of [{minion_range}_tiles:minion_range] that deals [{minion_damage}_arcane:arcane] damage and [freezes:freeze] for [{duration}_turns:duration].\n"
+                "The target of Nine the Faery takes [9_ice:ice] damage if the last digit of its current HP is 9, [99_ice:ice] damage if the second last digit is 9, [999_ice:ice] damage if the third last digit is 9, and so on. This damage ignores resistance and [SH:shields]. Nine the Faery will choose targets to maximize this damage.").format(**self.fmt_dict())
+
+    def can_cast(self, x, y):
+        existing = None
+        for unit in self.caster.level.units:
+            if unit.source is self:
+                existing = unit
+                break
+        if existing:
+            return x == self.caster.x and y == self.caster.y
+        else:
+            return Spell.can_cast(self, x, y) and not self.caster.level.get_unit_at(x, y)
+
+    def cast_instant(self, x, y):
+        existing = None
+        for unit in self.caster.level.units:
+            if unit.source is self:
+                existing = unit
+                break
+        if existing:
+            existing.shields = max(existing.shields, 9)
+            buff = existing.get_buff(ReincarnationBuff)
+            if buff:
+                buff.lives = 9
+            else:
+                buff = ReincarnationBuff(9)
+                buff.buff_type = BUFF_TYPE_PASSIVE
+                existing.apply_buff(buff)
+            return
+        
+        unit = Unit()
+        unit.name = "Nine the Faery"
+        unit.unique = True
+        unit.asset = ["MissingSynergies", "Units", "nine_the_faery"]
+        unit.max_hp = self.get_stat("minion_health")
+        unit.shields = 9
+        unit.resists[Tags.Arcane] = 100
+        unit.resists[Tags.Ice] = 100
+        unit.tags = [Tags.Living, Tags.Nature, Tags.Arcane, Tags.Ice]
+        unit.spells = [Ninebolt(self)]
+        unit.buffs = [ReincarnationBuff(9), TeleportyBuff(radius=9, chance=0.09)]
+        unit.debuff_immune = True
+        if self.get_stat("nineball"):
+            unit.buffs.append(NineballBuff())
+        if self.get_stat("strongest"):
+            unit.buffs.append(TheStrongestBuff())
+        self.summon(unit, Point(x, y))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, EschatonSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, OrbOfZealotrySpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, TwilightWandererSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell, CloudbenderSpell, GuruMeditationSpell, GazerFormSpell, MelodramaSpell, TideOfGenesisSpell, HolyHandGrenadeSpell, DragonChorusSpell, SpiritBombSpell, AltarOfBanishmentSpell, TeraAnnihilateSpell, NineTheFaerySpell])
 
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture, BatEscape, EyeBleach, AntimatterInfusion, WarpStrike, ThornShot, TimeSkip, BlindSavant, ScratchProofing, OffensiveShields, MageGlasses])
