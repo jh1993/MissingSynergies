@@ -14681,11 +14681,13 @@ class ImperfectWorld(Upgrade):
         self.global_triggers[EventOnPreDamaged] = self.on_pre_damaged
     
     def get_description(self):
-        return ("Whenever anything tries to deal damage to an enemy at full HP, you also deal [physical] damage to that enemy equal to the current realm number.\n"
-                "This happens even if the triggering damage is resisted or blocked, but cannot trigger itself.").format(**self.fmt_dict())
+        return ("Whenever anything tries to deal damage to an unshielded enemy at full HP, you also deal [physical] damage to that enemy equal to the current realm number.\n"
+                "This happens even if the triggering damage is resisted, but cannot trigger itself.").format(**self.fmt_dict())
 
     def on_pre_damaged(self, evt):
-        if evt.damage <= 0 or evt.source is self or not are_hostile(evt.unit, self.owner) or evt.unit.cur_hp < evt.unit.max_hp:
+        if evt.damage <= 0 or evt.source is self or not are_hostile(evt.unit, self.owner):
+            return
+        if evt.unit.cur_hp < evt.unit.max_hp or evt.unit.shields > 0:
             return
         self.owner.level.queue_spell(self.deal_damage(evt.unit))
 
