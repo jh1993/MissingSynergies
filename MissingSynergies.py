@@ -5364,10 +5364,9 @@ class AfterlifeEchoesBuff(Buff):
             shade = Unit()
             shade.name = "Afterlife Shade"
             shade.asset = ["MissingSynergies", "Units", "afterlife_shade"]
-            shade.tags = [Tags.Holy, Tags.Demon, Tags.Undead]
+            shade.tags = [Tags.Holy, Tags.Undead]
             shade.max_hp = unit.max_hp
             shade.resists[Tags.Holy] = 100
-            shade.resists[Tags.Poison] = 100
             shade.flying = True
             shade.spells = [AfterlifeShadeBolt(unit.max_hp//10 + self.spell.get_stat("minion_damage", base=1), self.spell.get_stat("minion_range", base=5))]
             shade.turns_to_death = self.spell.get_stat("minion_duration", base=10)
@@ -5378,8 +5377,8 @@ class AfterlifeEchoesBuff(Buff):
             shards = math.ceil(unit.max_hp/20 + unit.shields/2)
             for _ in range(shards):
                 shard = Unit()
-                shard.name = "Soul Shard"
-                shard.asset = ["MissingSynergies", "Units", "soul_shard"]
+                shard.name = "Mana Shard"
+                shard.asset = ["MissingSynergies", "Units", "mana_shard"]
                 shard.tags = [Tags.Arcane, Tags.Metallic, Tags.Glass]
                 shard.max_hp = 1
                 shard.shields = 1
@@ -5387,7 +5386,7 @@ class AfterlifeEchoesBuff(Buff):
                     shard.resists[tag] = 0
                 shard.flying = True
                 shard.stationary = True
-                shard.buffs = [SoulShardBuff(), TeleportyBuff(radius=RANGE_GLOBAL, chance=1)]
+                shard.buffs = [ManaShardBuff(), TeleportyBuff(radius=RANGE_GLOBAL, chance=1)]
                 self.spell.summon(shard, radius=RANGE_GLOBAL, sort_dist=False)
 
 class AfterlifeShadeBolt(SimpleRangedAttack):
@@ -5401,16 +5400,18 @@ class AfterlifeShadeBolt(SimpleRangedAttack):
         self.caster.level.deal_damage(x, y, damage, Tags.Dark, self)
         self.caster.level.deal_damage(x, y, damage, Tags.Holy, self)
 
-class SoulShardBuff(Buff):
+class ManaShardBuff(Buff):
 
     def on_init(self):
-        self.name = "Soul Shard"
+        self.name = "Mana Shard"
         self.color = Tags.Glass.color
         self.description = "When damaged or losing SH from damage by an enemy, deal 2 arcane or 2 physical damage to that enemy."
         self.owner_triggers[EventOnDamaged] = self.on_damaged
         self.owner_triggers[EventOnShieldDamaged] = self.on_damaged
 
     def on_damaged(self, evt):
+        if not are_hostile(evt.source.owner, self.owner):
+            return
         evt.source.owner.deal_damage(2, random.choice([Tags.Arcane, Tags.Physical]), self)
 
 class AfterlifeEchoesSpell(Spell):
@@ -5431,7 +5432,7 @@ class AfterlifeEchoesSpell(Spell):
         self.upgrades["life"] = (1, 5, "Life Echoes", "When you summon a [living] or [nature] minion, that minion's death explosion will [poison] enemies for a number of turns equal to 50% of its max HP.\nIf an enemy is already [poisoned], any excess duration will be dealt as [poison] damage.", "echo")
         self.upgrades["spirit"] = (1, 5, "Spirit Echoes", "When you summon a [holy], [demon], or [undead] minion, that minion's death explosion will summon an Afterlife Shade with the same max HP for [{minion_duration}_turns:minion_duration] on a random tile.\nThe Afterlife Shade has an attack with [{minion_range}_range:minion_range] that deals [holy] and [dark] damage equal to [{minion_damage}:minion_damage] plus 10% of its max HP.", "echo")
         self.upgrades["elemental"] = (1, 5, "Elemental Echoes", "When you summon a [fire], [lightning], or [ice] minion, that minion's death explosion has a chance to cast Fireball, Lightning Bolt, or Icicle respectively at valid enemy targets.\nA minion with multiple tags will try to cast every qualifying spell independently in random order.\nThe chance to cast is the minion's max HP divided by 40, with an extra guaranteed cast per 40 HP the minion has.\nThese spells gain all of your upgrades and bonuses.", "echo")
-        self.upgrades["shattering"] = (1, 5, "Shattering Echoes", "When you summon an [arcane], [metallic], or [glass] minion, that minion's death explosion will summon a Soul Shard on a random tile for every 20 HP and [2_SH:shields] the minion has, rounded up.\nSoul Shards have fixed 1 HP and [1_SH:shields], and teleport to random tiles each turn. They deal [2_physical:physical] or [2_arcane:arcane] damage to enemies that damage them or remove [SH:shields] from them with damage.", "echo")
+        self.upgrades["shattering"] = (1, 5, "Shattering Echoes", "When you summon an [arcane], [metallic], or [glass] minion, that minion's death explosion will summon a Mana Shard on a random tile for every 20 HP and [2_SH:shields] the minion has, rounded up.\nMana Shards have fixed 1 HP and [1_SH:shields], and teleport to random tiles each turn. They deal [2_physical:physical] or [2_arcane:arcane] damage to enemies that damage them or remove [SH:shields] from them with damage.", "echo")
 
     def fmt_dict(self):
         stats = Spell.fmt_dict(self)
@@ -12448,7 +12449,7 @@ class ReflectionBuff(Buff):
     def on_init(self):
         self.name = "Reflection"
         self.color = Tags.Metallic.color
-        self.description = "Whenever this unit takes damage, redeal that damage to a random enemy in line of sight."
+        self.description = "Whenever this unit takes damage, a random enemy in line of sight takes the same damage."
         self.owner_triggers[EventOnDamaged] = self.on_damaged
     
     def on_damaged(self, evt):
@@ -12461,7 +12462,9 @@ class ReflectionBuff(Buff):
         for p in Bolt(self.owner.level, self.owner, target):
             self.owner.level.show_effect(p.x, p.y, evt.damage_type, minor=True)
             yield
-        target.deal_damage(evt.damage, evt.damage_type, self)
+        penetration = evt.penetration if hasattr(evt, "penetration") else 0
+        ignore_sh = evt.ignore_sh if hasattr(evt, "ignore_sh") else False
+        target.deal_damage(evt.damage, evt.damage_type, evt.source, penetration=penetration, ignore_sh=ignore_sh)
 
 class MirrorDecoys(Upgrade):
 
@@ -12476,7 +12479,7 @@ class MirrorDecoys(Upgrade):
     def get_description(self):
         return ("Each turn, and also whenever a mirror crystal dies, you have a chance to summon a mirror crystal near yourself, equal to 100% divided by 1 plus the current number of mirror crystals you have.\n"
                 "Mirror crystals are [arcane] [metallic] stationary minions with [{minion_health}_HP:minion_health], no resistances, and no attacks of their own. Each turn each mirror crystal teleports to a random tile.\n"
-                "Whenever a mirror crystal takes damage, it redeals that damage to a random enemy in its line of sight.").format(**self.fmt_dict())
+                "Whenever a mirror crystal takes damage, a random enemy in its line of sight takes the same damage.").format(**self.fmt_dict())
 
     def try_summon(self):
         if random.random() >= 1/(1 + len([u for u in self.owner.level.units if u.source is self])):
@@ -14668,6 +14671,132 @@ class NineTheFaerySpell(Spell):
             unit.buffs.append(TheStrongestBuff())
         self.summon(unit, Point(x, y))
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, EschatonSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, OrbOfZealotrySpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, TwilightWandererSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell, CloudbenderSpell, GuruMeditationSpell, GazerFormSpell, MelodramaSpell, TideOfGenesisSpell, HolyHandGrenadeSpell, DragonChorusSpell, SpiritBombSpell, AltarOfBanishmentSpell, TeraAnnihilateSpell, NineTheFaerySpell])
+class ImperfectWorld(Upgrade):
 
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture, BatEscape, EyeBleach, AntimatterInfusion, WarpStrike, ThornShot, TimeSkip, BlindSavant, ScratchProofing, OffensiveShields, MageGlasses])
+    def on_init(self):
+        self.name = "Imperfect World"
+        self.asset = ["MissingSynergies", "Icons", "imperfect_world"]
+        self.tags = [Tags.Metallic]
+        self.level = 4
+        self.global_triggers[EventOnPreDamaged] = self.on_pre_damaged
+    
+    def get_description(self):
+        return ("Whenever anything tries to deal damage to an enemy at full HP, you also deal [physical] damage to that enemy equal to the current realm number.\n"
+                "This happens even if the triggering damage is resisted or blocked, but cannot trigger itself.").format(**self.fmt_dict())
+
+    def on_pre_damaged(self, evt):
+        if evt.damage <= 0 or evt.source is self or not are_hostile(evt.unit, self.owner) or evt.unit.cur_hp < evt.unit.max_hp:
+            return
+        self.owner.level.queue_spell(self.deal_damage(evt.unit))
+
+    def deal_damage(self, unit):
+        unit.deal_damage(self.owner.level.gen_params.difficulty, Tags.Physical, self)
+        yield
+
+class SoulFragmentBuff(Buff):
+
+    def __init__(self, parent):
+        self.parent = parent
+        Buff.__init__(self)
+
+    def on_init(self):
+        self.name = "Soul Fragment"
+        self.color = Tags.Dark.color
+        self.description = "When taking damage, the unit that this fragment was gouged from takes the same damage. Dies when that unit dies."
+        self.owner_triggers[EventOnDamaged] = self.on_damaged
+        self.global_triggers[EventOnDeath] = self.on_death
+    
+    def on_damaged(self, evt):
+        if not self.parent.is_alive():
+            return
+        penetration = evt.penetration if hasattr(evt, "penetration") else 0
+        ignore_sh = evt.ignore_sh if hasattr(evt, "ignore_sh") else False
+        self.parent.deal_damage(evt.damage, evt.damage_type, evt.source, penetration=penetration, ignore_sh=ignore_sh)
+
+    def on_death(self, evt):
+        if evt.unit is self.parent:
+            self.owner.kill()
+        elif evt.unit is self.owner and self.owner.source.get_stat("shade"):
+            self.owner.level.queue_spell(self.summon_shade())
+
+    def summon_shade(self):
+        shade = Unit()
+        shade.name = "Afterlife Shade"
+        shade.asset = ["MissingSynergies", "Units", "afterlife_shade"]
+        shade.tags = [Tags.Holy, Tags.Undead]
+        shade.max_hp = self.owner.max_hp
+        shade.resists[Tags.Holy] = 100
+        shade.flying = True
+        shade.spells = [AfterlifeShadeBolt(self.owner.max_hp//10 + self.owner.source.get_stat("minion_damage", base=1), self.owner.source.get_stat("minion_range", base=5))]
+        shade.turns_to_death = self.owner.source.get_stat("minion_duration", base=10)
+        self.owner.source.summon(shade, target=self.owner)
+        yield
+
+    def on_advance(self):
+        if not self.parent.is_alive():
+            self.owner.kill()
+        if self.owner.source.get_stat("pain"):
+            damage = self.owner.max_hp//8
+            self.owner.level.event_manager.raise_event(EventOnPreDamaged(self.owner, damage, Tags.Physical, self), self.owner)
+            self.owner.level.event_manager.raise_event(EventOnDamaged(self.owner, damage, Tags.Physical, self), self.owner)
+
+class SoulGougeSpell(Spell):
+
+    def on_init(self):
+        self.name = "Soul Gouge"
+        self.asset = ["MissingSynergies", "Icons", "soul_gouge"]
+        self.tags = [Tags.Dark, Tags.Holy, Tags.Sorcery, Tags.Conjuration]
+        self.level = 6
+        self.max_charges = 12
+        self.can_target_empty = False
+
+        self.range = 8
+        self.damage = 11
+        self.minion_health = 4
+
+        self.upgrades["damage"] = (5, 2)
+        self.upgrades["requires_los"] = (-1, 2, "Blindcasting", "Soul Gouge no longer requires line of sight.")
+        self.upgrades["pain"] = (1, 3, "False Pain", "Each turn, each soul fragment now pretends to take [physical] damage equal to 1/8 of its max HP, triggering all effects that are normally triggered by taking damage.")
+        self.upgrades["shade"] = (1, 5, "Remnant Shades", "When a soul fragment dies, it now summons an afterlife shade, a flying [holy] [undead] minion, with the same max HP, for [{minion_duration}_turns:minion_duration].\nThe shade has an attack with [{minion_range}_range:minion_range] that deals [holy] and [dark] damage equal to [{minion_damage}:minion_damage] plus 10% of its max HP.")
+
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["minion_range"] = self.get_stat("minion_range", base=5)
+        stats["minion_damage"] = self.get_stat("minion_damage", base=1)
+        stats["minion_duration"] = self.get_stat("minion_duration", base=10)
+        return stats
+
+    def get_description(self):
+        return ("Deal [{damage}_holy:holy] and [{damage}_dark:dark] damage to the target, then reduce its max HP to its current HP and summon a soul fragment near it with max HP equal to [{minion_health}:minion_health] plus the amount of max HP removed from the target.\n"
+                "The soul fragment is a stationary flying [holy] [undead] minion with no resistances. All damage it takes is also dealt to the target.\n"
+                "The soul fragment dies when the target dies, or at the end of its turn if the target is no longer alive.").format(**self.fmt_dict())
+
+    def cast_instant(self, x, y):
+        unit = self.caster.level.get_unit_at(x, y)
+        if not unit:
+            return
+        
+        damage = self.get_stat("damage")
+        unit.deal_damage(damage, Tags.Holy, self)
+        unit.deal_damage(damage, Tags.Dark, self)
+        self.caster.level.queue_spell(self.summon_fragment(unit))
+
+    def summon_fragment(self, unit):
+        amount = unit.max_hp - unit.cur_hp
+        unit.max_hp = unit.cur_hp
+        fragment = Unit()
+        fragment.name = "Soul Fragment"
+        fragment.asset = ["MissingSynergies", "Units", "soul_fragment"]
+        fragment.max_hp = amount + self.get_stat("minion_health")
+        fragment.flying = True
+        fragment.stationary = True
+        fragment.tags = [Tags.Holy, Tags.Undead]
+        for tag in [Tags.Fire, Tags.Ice, Tags.Lightning, Tags.Physical, Tags.Holy, Tags.Dark, Tags.Arcane, Tags.Poison]:
+            fragment.resists[tag] = 0
+        fragment.buffs = [SoulFragmentBuff(unit)]
+        self.summon(fragment, target=unit, radius=RANGE_GLOBAL)
+        yield
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, EschatonSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, OrbOfZealotrySpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, TwilightWandererSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell, CloudbenderSpell, GuruMeditationSpell, GazerFormSpell, MelodramaSpell, TideOfGenesisSpell, HolyHandGrenadeSpell, DragonChorusSpell, SpiritBombSpell, AltarOfBanishmentSpell, TeraAnnihilateSpell, NineTheFaerySpell, SoulGougeSpell])
+
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture, BatEscape, EyeBleach, AntimatterInfusion, WarpStrike, ThornShot, TimeSkip, BlindSavant, ScratchProofing, OffensiveShields, MageGlasses, ImperfectWorld])
