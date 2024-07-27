@@ -6177,14 +6177,13 @@ class GrudgeReaperBuff(Soulbound):
         self.description = "Cannot be killed when the target of its grudge is alive. Vanishes when the target dies without reincarnations."
 
     def on_death(self, evt):
-        if evt.unit is not self.guardian or self.reincarnation:
+        if evt.unit is not self.guardian or self.guardian.get_buff(ReincarnationBuff):
             return
         if self.insatiable and Point(evt.unit.x, evt.unit.y) not in self.owner.level.get_adjacent_points(Point(self.owner.x, self.owner.y), filter_walkable=False):
             units = [unit for unit in self.owner.level.units if are_hostile(unit, self.spell.caster)]
             if units:
                 target = random.choice(units)
                 self.guardian = target
-                self.reincarnation = target.get_buff(ReincarnationBuff)
                 return
         self.owner.level.show_effect(self.owner.x, self.owner.y, Tags.Translocation)
         self.owner.kill(trigger_death_event=False)
@@ -6292,7 +6291,6 @@ class GrudgeReaperSpell(Spell):
             if not buff:
                 return
             buff.guardian = target
-            buff.reincarnation = target.get_buff(ReincarnationBuff)
             return
         
         def can_harm(unit, other):
@@ -11310,6 +11308,16 @@ class CarcinizationPassive(Buff):
         if self.spell.get_stat("rave"):
             unit.spells.insert(0, CrabRaveSpell(damage=self.spell.get_stat("minion_damage") + unit.max_hp//5, radius=self.spell.get_stat("radius", base=6)))
 
+        def chimeric(spawner):
+            unit = spawner()
+            if random.random() < 0.25:
+                unit.buffs.append(CarcinizationPassive(self.spell))
+            return unit
+        if self.spell.get_stat("chimeric"):
+            snake = random.choice([GoldenSnake, DeathSnake, FireSnake])
+            lion = random.choice([RedLion, IceLion, StarLion])
+            unit.buffs.extend([RespawnAs(lambda: chimeric(snake)), RespawnAs(lambda: chimeric(lion))])
+
         self.spell.summon(unit, target=self.owner, radius=5)
         yield
 
@@ -11344,6 +11352,7 @@ class CarcinizationSpell(Spell):
         self.upgrades["duration"] = (20, 2)
         self.upgrades["spider"] = (1, 2, "Spider Crab", "The crab becomes a [spider] unit, which weaves webs around itself each turn that [stun] non-spider units.")
         self.upgrades["samurai"] = (1, 6, "Samurai Crab", "The crab can now attack enemies' weak points for massive damage. Each of its two melee attacks has a 10% chance to hit again for 500% damage.\nThe crab also gains a charge attack with a range of [{minion_range}_tiles:minion_range], dealing [physical] damage equal to [{minion_damage}:minion_damage] plus 20% of the crab's initial max HP.")
+        self.upgrades["chimeric"] = (1, 6, "Chimericrab", "Upon reaching 0 HP, the crab now respawns as a lightning, death, or fire snake and a fire, ice, or star lion, each chosen at random.\nThe snake and lion are not temporary, but each has a 25% chance to be able to evolve into a crab on death.")
         self.upgrades["rave"] = (1, 4, "Crab Rave", "The crab can now rave every [6_turns:cooldown], which deals damage of a random type equal to [{minion_damage}:minion_damage] plus 20% of the crab's initial max HP to every enemy in line of sight within [{radius}_tiles:radius] of the crab.")
 
     def fmt_dict(self):
@@ -12713,9 +12722,11 @@ class WrathOfTheHordeBuff(Buff):
         self.apply_bloodrage(math.ceil(evt.unit.max_hp/10), self.bloodrage_duration, units, evt.unit.source)
         if not self.full:
             return
-        for buff in evt.unit.buffs:
+        # Don't double dip with Bloodrage Avatar.
+        for buff in list(evt.unit.buffs):
             if not isinstance(buff, BloodrageBuff):
                 continue
+            evt.unit.remove_buff(buff)
             self.apply_bloodrage(buff.bonus, buff.turns_left, units, evt.unit.source)
     
     def apply_bloodrage(self, amount, duration, units, source):
@@ -14799,6 +14810,123 @@ class SoulGougeSpell(Spell):
         self.summon(fragment, target=unit, radius=RANGE_GLOBAL)
         yield
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, EschatonSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, OrbOfZealotrySpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, TwilightWandererSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell, CloudbenderSpell, GuruMeditationSpell, GazerFormSpell, MelodramaSpell, TideOfGenesisSpell, HolyHandGrenadeSpell, DragonChorusSpell, SpiritBombSpell, AltarOfBanishmentSpell, TeraAnnihilateSpell, NineTheFaerySpell, SoulGougeSpell])
+class BloodrageAvatarBuff(Buff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        Buff.__init__(self)
+    
+    def on_init(self):
+        self.name = "Bloodrage Avatar"
+        self.asset = ["status", "magma_shell"]
+        self.color = Tags.Demon.color
+        self.owner_triggers[EventOnDeath] = self.on_death
+    
+    def on_advance(self):
+        self.owner.apply_buff(BloodrageBuff(math.ceil(self.owner.max_hp/10)), self.spell.get_stat("duration"))
+        self.owner.level.queue_spell(self.absorb_bloodrage())
+
+    def absorb_bloodrage(self):
+
+        breed = self.spell.get_stat("breed")
+
+        def bolt(unit):
+            for p in Bolt(self.owner.level, unit, self.owner, find_clear=False):
+                self.owner.level.show_effect(p.x, p.y, Tags.Fire, minor=True)
+                self.owner.level.show_effect(p.x, p.y, Tags.Dark, minor=True)
+                yield True
+            for buff in list(unit.buffs):
+                if not isinstance(buff, BloodrageBuff):
+                    continue
+                if are_hostile(unit, self.spell.caster) or not breed or random.random() >= 0.5:
+                    unit.remove_buff(buff)
+                self.owner.apply_buff(BloodrageBuff(buff.bonus), buff.turns_left)
+            yield False
+
+        bolts = [bolt(unit) for unit in self.owner.level.units if unit.has_buff(BloodrageBuff) and unit is not self.owner]
+        while bolts:
+            bolts = [bolt for bolt in bolts if next(bolt)]
+            yield
+
+    def on_death(self, evt):
+
+        buffs = [b for b in self.owner.buffs if isinstance(b, BloodrageBuff)]
+        if not buffs:
+            return
+
+        units = [u for u in self.owner.level.units if not are_hostile(u, self.spell.caster) and u is not self.spell.caster]
+        if units:
+            for buff in buffs:
+                self.owner.remove_buff(buff)
+                random.choice(units).apply_buff(BloodrageBuff(buff.bonus), buff.turns_left)
+
+        if not self.spell.get_stat("rain"):
+            return
+        self.owner.level.queue_spell(self.blood_rain(buffs))
+
+    def blood_rain(self, buffs):
+        units = [u for u in self.owner.level.units if are_hostile(u, self.spell.caster)]
+        if not units:
+            return
+        for buff in buffs:
+            unit = random.choice(units)
+            unit.deal_damage(buff.bonus, Tags.Dark, self.spell, penetration=max(0, self.owner.resists[Tags.Heal]))
+            if random.random() < 0.5:
+                yield
+
+class BloodrageAvatarSpell(Spell):
+
+    def on_init(self):
+        self.name = "Bloodrage Avatar"
+        self.asset = ["MissingSynergies", "Icons", "bloodrage_avatar"]
+        self.tags = [Tags.Fire, Tags.Dark, Tags.Enchantment]
+        self.level = 5
+        self.max_charges = 8
+        self.can_target_empty = False
+        
+        self.duration = 10
+        self.range = RANGE_GLOBAL
+        self.requires_los = False
+
+        self.upgrades["breed"] = (1, 5, "Rage Breeds Rage", "When absorbing bloodrage from an ally, each stack of the ally's bloodrage has a 50% chance to not be consumed.")
+        self.upgrades["rain"] = (1, 4, "Blood Rain", "When the Bloodrage Avatar dies, each stack of that unit's bloodrage now deals [dark] damage to a random enemy equal to its damage bonus.\nThis damage penetrates [dark] resistance by an amount equal to the victim's healing penalty, which is typically caused by the [poison] debuff.")
+        self.upgrades["rebirth"] = (1, 3, "Cathartic Rebirth", "When sacrificing an existing Bloodrage Avatar to empower a new one, the existing unit gains 1 reincarnation before dying.")
+
+    def can_cast(self, x, y):
+        unit = self.caster.level.get_unit_at(x, y)
+        if not unit or are_hostile(unit, self.caster):
+            return False
+        if unit.has_buff(BloodrageAvatarBuff):
+            return False
+        return Spell.can_cast(self, x, y)
+
+    def get_description(self):
+        return ("The target minion becomes the Bloodrage Avatar. Each turn it gains a stack of bloodrage for [{duration}_turns:duration], increasing its damage by an amount equal to 10% of its max HP, rounded up. It then absorbs all bloodrage stacks from all other units.\n"
+                "If the Bloodrage Avatar dies, all of its bloodrage stacks are transferred to your other minions at random.\n"
+                "Casting this spell while a Bloodrage Avatar already exists will sacrifice the existing one before affecting the new one.").format(**self.fmt_dict())
+
+    def cast_instant(self, x, y):
+
+        unit = self.caster.level.get_unit_at(x, y)
+        if not unit:
+            return
+        
+        rebirth = self.get_stat("rebirth")
+        for u in list(self.caster.level.units):
+            if not u.has_buff(BloodrageAvatarBuff):
+                continue
+            if rebirth:
+                buff = u.get_buff(ReincarnationBuff)
+                if buff:
+                    buff.lives += 1
+                else:
+                    buff = ReincarnationBuff(1)
+                    buff.buff_type = BUFF_TYPE_PASSIVE
+                    u.apply_buff(buff)
+            u.kill()
+        
+        unit.apply_buff(BloodrageAvatarBuff(self))
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, EschatonSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, OrbOfZealotrySpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, TwilightWandererSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell, CloudbenderSpell, GuruMeditationSpell, GazerFormSpell, MelodramaSpell, TideOfGenesisSpell, HolyHandGrenadeSpell, DragonChorusSpell, SpiritBombSpell, AltarOfBanishmentSpell, TeraAnnihilateSpell, NineTheFaerySpell, SoulGougeSpell, BloodrageAvatarSpell])
 
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture, BatEscape, EyeBleach, AntimatterInfusion, WarpStrike, ThornShot, TimeSkip, BlindSavant, ScratchProofing, OffensiveShields, MageGlasses, ImperfectWorld])

@@ -73,6 +73,7 @@ Level 4:
 
 Level 5:
 + Agonizing Storm (Dark/Lightning/Sorcery)
++ Bloodrage Avatar (Dark/Fire/Enchantment)
 + Blue Spike Beast (Lightning/Nature/Orb/Conjuration)
 + Bolt Jump (Lightning/Translocation/Sorcery)
 + Box of Woe (Dark/Lightning/Ice/Conjuration)
