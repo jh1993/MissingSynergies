@@ -13710,9 +13710,9 @@ class ScratchProofing(Upgrade):
     def on_init(self):
         self.name = "Scratch Proofing"
         self.asset = ["MissingSynergies", "Icons", "scratch_proofing"]
-        self.tags = [Tags.Metallic]
+        self.tags = [Tags.Metallic, Tags.Arcane]
         self.level = 6
-        self.description = "Whenever one of your minions is about to take damage dealt by an enemy, it has a chance to negate that damage, equal to 100% divided by the damage it would have taken.\nThe chance to activate is doubled for [metallic] minions.\nDamage negation applies before [SH:shields]."
+        self.description = "Whenever one of your minions is about to take damage dealt by an enemy, it has a chance to negate that damage, equal to 100% divided by the damage it would have taken.\nThe chance to activate is doubled for [metallic] and [arcane] minions.\nDamage negation applies before [SH:shields]."
         self.global_triggers[EventOnPreDamaged] = self.on_pre_damaged
     
     def on_pre_damaged(self, evt):
@@ -13726,7 +13726,7 @@ class ScratchProofing(Upgrade):
             return
         amount = math.ceil(evt.damage*(100 - resist)/100)
         chance = 1/amount
-        if Tags.Metallic in evt.unit.tags:
+        if Tags.Metallic in evt.unit.tags or Tags.Arcane in evt.unit.tags:
             chance *= 2
         if random.random() >= chance:
             return
@@ -14927,6 +14927,51 @@ class BloodrageAvatarSpell(Spell):
         
         unit.apply_buff(BloodrageAvatarBuff(self))
 
+class HollowShell(Upgrade):
+
+    def on_init(self):
+        self.name = "Hollow Shell"
+        self.asset = ["MissingSynergies", "Icons", "hollow_shell"]
+        self.tags = [Tags.Dark, Tags.Arcane]
+        self.level = 7
+
+    def get_description(self):
+        return ("Each turn, you gain [1_SH:shields] but take [dark] damage equal to 5% of your current HP, rounded down, which ignores [SH:shields].\n"
+                "This does not activate if there are no enemies in the realm.").format(**self.fmt_dict())
+
+    def on_advance(self):
+        if all(u.team == TEAM_PLAYER for u in self.owner.level.units):
+            return
+        self.owner.add_shields(1)
+        self.owner.deal_damage(self.owner.cur_hp//20, Tags.Dark, self, ignore_sh=True)
+
+class RagePlague(Upgrade):
+
+    def on_init(self):
+        self.name = "Rage Plague"
+        self.asset = ["MissingSynergies", "Icons", "rage_plague"]
+        self.tags = [Tags.Dark, Tags.Fire]
+        self.level = 5
+        self.duration = 10
+        self.global_triggers[EventOnDamaged] = self.on_damaged
+
+    def get_description(self):
+        return ("Whenever an enemy deals damage with an attack, it gains a stack of bloodrage for [{duration}_turns:duration], increasing all of its attack damage by 1.\n"
+                "It then has a chance to go [berserk] for [1_turn:duration], equal to the total duration of its bloodrage stacks divided by 100%, up to 100%.").format(**self.fmt_dict())
+
+    def on_damaged(self, evt):
+        if not are_hostile(self.owner, evt.source.owner):
+            return
+        evt.source.owner.apply_buff(BloodrageBuff(1), self.get_stat("duration"))
+        total = 0
+        for buff in evt.source.owner.buffs:
+            if not isinstance(buff, BloodrageBuff):
+                continue
+            total += buff.turns_left
+        if random.random() < total/100:
+            # Take into account the berserk immediately ticking down by 1 turn.
+            evt.source.owner.apply_buff(BerserkBuff(), 2)
+
 all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, EschatonSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, OrbOfZealotrySpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, TwilightWandererSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell, CloudbenderSpell, GuruMeditationSpell, GazerFormSpell, MelodramaSpell, TideOfGenesisSpell, HolyHandGrenadeSpell, DragonChorusSpell, SpiritBombSpell, AltarOfBanishmentSpell, TeraAnnihilateSpell, NineTheFaerySpell, SoulGougeSpell, BloodrageAvatarSpell])
 
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture, BatEscape, EyeBleach, AntimatterInfusion, WarpStrike, ThornShot, TimeSkip, BlindSavant, ScratchProofing, OffensiveShields, MageGlasses, ImperfectWorld])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture, BatEscape, EyeBleach, AntimatterInfusion, WarpStrike, ThornShot, TimeSkip, BlindSavant, ScratchProofing, OffensiveShields, MageGlasses, ImperfectWorld, HollowShell, RagePlague])
