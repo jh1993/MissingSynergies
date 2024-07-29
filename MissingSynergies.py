@@ -14960,7 +14960,7 @@ class RagePlague(Upgrade):
                 "It then has a chance to go [berserk] for [1_turn:duration], equal to the total duration of its bloodrage stacks divided by 100%, up to 100%.").format(**self.fmt_dict())
 
     def on_damaged(self, evt):
-        if not are_hostile(self.owner, evt.source.owner):
+        if not isinstance(evt.source, Spell) or not are_hostile(self.owner, evt.source.owner):
             return
         evt.source.owner.apply_buff(BloodrageBuff(1), self.get_stat("duration"))
         total = 0
