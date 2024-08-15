@@ -6578,16 +6578,17 @@ class WastingBuff(Buff):
 
 class PrimordialRotBuff(Buff):
 
-    def __init__(self, spell, wasting):
+    def __init__(self, spell, buff):
         self.spell = spell
-        self.wasting = wasting
+        self.buff = buff
+        self.giant = spell.get_stat("giant")
         Buff.__init__(self)
     
     def on_init(self):
         self.name = "Primordial Rot"
         self.color = Tags.Dark.color
         self.max_hp_steal = self.spell.get_stat("max_hp_steal")
-        self.description = "Attacks steal %i max HP and deal bonus damage based on max HP. Has a 10%% chance to die each turn." % self.max_hp_steal
+        self.description = "Attacks steal %i max HP and deal bonus damage based on max HP." % self.max_hp_steal
         self.global_triggers[EventOnPreDamaged] = self.on_pre_damaged
     
     def on_pre_damaged(self, evt):
@@ -6597,10 +6598,13 @@ class PrimordialRotBuff(Buff):
         self.owner.level.queue_spell(self.effect(evt))
     
     def effect(self, evt):
-        if self.wasting:
-            evt.unit.apply_buff(WastingBuff(self.wasting.spell))
-        amount = min(evt.unit.max_hp, self.max_hp_steal)
-        drain_max_hp_kill(evt.unit, self.max_hp_steal, evt.source)
+        amount = self.max_hp_steal
+        if self.giant:
+            amount += evt.unit.max_hp//20
+        amount = min(evt.unit.max_hp, amount)
+        drain_max_hp_kill(evt.unit, amount, evt.source)
+        if random.random() < 0.5:
+            self.buff.to_split += amount
         self.owner.max_hp += amount
         self.owner.deal_damage(-amount, Tags.Heal, self)
         if evt.source.melee:
@@ -6612,42 +6616,29 @@ class PrimordialRotBuff(Buff):
 
     def on_advance(self):
         self.spell.update_sprite(self.owner)
-        if random.random() < 0.1:
-            self.owner.kill()
 
     # For my No More Scams mod
     def can_redeal(self, target, source, damage_type, already_checked):
         return source and source.owner is self.owner
 
 def PrimordialRotUnit(spell, max_hp):
+
     unit = Unit()
     unit.name = "Primordial Rot"
     unit.max_hp = max_hp
     unit.asset = ["MissingSynergies", "Units", ""]
     spell.update_sprite(unit)
-    unit.tags = [Tags.Dark, Tags.Nature, Tags.Undead]
+    unit.tags = [Tags.Dark, Tags.Nature, Tags.Undead, Tags.Slime]
     unit.resists[Tags.Poison] = 100
     unit.resists[Tags.Physical] = 50
+    if spell.get_stat("vitality"):
+        unit.resists[Tags.Heal] = -100
     unit.spells = [SimpleMeleeAttack(damage=spell.get_stat("minion_damage"), damage_type=Tags.Dark)]
-    unit.buffs = [PrimordialRotBuff(spell, spell.caster.get_buff(PrimordialWasting))]
+    buff = SlimeBuff(lambda: PrimordialRotUnit(spell, unit.max_hp))
+    unit.buffs = [PrimordialRotBuff(spell, buff), buff]
     if max_hp >= 8:
         unit.buffs.append(SplittingBuff(lambda: PrimordialRotUnit(spell, unit.max_hp//2)))
     return unit
-
-class PrimordialWasting(Upgrade):
-
-    def on_init(self):
-        self.name = "Primordial Wasting"
-        self.level = 4
-        self.description = "The spirit's attacks permanently inflict wasting, which deals [dark] damage each turn equal to the amount of max HP the target has lost since the debuff was inflicted.\nThis is treated as damage dealt by your Wastefire spell."
-    
-    def on_applied(self, owner):
-        self.spell = WastefireSpell()
-        self.spell.caster = self.owner
-        self.spell.owner = self.owner
-        self.spell.statholder = self.owner
-        self.spell.max_charges = 0
-        self.spell.cur_charges = 0
 
 class PrimordialRotSpell(Spell):
 
@@ -6656,7 +6647,7 @@ class PrimordialRotSpell(Spell):
         self.asset = ["MissingSynergies", "Icons", "primordial_rot"]
         self.tags = [Tags.Nature, Tags.Dark, Tags.Conjuration]
         self.level = 7
-        self.max_charges = 2
+        self.max_charges = 1
         self.must_target_empty = True
         self.must_target_walkable = True
 
@@ -6667,13 +6658,13 @@ class PrimordialRotSpell(Spell):
 
         self.upgrades["minion_health"] = (64, 7)
         self.upgrades["max_hp_steal"] = (4, 4)
-        self.add_upgrade(PrimordialWasting())
+        self.upgrades["vitality"] = (1, 3, "Primordial Vitality", "The slime now has 100% healing bonus, increasing all healing received.\nWhenever the slime gains max HP, it gains the same amount of current HP; this counts as healing and benefits from the bonus as well.")
+        self.upgrades["giant"] = (1, 7, "Devourer of Giants", "The slime's attacks now also steal 5% of the target's max HP.")
 
     def get_description(self):
-        return ("Summon a [nature] [undead] spirit of rot with [{minion_health}_HP:minion_health] and a melee attack that deals [{minion_damage}_dark:dark] damage.\n"
-                "The spirit's attacks steal [{max_hp_steal}:dark] max HP, and instantly kill targets with less max HP than that; this counts as dying to [dark] damage.\n"
-                "Its melee attacks deal bonus damage equal to 25% of its max HP, and other attacks deal bonus damage equal to 10% of its max HP.\n"
-                "The spirit has a 10% chance to die each turn. On death, the spirit splits into two spirits with half max HP if its initial max HP was at least 8.").format(**self.fmt_dict())
+        return ("Summon a [nature] [undead] [slime] minion with [{minion_health}_HP:minion_health] and a melee attack that deals [{minion_damage}_dark:dark] damage.\n"
+                "The slime has a 50% chance to gain 10% of its initial max HP each turn, and splits into two slimes upon reaching twice its initial HP. On death, if its initial max HP was at least 8, it splits into two slime with half max HP.\n"
+                "The slime's melee attacks deal bonus damage equal to 25% of its max HP, and other attacks 10% of its max HP. They steal [{max_hp_steal}:dark] max HP, and instantly kill targets with less max HP than that. This counts as dying to [dark] damage, and has a 50% chance to increase the slime's splitting HP threshold.").format(**self.fmt_dict())
 
     def update_sprite(self, unit):
         if unit.max_hp >= 256:
