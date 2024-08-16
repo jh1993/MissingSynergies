@@ -6600,7 +6600,7 @@ class PrimordialRotBuff(Buff):
     def effect(self, evt):
         amount = self.max_hp_steal
         if self.giant:
-            amount += evt.unit.max_hp//20
+            amount += math.ceil(evt.unit.max_hp/50)
         amount = min(evt.unit.max_hp, amount)
         drain_max_hp_kill(evt.unit, amount, evt.source)
         if random.random() < 0.5:
@@ -6659,7 +6659,7 @@ class PrimordialRotSpell(Spell):
         self.upgrades["minion_health"] = (64, 7)
         self.upgrades["max_hp_steal"] = (4, 4)
         self.upgrades["vitality"] = (1, 3, "Primordial Vitality", "The slime now has 100% healing bonus, increasing all healing received.\nWhenever the slime gains max HP, it gains the same amount of current HP; this counts as healing and benefits from the bonus as well.")
-        self.upgrades["giant"] = (1, 7, "Devourer of Giants", "The slime's attacks now also steal 5% of the target's max HP.")
+        self.upgrades["giant"] = (1, 7, "Devourer of Giants", "The slime's attacks now also steal 2% of the target's max HP, rounded up.")
 
     def get_description(self):
         return ("Summon a [nature] [undead] [slime] minion with [{minion_health}_HP:minion_health] and a melee attack that deals [{minion_damage}_dark:dark] damage.\n"
