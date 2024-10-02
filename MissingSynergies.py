@@ -1275,12 +1275,12 @@ class RaiseDracolichBreath(BreathWeapon):
             apply_minion_bonuses(self.caster.source, ghost)
             if not unit:
                 ghost.resists[Tags.Dark] = 100
-                summoned = self.caster.source.summon(ghost, target=Point(x, y))
-                if summoned and self.legacy:
+                if self.legacy:
                     buff = TouchedBySorcery(self.legacy, self.caster.source)
-                    buff.buff_type = BUFF_TYPE_NONE
+                    buff.show_icon = True
                     buff.resists[self.legacy] = max(100, 100 - ghost.resists[self.legacy])
-                    ghost.apply_buff(buff)
+                    ghost.buffs.append(buff)
+                self.caster.source.summon(ghost, target=Point(x, y))
             elif unit and unit.is_alive():
                 unit.deal_damage(ghost.spells[0].damage, Tags.Dark, self)
         
@@ -1290,12 +1290,12 @@ class RaiseDracolichBreath(BreathWeapon):
             if not skeleton:
                 return
             skeleton.spells[0].damage = self.caster.source.get_stat("minion_damage", base=skeleton.spells[0].damage)
-            summoned = self.caster.source.summon(skeleton, target=unit)
-            if summoned and self.legacy:
+            if self.legacy:
                 buff = TouchedBySorcery(self.legacy, self.caster.source)
-                buff.buff_type = BUFF_TYPE_NONE
+                buff.show_icon = True
                 buff.resists[self.legacy] = max(100, 100 - skeleton.resists[self.legacy])
-                skeleton.apply_buff(buff)
+                skeleton.buffs.append(buff)
+            self.caster.source.summon(skeleton, target=unit)
         yield
 
 class RaiseDracolichSoulJar(LichSealSoulSpell):
@@ -1314,13 +1314,13 @@ class RaiseDracolichSoulJar(LichSealSoulSpell):
         phylactery.tags = [Tags.Construct, Tags.Dark]
         phylactery.resists[Tags.Dark] = 100
 
-        if self.caster.source.summon(phylactery, Point(x, y)):
-            self.caster.apply_buff(Soulbound(phylactery))
-            if self.legacy:
-                buff = TouchedBySorcery(self.legacy, self.caster.source)
-                buff.buff_type = BUFF_TYPE_NONE
-                buff.resists[self.legacy] = max(100, 100 - phylactery.resists[self.legacy])
-                phylactery.apply_buff(buff)
+        self.caster.apply_buff(Soulbound(phylactery))
+        if self.legacy:
+            buff = TouchedBySorcery(self.legacy, self.caster.source)
+            buff.show_icon = True
+            buff.resists[self.legacy] = max(100, 100 - phylactery.resists[self.legacy])
+            phylactery.buffs.append(buff)
+        self.caster.source.summon(phylactery, Point(x, y))
 
 class InstantRaising(Upgrade):
 
@@ -12438,11 +12438,12 @@ class SerpentBrood(Upgrade):
             snake.spells[0].damage = self.minion_damage
             snake.spells[0].buff_duration = duration
             apply_minion_bonuses(self, snake)
-            if self.summon(snake, target=u, radius=5) and breath:
+            if breath:
                 buff = TouchedBySorcery(breath.damage_type, self)
-                buff.buff_type = BUFF_TYPE_NONE
                 buff.resists[breath.damage_type] = max(100, 100 - snake.resists[breath.damage_type])
-                snake.apply_buff(buff)
+                buff.show_icon = True
+                snake.buffs = [buff]
+            self.summon(snake, target=u, radius=5)
 
 class ReflectionBuff(Buff):
 
@@ -12944,7 +12945,9 @@ class PoisonHatcherySpell(Spell):
         apply_minion_bonuses(self, unit)
         unit.resists[Tags.Ice] = 0
         unit.tags.append(Tags.Poison)
-        unit.buffs = [TouchedBySorcery(Tags.Poison, self)]
+        buff = TouchedBySorcery(Tags.Poison, self)
+        buff.show_icon = True
+        unit.buffs = [buff]
         unit.spells[0].buff_duration = self.get_stat("duration")
         return unit
 
@@ -13779,18 +13782,14 @@ class PermaBerserkBuff(BerserkBuff):
 
     def __init__(self):
         BerserkBuff.__init__(self)
-        self.buff_type = BUFF_TYPE_NONE
+        self.description = "Permanently berserk."
+        self.show_icon = True
 
 class UnstableCellBuff(Buff):
 
     def on_init(self):
         self.color = Tags.Chaos.color
         self.description = "Cannot move or act. Each turn, takes holy, dark, or poison damage equal to max HP from Tide of Genesis, which ignores resistances and SH."
-        self.berserk = random.choice([True, False])
-    
-    def on_applied(self, owner):
-        if self.berserk:
-            self.owner.apply_buff(PermaBerserkBuff())
     
     def on_advance(self):
         tag = random.choice([Tags.Holy, Tags.Dark, Tags.Poison])
@@ -13849,6 +13848,8 @@ class TideOfGenesisSpell(Spell):
             for tag in [Tags.Fire, Tags.Ice, Tags.Lightning, Tags.Physical, Tags.Poison, Tags.Arcane, Tags.Holy, Tags.Dark]:
                 unit.resists[tag] = 0
             unit.buffs = [UnstableCellBuff()]
+            if random.choice([True, False]):
+                unit.buffs.append(PermaBerserkBuff())
             lives = 0
             if endless:
                 while random.choice([True, False]):
