@@ -121,6 +121,7 @@ Level 6:
 + Mutant Cyclops (Arcane/Conjuration)
 + Pureglass Knight (Holy/Arcane/Conjuration)
 + Quantum Overlay (Arcane/Chaos/Enchantment)
++ Railgun (Lightning/Metallic/Sorcery)
 + Raise Dracolich (Dragon/Dark/Enchantment/Conjuration)
 + Soul Gouge (Holy/Dark/Sorcery/Conjuration)
 + Stone Egg (Dragon/Orb/Conjuration)

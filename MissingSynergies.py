@@ -2276,14 +2276,18 @@ class MalignantGrowthSpell(Spell):
                 unit.apply_buff(EnfleshedBuff(self, BUFF_TYPE_BLESS))
 
 class ChaosEyeBuff(Spells.ElementalEyeBuff):
+
     def __init__(self, spell):
         Spells.ElementalEyeBuff.__init__(self, random.choice([Tags.Fire, Tags.Lightning, Tags.Physical]), spell.get_stat("damage"), spell.get_stat("shot_cooldown"), spell)
         self.name = "Eye of Chaos"
         self.color = Tags.Chaos.color
         self.asset = ["MissingSynergies", "Statuses", "chaos_eye"]
-        freq_str = "each turn" if self.freq == 1 else ("every %d turns" % self.freq)
-        self.description = "Deals %d fire, lightning, or physical damage to a random enemy in LOS %s" % (self.damage, freq_str)
         self.stack_type = STACK_INTENSITY
+    
+    def get_description(self):
+        freq_str = "each turn" if self.freq == 1 else ("every %d turns" % self.freq)
+        self.description = "Deals %d fire, lightning, or physical damage to a random enemy in LOS %s" % (self.spell.get_stat("damage", base=self.damage), freq_str)
+    
     def on_advance(self):
         Spells.ElementalEyeBuff.on_advance(self)
         self.element = random.choice([Tags.Fire, Tags.Lightning, Tags.Physical])
@@ -2408,7 +2412,7 @@ class DivineGazeSpell(Spell):
         for p in Bolt(self.caster.level, self.caster, target):
             unit = self.caster.level.get_unit_at(p.x, p.y)
             for eye in eyes:
-                damage = eye.damage if eye else holy_damage
+                damage = eye.spell.get_stat("damage", base=eye.damage) if eye else holy_damage
                 tag = eye.element if eye else Tags.Holy
                 spell = eye.spell if eye else self
                 for _ in range(1 + (order if eye and eye.stack_type != STACK_INTENSITY else 0)):
@@ -2462,7 +2466,7 @@ class WarpLensStrike(LeapAttack):
                 eye.turns_left -= eye.freq
                 if not eye.turns_left:
                     self.spell.caster.remove_buff(eye)
-                unit.deal_damage(eye.damage, eye.element, eye.spell)
+                unit.deal_damage(eye.spell.get_stat("damage", base=eye.damage), eye.element, eye.spell)
                 eye.on_shoot(unit)
             else:
                 unit.deal_damage(self.get_stat("damage"), Tags.Physical, self)
@@ -3119,7 +3123,7 @@ class OrbOfMirrorsSpell(OrbSpell):
                     for point in Bolt(self.caster.level, origin, target):
                         self.caster.level.show_effect(point.x, point.y, eye.element, minor=True)
                         yield
-                    target.deal_damage(eye.damage, eye.element, eye.spell)
+                    target.deal_damage(eye.spell.get_stat("damage", base=eye.damage), eye.element, eye.spell)
                     eye.on_shoot(target)
                     yield
 
@@ -3856,8 +3860,7 @@ class SingularEye(Upgrade):
         self.owner_triggers[EventOnBuffApply] = self.on_buff_apply
     
     def get_description(self):
-        return ("When you gain an [eye] buff, if you have no other [eye] buffs, that [eye] buff gains [15_damage:damage] and [-1_shot_cooldown:shot_cooldown] (to a minimum of 1).\n"
-                "This added damage affects even [eye] buffs that do not normally deal damage.").format(**self.fmt_dict())
+        return ("When you gain an [eye] buff, if you have no other [eye] buffs, that [eye] buff gains [15_damage:damage] (if it deals damage) and [-1_shot_cooldown:shot_cooldown] (to a minimum of 1).").format(**self.fmt_dict())
     
     def on_buff_apply(self, evt):
         if not isinstance(evt.buff, Spells.ElementalEyeBuff):
@@ -3865,10 +3868,9 @@ class SingularEye(Upgrade):
         for buff in self.owner.buffs:
             if isinstance(buff, Spells.ElementalEyeBuff) and buff is not evt.buff:
                 return
-        evt.buff.damage += 15
+        if evt.buff.damage:
+           evt.buff.damage += 15
         evt.buff.freq = max(1, evt.buff.freq - 1)
-        freq_str = "each turn" if evt.buff.freq == 1 else ("every %d turns" % evt.buff.freq)
-        evt.buff.description = "Deals %d %s damage to a random enemy in LOS %s" % (evt.buff.damage, evt.buff.element.name, freq_str)
 
 class CausticBurnBuff(Buff):
 
@@ -14964,6 +14966,113 @@ class RagePlague(Upgrade):
             # Take into account the berserk immediately ticking down by 1 turn.
             evt.source.owner.apply_buff(BerserkBuff(), 2)
 
-all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, EschatonSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, OrbOfZealotrySpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, TwilightWandererSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell, CloudbenderSpell, GuruMeditationSpell, GazerFormSpell, MelodramaSpell, TideOfGenesisSpell, HolyHandGrenadeSpell, DragonChorusSpell, SpiritBombSpell, AltarOfBanishmentSpell, TeraAnnihilateSpell, NineTheFaerySpell, SoulGougeSpell, BloodrageAvatarSpell])
+class ChargeBuff(ChannelDependentBuff):
+
+    def __init__(self, spell):
+        self.spell = spell
+        ChannelDependentBuff.__init__(self)
+
+    def on_init(self):
+        ChannelDependentBuff.on_init(self)
+        self.name = "Charge"
+        self.color = Tags.Lightning.color
+        if self.spell.get_stat("universal"):
+            self.global_bonuses["damage"] = 2
+        else:
+            self.spell_bonuses[RailgunSpell]["damage"] = 2
+
+class RailgunBuff(ChannelBuff):
+
+    def on_applied(self, owner):
+        ChannelBuff.on_applied(self, owner)
+        self.target_unit = None
+        self.global_triggers[EventOnMoved] = self.on_moved
+        unit = self.owner.level.get_unit_at(self.spell_target.x, self.spell_target.y)
+        if unit and are_hostile(unit, self.owner):
+            self.target_unit = unit
+
+    def on_moved(self, evt):
+        if evt.unit is not self.target_unit:
+            return
+        self.spell_target = Point(evt.x, evt.y)
+
+    def on_advance(self):
+        unit = self.owner.level.get_unit_at(self.spell_target.x, self.spell_target.y)
+        if unit and are_hostile(unit, self.owner):
+            self.target_unit = unit
+        if not self.passed:
+            self.owner.level.queue_spell(self.spell.__self__.beam(self.spell_target))
+        ChannelBuff.on_advance(self)
+
+class RailgunSpell(Spell):
+
+    def on_init(self):
+        self.name = "Railgun"
+        self.asset = ["MissingSynergies", "Icons", "railgun"]
+        self.tags = [Tags.Lightning, Tags.Metallic, Tags.Sorcery]
+        self.level = 6
+        self.max_charges = 4
+
+        self.damage = 20
+        self.range = RANGE_GLOBAL
+        self.requires_los = False
+
+        self.upgrades["fire"] = (1, 5, "Chaos Cannon", "Railgun also deals [fire] damage.")
+        self.upgrades["buff"] = (1, 3, "Buff Charging", "Channeling Railgun also increases the duration of each of your buffs by [1_turn:duration].")
+        self.upgrades["universal"] = (1, 4, "Universal Charge", "Charge stacks now instead increases the damage of all of your spells and skills.")
+        self.upgrades["bolt"] = (1, 4, "Bolt Combo", "After shooting Railgun, you now also cast your Lightning Bolt at the target tile.", "combo")
+        self.upgrades["deadeye"] = (1, 5, "Deadeye Combo", "After shooting Railgun, you now also cast your Divine Gaze at the target tile.", "combo")
+
+    def get_description(self):
+        return ("Channel each turn to gain a stack of charge, which increases Railgun damage by 2.\n"
+                "When you stop channeling, deal [{damage}_lightning:lightning] and [{damage}_physical:physical] damage in a beam, and destroy walls on affected tiles. Charge stacks are removed at the beginning of your next turn.\n"
+                "If you target an enemy, and that enemy moves, Railgun automatically changes its target tile to follow that enemy.").format(**self.fmt_dict())
+
+    def cast(self, x, y, channel_cast=False):
+
+        if not channel_cast:
+            self.caster.apply_buff(RailgunBuff(self.cast, Point(x, y)))
+            return
+        
+        self.caster.apply_buff(ChargeBuff(self))
+
+        if self.get_stat("buff"):
+            for buff in self.caster.buffs:
+                if buff.buff_type != BUFF_TYPE_BLESS or buff.turns_left <= 0:
+                    continue
+                buff.turns_left += 1
+        
+        yield
+        
+    def beam(self, target):
+
+        dtypes = [Tags.Lightning, Tags.Physical]
+        if self.get_stat("fire"):
+            dtypes.append(Tags.Fire)
+        
+        damage = self.get_stat("damage")
+        for p in Bolt(self.caster.level, self.caster, target, find_clear=False):
+            for dtype in dtypes:
+                self.caster.level.deal_damage(p.x, p.y, damage, dtype, self)
+            if self.caster.level.tiles[p.x][p.y].is_wall():
+                self.caster.level.make_floor(p.x, p.y)
+        
+        spell = None
+        if self.get_stat("bolt"):
+            spell = LightningBoltSpell()
+        elif self.get_stat("deadeye"):
+            spell = DivineGazeSpell()
+        if not spell:
+            return
+        
+        spell.caster = self.caster
+        spell.owner = self.caster
+        spell.range = RANGE_GLOBAL
+        spell.requires_los = False
+        self.caster.level.act_cast(self.caster, spell, target.x, target.y, pay_costs=False)
+
+        yield
+
+all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, EschatonSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, OrbOfZealotrySpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, TwilightWandererSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell, CloudbenderSpell, GuruMeditationSpell, GazerFormSpell, MelodramaSpell, TideOfGenesisSpell, HolyHandGrenadeSpell, DragonChorusSpell, SpiritBombSpell, AltarOfBanishmentSpell, TeraAnnihilateSpell, NineTheFaerySpell, SoulGougeSpell, BloodrageAvatarSpell, RailgunSpell])
 
 skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture, BatEscape, EyeBleach, AntimatterInfusion, WarpStrike, ThornShot, TimeSkip, BlindSavant, ScratchProofing, OffensiveShields, MageGlasses, ImperfectWorld, HollowShell, RagePlague])
