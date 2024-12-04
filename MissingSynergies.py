@@ -2283,6 +2283,8 @@ class ChaosEyeBuff(Spells.ElementalEyeBuff):
         self.color = Tags.Chaos.color
         self.asset = ["MissingSynergies", "Statuses", "chaos_eye"]
         self.stack_type = STACK_INTENSITY
+        if spell.get_stat("resonance"):
+            self.spell_bonuses[EyesOfChaosSpell]["damage"] = 2
     
     def get_description(self):
         freq_str = "each turn" if self.freq == 1 else ("every %d turns" % self.freq)
@@ -2299,7 +2301,7 @@ class EyesOfChaosSpell(Spell):
         self.asset = ["MissingSynergies", "Icons", "eyes_of_chaos"]
         self.tags = [Tags.Eye, Tags.Chaos, Tags.Enchantment]
         self.level = 6
-        self.max_charges = 4
+        self.max_charges = 8
         self.range = 0
 
         self.damage = 15
@@ -2308,8 +2310,8 @@ class EyesOfChaosSpell(Spell):
 
         self.upgrades['shot_cooldown'] = (-1, 3)
         self.upgrades['duration'] = (10, 3)
-        self.upgrades['damage'] = (7, 4)
-        self.upgrades['max_charges'] = (4, 5)
+        self.upgrades['damage'] = (7, 3)
+        self.upgrades['resonance'] = (1, 6, "Chaos Resonance", "Each stack of eye of chaos now grants this spell [2_damage:damage].")
 
     def get_description(self):
         return ("Every [{shot_cooldown}_turns:shot_cooldown], deals [{damage}:damage] damage to a random enemy unit in line of sight.\n"
@@ -12321,19 +12323,49 @@ class QuantumCollapse(Upgrade):
 
     def on_init(self):
         self.name = "Quantum Collapse"
+        self.asset = ["MissingSynergies", "Icons", "quantum_collapse"]
         self.level = 6
-        self.description = "Whenever an enemy dies due to a reason other than taking damage, an implosion occurs around its tile. All enemies in its area are subjected to the per-tile effect of Quantum Ripple.\nThe implosion is a burst that ignores walls. Its radius is half of the radius of this spell, which randomly rounds up or down."
+        self.tags = [Tags.Arcane, Tags.Dark, Tags.Chaos]
+        self.damage = 7
+        self.radius = 2
         self.global_triggers[EventOnDeath] = self.on_death
     
+    def get_description(self):
+        return ("Whenever an enemy dies to any reason other than taking damage, an implosion occurs in a [{radius}_tile:radius] burst around it, which passes through walls.\n"
+                "Each enemy in the implosion loses [{damage}:damage] current HP. This amount is equal to the [damage] stat of this skill, but does not count as dealing damage.\n"
+                "If the enemy is shielded, it instead loses [1_SH:shields].").format(**self.fmt_dict())
+
     def on_death(self, evt):
         if not are_hostile(evt.unit, self.owner) or evt.damage_event:
             return
         self.owner.level.queue_spell(self.implode(evt.unit))
 
     def implode(self, target):
-        for stage in reversed(list(Burst(self.owner.level, target, random.choice([math.ceil, math.floor])(self.prereq.get_stat("radius")/2), ignore_walls=True))):
+        
+        damage = self.get_stat("damage")
+
+        for stage in reversed(list(Burst(self.owner.level, target, self.get_stat("radius"), ignore_walls=True))):
             for p in stage:
-                self.prereq.hit(p.x, p.y)
+
+                self.owner.level.show_effect(p.x, p.y, Tags.Arcane)
+                self.owner.level.show_effect(p.x, p.y, Tags.Dark)
+                chaos_tags =  [Tags.Fire, Tags.Lightning, Tags.Physical]
+                for tag in chaos_tags:
+                    if random.random() >= 1/3:
+                        continue
+                    self.owner.level.show_effect(p.x, p.y, tag)
+                
+                unit = self.owner.level.get_unit_at(p.x, p.y)
+                if not unit or not are_hostile(unit, self.owner):
+                    continue
+
+                if unit.shields:
+                    unit.shields -= 1
+                    self.owner.level.show_effect(p.x, p.y, Tags.Shield_Expire)
+                else:
+                    unit.cur_hp -= damage
+                    if unit.cur_hp <= 0:
+                        unit.kill()
             yield
 
 class QuantumRippleSpell(Spell):
@@ -12353,7 +12385,6 @@ class QuantumRippleSpell(Spell):
         self.upgrades["damage"] = (13, 3)
         self.upgrades["virtual"] = (1, 4, "Virtual Particles", "On hit, Quantum Ripple behaves as if it has dealt [arcane] damage to the enemy. For each of [fire], [lightning], and [physical], it has a 1/3 chance to behave as if it has also dealt that damage type.\nThis ignores resistances, and triggers all effects that are normally triggered when dealing damage.")
         self.upgrades["mortality"] = (1, 6, "Quantum Mortality", "The amount of HP an enemy loses is now multiplied by the sum of all of its elemental weaknesses.")
-        self.add_upgrade(QuantumCollapse())
 
     def get_impacted_tiles(self, x, y):
         return [p for stage in Burst(self.caster.level, Point(x, y), self.get_stat('radius'), ignore_walls=True) for p in stage]
@@ -15073,6 +15104,30 @@ class RailgunSpell(Spell):
 
         yield
 
+class QuantumDecay(Upgrade):
+
+    def on_init(self):
+        self.name = "Quantum Decay"
+        self.asset = ["MissingSynergies", "Icons", "quantum_decay"]
+        self.tags = [Tags.Arcane, Tags.Dark, Tags.Chaos]
+        self.level = 4
+        self.description = "Each turn, if there are enemies in the realm, each unshielded unit loses 1 current HP, and each shielded unit loses [1_SH:shields]."
+
+    def on_advance(self):
+
+        if not [u for u in self.owner.level.units if u.team == TEAM_ENEMY]:
+            return
+        
+        for unit in list(self.owner.level.units):
+            if unit.shields:
+                unit.shields -= 1
+                self.owner.level.show_effect(unit.x, unit.y, Tags.Shield_Expire)
+            else:
+                unit.cur_hp -= 1
+                if unit.cur_hp <= 0:
+                    self.owner.level.show_effect(unit.x, unit.y, Tags.Translocation)
+                    unit.kill()
+
 all_player_spell_constructors.extend([WormwoodSpell, IrradiateSpell, FrozenSpaceSpell, WildHuntSpell, PlanarBindingSpell, ChaosShuffleSpell, BladeRushSpell, MaskOfTroublesSpell, PrismShellSpell, CrystalHammerSpell, ReturningArrowSpell, WordOfDetonationSpell, WordOfUpheavalSpell, RaiseDracolichSpell, EyeOfTheTyrantSpell, TwistedMutationSpell, ElementalSpiritsSpell, RuinousImpactSpell, CopperFurnaceSpell, EschatonSpell, EyesOfChaosSpell, DivineGazeSpell, WarpLensGolemSpell, MortalCoilSpell, MorbidSphereSpell, GoldenTricksterSpell, OrbOfZealotrySpell, OrbOfMirrorsSpell, VolatileOrbSpell, AshenAvatarSpell, AstralMeltdownSpell, ChaosHailSpell, UrticatingRainSpell, ChaosConcoctionSpell, HighSorcerySpell, MassEnchantmentSpell, BrimstoneClusterSpell, CallScapegoatSpell, FrigidFamineSpell, NegentropySpell, GatheringStormSpell, WordOfRustSpell, LiquidMetalSpell, LivingLabyrinthSpell, AgonizingStormSpell, PsychedelicSporesSpell, KingswaterSpell, ChaosTheorySpell, AfterlifeEchoesSpell, TimeDilationSpell, CultOfDarknessSpell, BoxOfWoeSpell, MadWerewolfSpell, ParlorTrickSpell, GrudgeReaperSpell, DeathMetalSpell, MutantCyclopsSpell, PrimordialRotSpell, CosmicStasisSpell, WellOfOblivionSpell, AegisOverloadSpell, PureglassKnightSpell, TwilightWandererSpell, WastefireSpell, ShieldBurstSpell, EmpyrealAscensionSpell, IronTurtleSpell, EssenceLeechSpell, FleshSacrificeSpell, QuantumOverlaySpell, StaticFieldSpell, WebOfFireSpell, ElectricNetSpell, XenodruidFormSpell, KarmicLoanSpell, ChaoticSparkSpell, WeepingMedusaSpell, ThermalImbalanceSpell, CoolantSpraySpell, MadMaestroSpell, BoltJumpSpell, GeneHarvestSpell, OmnistrikeSpell, DroughtSpell, DamnationSpell, LuckyGnomeSpell, BlueSpikeBeastSpell, NovaJuggernautSpell, DisintegrateSpell, MindMonarchSpell, CarcinizationSpell, BurnoutReactorSpell, LiquidLightningSpell, HeartOfWinterSpell, NonlocalitySpell, HeatTrickSpell, MalignantGrowthSpell, ToxicOrbSpell, StoneEggSpell, VainglorySpell, QuantumRippleSpell, MightOfTheOverlordSpell, WrathOfTheHordeSpell, RealityFeintSpell, PoisonHatcherySpell, MimeticHydraSpell, OverchannelSpell, CloudbenderSpell, GuruMeditationSpell, GazerFormSpell, MelodramaSpell, TideOfGenesisSpell, HolyHandGrenadeSpell, DragonChorusSpell, SpiritBombSpell, AltarOfBanishmentSpell, TeraAnnihilateSpell, NineTheFaerySpell, SoulGougeSpell, BloodrageAvatarSpell, RailgunSpell])
 
-skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture, BatEscape, EyeBleach, AntimatterInfusion, WarpStrike, ThornShot, TimeSkip, BlindSavant, ScratchProofing, OffensiveShields, MageGlasses, ImperfectWorld, HollowShell, RagePlague])
+skill_constructors.extend([ShiveringVenom, Electrolysis, BombasticArrival, ShadowAssassin, DraconianBrutality, BreathOfAnnihilation, AbyssalInsight, OrbSubstitution, LocusOfEnergy, DragonArchmage, SingularEye, NuclearWinter, UnnaturalVitality, ShockTroops, ChaosTrick, SoulDregs, RedheartSpider, InexorableDecay, FulguriteAlchemy, FracturedMemories, Ataraxia, ReflexArc, DyingStar, CantripAdept, SecretsOfBlood, SpeedOfLight, ForcefulChanneling, WhispersOfOblivion, HeavyElements, FleshLoan, Halogenesis, LuminousMuse, TeleFrag, TrickWalk, ChaosCloning, SuddenDeath, DivineRetribution, ScarletBison, OutrageRune, BloodMitosis, ScrapBurst, GateMaster, SlimeInstability, OrbPonderance, MirrorScales, SerpentBrood, MirrorDecoys, BloodFodder, ExorbitantPower, SoulInvestiture, BatEscape, EyeBleach, AntimatterInfusion, WarpStrike, ThornShot, TimeSkip, BlindSavant, ScratchProofing, OffensiveShields, MageGlasses, ImperfectWorld, HollowShell, RagePlague, QuantumCollapse, QuantumDecay])
