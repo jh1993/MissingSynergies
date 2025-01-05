@@ -1272,6 +1272,7 @@ class RaiseDracolichBreath(BreathWeapon):
 
         if self.ghost:
             ghost = Ghost()
+            ghost.turns_to_death = 10
             apply_minion_bonuses(self.caster.source, ghost)
             if not unit:
                 ghost.resists[Tags.Dark] = 100
@@ -1358,9 +1359,14 @@ class RaiseDracolichSpell(Spell):
 
         self.upgrades["legacy"] = (1, 7, "Elemental Legacy", "The dracolich gains 100 resistance of the same element as the breath weapon of the dragon it was created from, and its breath weapon redeals half of its damage as that element; this also counts as using another breath weapon of that element.\nUnits summoned by the dracolich gain 100 resistance to that element and a ranged attack of that element.\nThese resistances are raised to 100 if they are still less than 100 after the increase.")
         self.upgrades["dragon_mage"] = (1, 5, "Dragon Mage", "The dracolich can cast Death Bolt with a 3 turn cooldown.\nThis Death Bolt gains all of your upgrades and bonuses.")
-        self.upgrades["ghost"] = (1, 5, "Spectral Breath", "The dracolich's breath summons ghosts with [dark] immunity in empty tiles.\nOccupied tiles are dealt [dark] damage equal to the melee damage of the ghosts.")
+        self.upgrades["ghost"] = (1, 5, "Spectral Breath", "The dracolich's breath summons ghosts with [dark] immunity in empty tiles, each lasting [{minion_duration}_turns:minion_duration].\nOccupied tiles are dealt [dark] damage equal to the melee damage of the ghosts.")
         self.add_upgrade(InstantRaising())
     
+    def fmt_dict(self):
+        stats = Spell.fmt_dict(self)
+        stats["minion_duration"] = Spell.get_stat(self, "minion_duration", base=10)
+        return stats
+
     def get_description(self):
         return ("Kill target [dragon] minion and resurrect it as a dracolich with the same max HP, melee damage, breath damage, and breath range. Other abilities will not be retained.\n"
                 "The dracolich can create a flying stationary soul jar that makes itself immortal as long as the jar exists, and its [dark] breath raises slain [living] enemies as friendly skeletons with the same max HP.").format(**self.fmt_dict())
@@ -2727,7 +2733,7 @@ class MorbidSphereSpell(OrbSpell):
 
         self.upgrades["timer"] = (-10, 4, "Morph Timer", "Summoned vampire bats take 10 fewer turns to transform.")
         self.upgrades["push"] = (1, 2, "Stand Back", "Each turn, a summoned vampire bat has a chance to push all enemy units within [{radius}_tiles:radius] of itself [1_tile:range] away.\nThe chance is equal to the number of turns it has been alive divided by the number of turns it takes to transform.")
-        self.upgrades["higher"] = (1, 4, "Higher Vampires", "When a vampire bat is summoned, it has a 50% chance to instead be an armored vampire bat, vampiric mist, or vampire eye.\nArmored vampire bats mature into armored vampires, which are [metallic] and have many more resistances.\nVampiric mists mature into greater vampires, whose attacks drain 7 max HP on hit and instantly kill targets with less max HP than that; this counts as killing with [dark] damage.\n Vampire eyes mature into mind vampires, whose attacks increase the cooldown of a random one of the target's abilities by [1_turn:cooldown] if possible (does not work on units that can gain clarity); otherwise the target takes the same damage again. The attack also gives [1_SH:shields] to the user, to a max of 3.")
+        self.upgrades["higher"] = (1, 4, "Higher Vampires", "When a vampire bat is summoned, it has a 50% chance to instead be an armored vampire bat, vampiric mist, or vampire eye.\nArmored vampire bats mature into armored vampires, which are [metallic] and have many more resistances.\nVampiric mists mature into greater vampires, whose attacks drain 7 max HP on hit; shielded targets instead lose [1_SH:shields]. This can kill and counts as killing with [dark] damage.\n Vampire eyes mature into mind vampires, whose attacks increase the cooldown of a random one of the target's abilities by [1_turn:cooldown] if possible (does not work on units that can gain clarity); otherwise the target takes the same damage again. The attack also gives [1_SH:shields] to the user, to a max of 3.")
         self.upgrades["ghost"] = (1, 3, "Bloody Mist", "Each turn, also summon a bloodghast, which inherits a quarter of the orb's bonus to max HP.")
         self.upgrades["orb_walk"] = (1, 5, "Night Lord", "Targeting an existing blood orb with another transforms it into a vampire necromancer or vampire count, chosen at random, which inherits the orb's full max HP bonus.\nThis has a chance to refund a charge of Morbid Sphere, equal to the orb's remaining duration divided by maximum duration.")
     
@@ -6592,7 +6598,7 @@ class PrimordialRotBuff(Buff):
         self.name = "Primordial Rot"
         self.color = Tags.Dark.color
         self.max_hp_steal = self.spell.get_stat("max_hp_steal")
-        self.description = "Attacks steal %i max HP and deal bonus damage based on max HP." % self.max_hp_steal
+        self.description = "Attacks deal bonus damage based on max HP and steal %i max HP." % self.max_hp_steal
         self.global_triggers[EventOnPreDamaged] = self.on_pre_damaged
     
     def on_pre_damaged(self, evt):
@@ -6602,20 +6608,19 @@ class PrimordialRotBuff(Buff):
         self.owner.level.queue_spell(self.effect(evt))
     
     def effect(self, evt):
-        amount = self.max_hp_steal
-        if self.giant:
-            amount += math.ceil(evt.unit.max_hp/50)
-        amount = min(evt.unit.max_hp, amount)
-        drain_max_hp_kill(evt.unit, amount, evt.source)
-        if random.random() < 0.5:
-            self.buff.to_split += amount
-        self.owner.max_hp += amount
-        self.owner.deal_damage(-amount, Tags.Heal, self)
         if evt.source.melee:
             damage = self.owner.max_hp//4
         else:
             damage = self.owner.max_hp//10
         evt.unit.deal_damage(damage, evt.damage_type, self)
+        amount = self.max_hp_steal
+        if self.giant:
+            amount += math.ceil(evt.unit.max_hp/50)
+        amount = drain_max_hp_kill(evt.unit, amount, evt.source)
+        if random.random() < 0.5:
+            self.buff.to_split += amount
+        self.owner.max_hp += amount
+        self.owner.deal_damage(-amount, Tags.Heal, self)
         yield
 
     def on_advance(self):
@@ -6668,7 +6673,7 @@ class PrimordialRotSpell(Spell):
     def get_description(self):
         return ("Summon a [nature] [undead] [slime] minion with [{minion_health}_HP:minion_health] and a melee attack that deals [{minion_damage}_dark:dark] damage.\n"
                 "The slime has a 50% chance to gain 10% of its initial max HP each turn, and splits into two slimes upon reaching twice its initial HP. On death, if its initial max HP was at least 8, it splits into two slime with half max HP.\n"
-                "The slime's melee attacks deal bonus damage equal to 25% of its max HP, and other attacks 10% of its max HP. They steal [{max_hp_steal}:dark] max HP, and instantly kill targets with less max HP than that. This counts as dying to [dark] damage, and has a 50% chance to increase the slime's splitting HP threshold.").format(**self.fmt_dict())
+                "The slime's attacks deal bonus damage (25% of max HP if melee, otherwise 10%) and steal [{max_hp_steal}:dark] max HP, which has a 50% chance to increase the slime's splitting HP threshold; shielded targets instead lose [1_SH:shields]. This can kill and counts as killing with [dark] damage.").format(**self.fmt_dict())
 
     def update_sprite(self, unit):
         if unit.max_hp >= 256:
@@ -7567,7 +7572,7 @@ class InexorableDecay(Upgrade):
         self.asset = ["MissingSynergies", "Icons", "inexorable_decay"]
         self.tags = [Tags.Dark]
         self.level = 5
-        self.description = "Whenever anything tries to deal [dark] damage to an enemy, that enemy permanently loses 2 max HP.\nIf it has 2 max HP or less, it will be instantly killed; this counts as dying to [dark] damage."
+        self.description = "Whenever anything tries to deal [dark] damage to an enemy, that enemy permanently loses 2 max HP; shielded enemies instead lose [1_SH:shields].\nThis can kill and counts as killing with [dark] damage."
         self.global_triggers[EventOnPreDamaged] = self.on_pre_damaged
     
     def on_pre_damaged(self, evt):
@@ -7588,7 +7593,7 @@ class RaiseWastewight(Upgrade):
     def on_init(self):
         self.name = "Raise Wastewight"
         self.level = 5
-        self.description = "When an enemy with wasting dies, it has a chance to summon a wastewight, equal to twice the percentage of max HP it has lost since it was afflicted with wasting, with a minimum of 10%.\nWastewights are [fire] [undead] minions with melee attacks that permanently drain 2 max HP, and instantly kill targets with 2 max HP or less; this is treated as dying to [dark] damage."
+        self.description = "When an enemy with wasting dies, it has a chance to summon a wastewight, equal to twice the percentage of max HP it has lost since it was afflicted with wasting, with a minimum of 10%.\nWastewights are [fire] [undead] minions with melee attacks that permanently drain 2 max HP; shielded targets instead lose [1_SH:shields]. This can kill and counts as killing with [dark] damage."
         self.global_triggers[EventOnDeath] = self.on_death
     
     def on_death(self, evt):
@@ -7604,7 +7609,7 @@ class RaiseWastewight(Upgrade):
         melee = unit.spells[0]
         melee.damage_type = Tags.Fire
         melee.onhit = lambda caster, target: drain_max_hp_kill(target, 2, melee)
-        melee.description = "Drains 2 max HP. Targets with less than 2 max HP are instantly killed."
+        melee.description = "Drains 2 max HP."
         # For my No More Scams mod
         melee.can_redeal = lambda target, already_checked: True
         apply_minion_bonuses(self.prereq, unit)
@@ -7635,7 +7640,7 @@ class WastefireSpell(Spell):
 
     def get_description(self):
         return ("Permanently inflict wasting to all enemies in a [{radius}_tile:radius] burst, which deals [dark] damage to the victim equal to the amount of max HP it has lost since being afflicted with the debuff.\n"
-                "Then deal [{damage}_fire:fire] damage to affected enemies, and drain max HP equal to 25% of the damage dealt. Enemies with less max HP than that are instantly killed; this counts as dying to [dark] damage.\n"
+                "Then deal [{damage}_fire:fire] damage to affected enemies, and drain max HP equal to 25% of the damage dealt. This can kill and counts as killing with [dark] damage.\n"
                 "If the enemy already has wasting, the percentage of max HP drain is doubled.").format(**self.fmt_dict())
 
     def cast(self, x, y):
